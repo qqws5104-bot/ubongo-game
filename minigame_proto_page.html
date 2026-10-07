@@ -1,0 +1,222 @@
+<title>확보 미니게임 시험장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  /* 게임 본체와 같은 크림/주황 톤을 그대로 쓴다 (build_client.py의 :root 토큰과 동일 값).
+     게임이 라이트 한 가지 세계라서 이 시험장도 라이트 단일로 가고, 배경/글자색은 전부 명시한다. */
+  :root {
+    --bg: #f7ecd9; --bg-deep: #efdcb2; --panel: #fffcf4; --panel-line: rgba(43,29,18,0.14);
+    --ink: #2b1d12; --muted: #8a7256; --gold: #e2691a; --gold-ink: #fff8ef;
+    --sky: #2569a8; --danger: #c7402d; --ok: #2f8f52;
+    --font-display: 'Oswald','Noto Sans KR',sans-serif; --font-body: 'Noto Sans KR',system-ui,-apple-system,sans-serif;
+    color-scheme: light;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+  body { min-height: 100vh; background: linear-gradient(180deg, var(--bg-deep), var(--bg) 220px); }
+  .lab { max-width: 820px; margin: 0 auto; padding: 1.6rem 16px 3rem; display: flex; flex-direction: column; gap: 1.6rem; }
+  .lab-head .eyebrow { margin: 0 0 0.3rem; font-family: var(--font-display); font-size: 0.72rem; letter-spacing: 0.2em; color: var(--gold); font-weight: 600; text-transform: uppercase; }
+  .lab-head h1 { margin: 0 0 0.5rem; font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.2rem); line-height: 1.15; text-wrap: balance; }
+  .lab-head .lede { margin: 0; max-width: 60ch; color: var(--muted); font-size: 0.95rem; line-height: 1.65; }
+
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .gcard { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 16px; padding: 1.1rem 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  .gcard .cat { align-self: flex-start; font-size: 0.74rem; font-weight: 700; padding: 0.2rem 0.65rem; border-radius: 999px; background: rgba(226,105,26,0.1); color: var(--gold); border: 1px solid rgba(226,105,26,0.35); }
+  .gcard h2 { margin: 0; font-family: var(--font-display); font-size: 1.35rem; }
+  .gcard .rule { margin: 0; color: var(--muted); font-size: 0.86rem; line-height: 1.55; flex: 1 1 auto; }
+  .gcard .reward { font-family: var(--font-display); font-weight: 600; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+  .gcard .reward small { font-family: var(--font-body); color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+  .lv { display: flex; gap: 6px; }
+  .lv button {
+    flex: 1; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; padding: 0.4rem 0; border-radius: 999px;
+    background: transparent; color: var(--ink); border: 1px solid var(--panel-line);
+  }
+  .lv button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  .lv button.rec::after { content: " ★"; color: var(--gold); }
+  .lv button[aria-pressed="true"].rec::after { color: #ffd9b5; }
+  .go {
+    font-family: var(--font-display); font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer;
+    padding: 0.65rem 1rem; border-radius: 12px; border: none; background: var(--gold); color: var(--gold-ink);
+  }
+  .go:hover { filter: brightness(1.06); }
+  button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .gcard.keep { background: transparent; border-style: dashed; }
+  .gcard.keep h2, .gcard.keep .reward { color: var(--muted); }
+
+  .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; padding: 0.9rem 1.1rem; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 14px; font-size: 0.88rem; }
+  .opts label { font-weight: 700; }
+  .opts select { font: inherit; padding: 0.35rem 0.6rem; border-radius: 8px; border: 1px solid var(--panel-line); background: #fff; color: var(--ink); }
+  .opts .note { color: var(--muted); font-size: 0.8rem; flex: 1 1 260px; }
+
+  #play[hidden] { display: none; }
+  #play .esc { text-align: center; margin: 0.8rem 0 0; font-size: 0.78rem; color: var(--muted); }
+
+  .logbox h3 { margin: 0 0 0.6rem; font-family: var(--font-display); font-size: 1.1rem; }
+  .last { padding: 0.8rem 1rem; border-radius: 12px; background: rgba(47,143,82,0.1); border: 1px solid rgba(47,143,82,0.4); margin-bottom: 0.9rem; font-size: 0.92rem; display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+  .last b { font-family: var(--font-display); }
+  .last button { margin-left: auto; font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer; padding: 0.35rem 0.9rem; border-radius: 999px; border: 1px solid var(--ok); background: var(--panel); color: var(--ok); }
+  .tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+  th, td { padding: 0.55rem 0.8rem; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--panel-line); }
+  th { font-family: var(--font-display); font-size: 0.76rem; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; background: rgba(43,29,18,0.03); }
+  td.n, th.n { text-align: right; }
+  tr:last-child td { border-bottom: none; }
+  .empty { color: var(--muted); font-size: 0.88rem; padding: 1rem; }
+  .sum td:first-child { font-weight: 700; }
+  .clear { margin-top: 0.7rem; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.8rem; border-radius: 999px; background: transparent; color: var(--muted); border: 1px solid var(--panel-line); }
+  .foot { color: var(--muted); font-size: 0.8rem; line-height: 1.6; max-width: 66ch; }
+
+  /*__MG_CSS__*/
+</style>
+
+<main class="lab">
+  <header class="lab-head">
+    <p class="eyebrow">BEATPHOBIA · 택배 확보 단계</p>
+    <h1>확보 미니게임 시험장</h1>
+    <p class="lede">일반·깨지기·확정 층수 칸에 들어갈 새 게임 3종을 직접 해 보고, 걸린 시간으로 보상 금액을 맞추는 곳입니다. 귀중품은 우봉고 그대로 둡니다. 별(★)은 지금 가정한 시작 난이도예요.</p>
+  </header>
+
+  <section id="menu" aria-label="게임 선택">
+    <div class="cards" id="cards"></div>
+    <div class="opts">
+      <label for="rule">박스 포장 오입력 규칙</label>
+      <select id="rule">
+        <option value="reset">처음부터 다시 (영상 방식 · 현재 결정)</option>
+        <option value="freeze">0.5초 멈췄다가 이어서</option>
+        <option value="ignore">틀린 키는 무시</option>
+      </select>
+      <span class="note">세 가지를 바꿔 가며 해 보면 어느 쪽이 덜 답답한지 바로 느껴져요.</span>
+    </div>
+  </section>
+
+  <section id="play" hidden aria-label="진행 중인 게임">
+    <div id="host"></div>
+    <p class="esc">Esc 키로도 포기할 수 있어요.</p>
+  </section>
+
+  <section class="logbox" aria-label="기록">
+    <h3>내 기록</h3>
+    <div id="last"></div>
+    <div class="tablewrap" id="tables"><p class="empty">아직 기록이 없어요. 위에서 게임을 하나 골라 시작해 보세요.</p></div>
+    <button type="button" class="clear" id="clear" hidden>기록 지우기</button>
+  </section>
+
+  <p class="foot">원/초는 이 게임이 맡을 카테고리의 성공 보상을 걸린 시간으로 나눈 값입니다. 카테고리끼리 이 값이 비슷하거나, 어려운 쪽이 더 높게 나와야 보상 금액이 공정해져요. 사람마다 숙련도가 다르니 여러 명이 몇 판씩 해 본 평균으로 보세요.</p>
+</main>
+
+<script>
+/*__MG_JS__*/
+
+(function () {
+  var CARDS = [
+    { kind: "pack",    cat: "일반택배",         reward: 2500, rec: 1, rule: "화면에 뜬 방향키 순서대로 누르고, 마지막은 스페이스바로 테이프를 붙입니다." },
+    { kind: "inspect", cat: "깨지기 쉬운 택배", reward: 5000, rec: 2, rule: "상자 여러 개 중에서 깨지거나 찌그러진 것을 전부 찾아 클릭합니다." },
+    { kind: "sticker", cat: "확정 층수 택배",   reward: 3000, rec: 2, rule: "송장을 끌어다 상자 위 점선 칸에 쏙 맞게 붙입니다." },
+  ];
+  var LEVELS = MiniGames.LEVEL_NAME;
+  var sel = {};           // kind -> 선택한 난이도
+  var runs = [];          // 기록
+  var ctl = null, lastCfg = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  function won(n) { return n.toLocaleString("ko-KR") + "원"; }
+  function cardOf(kind) { return CARDS.filter(function (c) { return c.kind === kind; })[0]; }
+
+  function renderCards() {
+    var h = "";
+    CARDS.forEach(function (c) {
+      if (!sel[c.kind]) sel[c.kind] = c.rec;
+      h += '<article class="gcard"><span class="cat">' + c.cat + '</span>'
+        + "<h2>" + MiniGames.KINDS[c.kind].name + "</h2>"
+        + '<p class="rule">' + c.rule + "</p>"
+        + '<div class="reward">성공 ' + won(c.reward) + ' <small>· 시작 난이도 ' + LEVELS[c.rec - 1] + "</small></div>"
+        + '<div class="lv" role="group" aria-label="난이도">';
+      for (var i = 1; i <= 3; i++) {
+        h += '<button type="button" data-kind="' + c.kind + '" data-lv="' + i + '" aria-pressed="' + (sel[c.kind] === i) + '"'
+          + (i === c.rec ? ' class="rec"' : "") + ">" + LEVELS[i - 1] + "</button>";
+      }
+      h += '</div><button type="button" class="go" data-go="' + c.kind + '">시작</button></article>';
+    });
+    h += '<article class="gcard keep"><span class="cat">귀중품</span><h2>우봉고</h2>'
+      + '<p class="rule">기존 그대로 유지합니다. 퍼즐 그림을 보고 직접 푼 뒤 “완료”를 누르는 방식이에요.</p>'
+      + '<div class="reward">성공 ' + won(10000) + "</div></article>";
+    $("cards").innerHTML = h;
+  }
+
+  function begin(kind, level) {
+    lastCfg = { kind: kind, level: level };
+    $("menu").hidden = true;
+    $("play").hidden = false;
+    $("last").innerHTML = "";
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    ctl = MiniGames.start($("host"), {
+      kind: kind, level: level,
+      onDone: function (res) { endPlay(); runs.push(res); renderLog(res); },
+      onCancel: function () { endPlay(); },
+    });
+    window.scrollTo(0, 0);
+  }
+  function endPlay() {
+    if (ctl) { ctl.destroy(); ctl = null; }
+    $("play").hidden = true;
+    $("menu").hidden = false;
+  }
+
+  function renderLog(latest) {
+    var lastEl = $("last");
+    if (latest) {
+      var c = cardOf(latest.kind), s = latest.ms / 1000;
+      lastEl.innerHTML = '<div class="last"><span><b>' + MiniGames.KINDS[latest.kind].name + " · " + LEVELS[latest.level - 1] + "</b> "
+        + s.toFixed(1) + "초, 실수 " + latest.mistakes + "회 → " + Math.round(c.reward / s).toLocaleString("ko-KR") + "원/초</span>"
+        + '<button type="button" data-again="1">같은 설정으로 한 번 더</button></div>';
+    }
+    if (!runs.length) { $("tables").innerHTML = '<p class="empty">아직 기록이 없어요. 위에서 게임을 하나 골라 시작해 보세요.</p>'; $("clear").hidden = true; return; }
+    $("clear").hidden = false;
+
+    // 게임·난이도별 요약
+    var groups = {};
+    runs.forEach(function (r) {
+      var k = r.kind + ":" + r.level;
+      (groups[k] = groups[k] || []).push(r);
+    });
+    var sum = '<table class="sum"><thead><tr><th>게임 · 난이도</th><th class="n">횟수</th><th class="n">평균 시간</th><th class="n">최단</th><th class="n">평균 실수</th><th class="n">원/초</th></tr></thead><tbody>';
+    Object.keys(groups).sort().forEach(function (k) {
+      var g = groups[k], f = g[0], c = cardOf(f.kind);
+      var avg = g.reduce(function (a, r) { return a + r.ms; }, 0) / g.length / 1000;
+      var best = Math.min.apply(null, g.map(function (r) { return r.ms; })) / 1000;
+      var miss = g.reduce(function (a, r) { return a + r.mistakes; }, 0) / g.length;
+      sum += "<tr><td>" + MiniGames.KINDS[f.kind].name + " · " + LEVELS[f.level - 1] + '</td><td class="n">' + g.length + '</td><td class="n">' + avg.toFixed(1)
+        + '초</td><td class="n">' + best.toFixed(1) + '초</td><td class="n">' + miss.toFixed(1) + '</td><td class="n">' + Math.round(c.reward / avg).toLocaleString("ko-KR") + "</td></tr>";
+    });
+    sum += "</tbody></table>";
+
+    var all = '<table><thead><tr><th>#</th><th>게임 · 난이도</th><th class="n">시간</th><th class="n">실수</th><th class="n">원/초</th></tr></thead><tbody>';
+    runs.slice().reverse().forEach(function (r, i) {
+      var c = cardOf(r.kind), s = r.ms / 1000;
+      all += '<tr><td>' + (runs.length - i) + "</td><td>" + MiniGames.KINDS[r.kind].name + " · " + LEVELS[r.level - 1] + '</td><td class="n">' + s.toFixed(1)
+        + '초</td><td class="n">' + r.mistakes + '</td><td class="n">' + Math.round(c.reward / s).toLocaleString("ko-KR") + "</td></tr>";
+    });
+    all += "</tbody></table>";
+    $("tables").innerHTML = sum + all;
+  }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("button"); if (!t) return;
+    if (t.hasAttribute("data-lv")) {
+      sel[t.getAttribute("data-kind")] = parseInt(t.getAttribute("data-lv"), 10);
+      renderCards();
+      var again = document.querySelector('.lv button[data-kind="' + t.getAttribute("data-kind") + '"][data-lv="' + t.getAttribute("data-lv") + '"]');
+      if (again) again.focus();
+    } else if (t.hasAttribute("data-go")) {
+      var k = t.getAttribute("data-go"); begin(k, sel[k]);
+    } else if (t.hasAttribute("data-again") && lastCfg) {
+      begin(lastCfg.kind, lastCfg.level);
+    }
+  });
+  $("rule").addEventListener("change", function () { MiniGames.setMistakeRule(this.value); });
+  $("clear").addEventListener("click", function () { runs = []; $("last").innerHTML = ""; renderLog(null); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && ctl) endPlay(); });
+
+  renderCards();
+  renderLog(null);
+})();
+</script>
