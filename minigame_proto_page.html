@@ -72,20 +72,11 @@
   <header class="lab-head">
     <p class="eyebrow">BEATPHOBIA · 택배 확보 단계</p>
     <h1>확보 미니게임 시험장</h1>
-    <p class="lede">일반·깨지기·확정 층수 칸에 들어갈 새 게임 3종을 직접 해 보고, 걸린 시간으로 보상 금액을 맞추는 곳입니다. 귀중품은 우봉고 그대로 둡니다. 별(★)은 지금 가정한 시작 난이도예요.</p>
+    <p class="lede">일반·깨지기·확정 층수·귀중품 칸에 들어갈 게임 4종을 직접 해 보고, 걸린 시간으로 보상 금액을 맞추는 곳입니다. 별(★)은 지금 가정한 시작 난이도예요.</p>
   </header>
 
   <section id="menu" aria-label="게임 선택">
     <div class="cards" id="cards"></div>
-    <div class="opts">
-      <label for="rule">박스 포장 오입력 규칙</label>
-      <select id="rule">
-        <option value="reset">처음부터 다시 (영상 방식 · 현재 결정)</option>
-        <option value="freeze">0.5초 멈췄다가 이어서</option>
-        <option value="ignore">틀린 키는 무시</option>
-      </select>
-      <span class="note">세 가지를 바꿔 가며 해 보면 어느 쪽이 덜 답답한지 바로 느껴져요.</span>
-    </div>
   </section>
 
   <section id="play" hidden aria-label="진행 중인 게임">
@@ -108,9 +99,10 @@
 
 (function () {
   var CARDS = [
-    { kind: "pack",    cat: "일반택배",         reward: 2500, rec: 1, rule: "화면에 뜬 방향키 순서대로 누르고, 마지막은 스페이스바로 테이프를 붙입니다." },
-    { kind: "inspect", cat: "깨지기 쉬운 택배", reward: 5000, rec: 2, rule: "상자 여러 개 중에서 깨지거나 찌그러진 것을 전부 찾아 클릭합니다." },
-    { kind: "sticker", cat: "확정 층수 택배",   reward: 3000, rec: 2, rule: "송장을 끌어다 상자 위 점선 칸에 쏙 맞게 붙입니다." },
+    { kind: "pack",    cat: "일반택배",         reward: 2500, rec: 2, rule: "상자 칸에 조각들을 빈틈없이 채웁니다. 방향키로 옮기고 스페이스로 돌리고 엔터로 놓아요. 안 맞으면 백스페이스로 되돌리고 탭으로 다른 조각을 고릅니다. 겹치게 놓으면 실수." },
+    { kind: "inspect", cat: "깨지기 쉬운 택배", reward: 5000, rec: 2, rule: "벨트로 들어오는 택배를 종류에 맞는 칸으로 보내고(← 일반 · ↓ 깨지기 · → 귀중품), 찌그러지거나 갈라진 택배는 스페이스로 폐기합니다." },
+    { kind: "sticker", cat: "확정 층수 택배",   reward: 3000, rec: 2, rule: "송장의 배송코드를 읽고, 방향키(←→↑↓)로 같은 코드가 적힌 박스를 고른 뒤 스페이스로 붙입니다. 틀린 박스에 붙이면 실수." },
+    { kind: "map",     cat: "귀중품",           reward: 10000, rec: 2, rule: "먼저 송장만 붙은 택배(예: 103호)가 순서대로 팝업으로 떴다 사라집니다. 그다음 지도가 나오면 그 호실의 집을 찾아 방향키로 이동하고, 스페이스로 순서대로 배달해요. 시작 20초 뒤부터는 송장을 다시 볼 수 있어요. 난이도가 오르면 택배가 늘고 비슷한 번호의 미끼 집·공사장이 생겨요." },
   ];
   var LEVELS = MiniGames.LEVEL_NAME;
   var sel = {};           // kind -> 선택한 난이도
@@ -136,9 +128,6 @@
       }
       h += '</div><button type="button" class="go" data-go="' + c.kind + '">시작</button></article>';
     });
-    h += '<article class="gcard keep"><span class="cat">귀중품</span><h2>우봉고</h2>'
-      + '<p class="rule">기존 그대로 유지합니다. 퍼즐 그림을 보고 직접 푼 뒤 “완료”를 누르는 방식이에요.</p>'
-      + '<div class="reward">성공 ' + won(10000) + "</div></article>";
     $("cards").innerHTML = h;
   }
 
@@ -149,7 +138,7 @@
     $("last").innerHTML = "";
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     ctl = MiniGames.start($("host"), {
-      kind: kind, level: level,
+      kind: kind, level: level, testHooks: /[?&]mgtest=1/.test(location.search),
       onDone: function (res) { endPlay(); runs.push(res); renderLog(res); },
       onCancel: function () { endPlay(); },
     });
@@ -212,7 +201,6 @@
       begin(lastCfg.kind, lastCfg.level);
     }
   });
-  $("rule").addEventListener("change", function () { MiniGames.setMistakeRule(this.value); });
   $("clear").addEventListener("click", function () { runs = []; $("last").innerHTML = ""; renderLog(null); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && ctl) endPlay(); });
 

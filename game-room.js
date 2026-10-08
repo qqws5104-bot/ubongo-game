@@ -5,16 +5,17 @@
 // existed because the old design had no real server; it's gone here by construction.
 "use strict";
 
+// 보드가 다 비었을 때 확보 단계를 끝내기까지의 짧은 여유(마지막 확보가 화면에 보일 시간).
+const SECURE_EARLY_END_MS = 1500;
+
 const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
-  PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS,
+  PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
 } = require("./game-data");
 
-// Secure phase is per-player now: each seat has its own independent copy of the 21-cell board,
-// so there is no cross-player contention (both players can secure "the same" cell id -- they're
-// really securing their own separate copy of it). cellById therefore needs to know which seat's
-// board to look in.
-function cellById(state, seat, id) { return state.boards[seat].find((c) => c.id === id) || null; }
+// 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
+// 그 칸은 상대에게서도 사라진다. 그 전(2026-08-27~10-05)에는 플레이어별로 독립된 보드 사본이었다.
+function cellById(state, id) { return state.board.find((c) => c.id === id) || null; }
 function cellMeta(id) { return CELLS.find((c) => c.id === id) || null; }
 
 // 호수(ROOMS, "1"~"9")는 플레이어별로 겹치지 않게 뽑는다 -- 완전 무작위 복원추출이면 같은 플레이어
@@ -78,7 +79,9 @@ function totalScore(seat, state) {
 }
 
 function freshBoard() {
-  return CELLS.map((c) => ({ id: c.id, catIdx: c.catIdx, num: c.num, taken: false, acquiredSeq: null }));
+  // takenBy: 이 칸을 확보한 좌석("1"/"2"). acquiredSeq는 그 좌석 안에서의 확보 순번이다(송장과 연결하는 키 --
+  // 좌석이 다르면 같은 번호가 있을 수 있으니 항상 takenBy와 함께 본다).
+  return CELLS.map((c) => ({ id: c.id, catIdx: c.catIdx, num: c.num, taken: false, takenBy: null, acquiredSeq: null }));
 }
 function freshPlayers() {
   // roomBag: 이 플레이어의 이번 하프용 "안 겹치는 호수" 셔플 가방 (drawRoom() 참고). 하프가 바뀌면
@@ -87,7 +90,9 @@ function freshPlayers() {
 }
 function freshElevator() {
   return {
-    // state: "idle" | "thief" | "voting" | "choosing" | "result" | "done"
+    // state: "idle" | "priority" | "thief" | "voting" | "choosing" | "result" | "done"
+    // "priority": 매 라운드 게이트(idle/result)에서 둘 다 준비하면 맨 먼저 열리는 우선 택배 지정 전용 시간
+    // (PRIORITY_PICK_MS = 10초, 2026-10-06 신설). 둘 다 "확정"하면 조기 종료. 이후 후반이면 thief, 전반이면 voting.
     // "thief": 후반(half===2)에서만 등장 -- voting 시작 전, 택배도둑을 놓을지 말지 THIEF_PLACE_MS
     // 동안 따로 주어지는 전용 시간 (2026-08-27 신설). 전반에는 이 상태를 아예 거치지 않는다.
     // "choosing": 이번 라운드에 같은 층에 배송 대기 중인 내 택배가 2개 이상인 플레이어가 있을 때,
@@ -105,16 +110,20 @@ function freshElevator() {
     // 1회 -> 매 라운드 새로 지정으로 변경). idle/result 게이트(다음 라운드 시작 전 대기 화면)에서만
     // 바꿀 수 있고, 그 라운드 배송이 확정되는 순간(_finishRound) 다음 게이트를 위해 다시 비워진다.
     priorityPick: { "1": null, "2": null },
+    // 우선 택배 지정 전용 시간("priority" 상태)의 종료 시각과 좌석별 "확정" 여부 (2026-10-06 신설).
+    // 미배송 택배가 하나도 없는 플레이어는 지정할 게 없으니 자동으로 확정 처리된다.
+    priorityWindowEndsAt: null,
+    priorityConfirmed: { "1": false, "2": false },
     // thieves: 후반(half===2) 전용. placedThisRound는 "이번 라운드 전용 시간에 배치를 썼는가"(1인당
     // 라운드당 1회), skipped는 "이번 라운드엔 안 놓기로 명시적으로 넘겼는가" (둘 다 하면 그 즉시
     // THIEF_PLACE_MS를 기다리지 않고 voting으로 넘어감 -- choosing의 조기-진행 패턴과 동일), active는
     // "바로 다음 라운드에 실제로 작동 중인 도둑 목록" -- 배치한 그 라운드에는 아직 작동하지 않고,
     // 다음 라운드의 thief 창이 열릴 때 activate된다 ("다음 라운드에 그 층에 배송하면 뺏어간다").
-    // usedThisHalf: 1인당 이 후반 전체(라운드 5개) 통틀어 택배도둑 배치는 딱 1번만 허용한다
-    // (2026-08-27 요청 -- 원래는 매 라운드 새로 놓을 수 있었음). 한 번 놓으면(스킵은 해당 안 됨)
-    // true로 굳어지고, 다음 하프에 freshElevator()가 다시 호출될 때만 리셋된다.
+    // usedThisHalf: 1인당 이 후반 전체를 통틀어 택배도둑을 놓은 횟수. perHalf(THIEF_PER_HALF = 2)에 닿으면
+    // 더는 못 놓는다 (2026-08-27 요청으로 후반 통틀어 1회 -> 2026-10-07 2회). 스킵은 횟수에 안 들어가고,
+    // 다음 하프에 freshElevator()가 다시 호출될 때만 0으로 리셋된다. 라운드당 배치는 여전히 최대 1개.
     thieves: { placedThisRound: { "1": null, "2": null }, skipped: { "1": false, "2": false }, active: [],
-      usedThisHalf: { "1": false, "2": false } },
+      usedThisHalf: { "1": 0, "2": 0 }, perHalf: THIEF_PER_HALF },
     thiefWindowEndsAt: null,
     log: [],
   };
@@ -130,7 +139,7 @@ function initialState() {
     // 없음). 2026-08-27 신설.
     courierPick: { "1": null, "2": null },
     secureEndsAt: null,
-    boards: { "1": freshBoard(), "2": freshBoard() },
+    board: freshBoard(), // 두 플레이어가 공유하는 보드 (종류별 6칸 합계)
     acquireCounter: { "1": 0, "2": 0 },
     players: freshPlayers(),
     elevator: freshElevator(),
@@ -217,23 +226,56 @@ class GameRoom {
   }
 
   // ---- secure phase ----
-  // Each seat has its own independent board (see freshBoard/state.boards), so there is no
-  // cross-player race here anymore -- player 1 securing "fragile-1" has zero effect on whether
-  // player 2 can also secure their own "fragile-1". Giving up (the client just closes the puzzle
-  // overlay without sending this message) never reaches here, so a given-up cell never gets
-  // touched -- it stays exactly as untaken as it was before the attempt.
+  // 보드는 두 플레이어가 공유한다(종류별 6칸 = 합계 6개). 누가 미니게임을 "먼저 끝내느냐"가 곧 선착순이다
+  // (여는 순간 잠그지 않는다 -- 사용자 결정 2026-10-06: "한 사람이 완료해서 박스를 만들면 총 개수에서 줄어든다").
+  //  * 일반/깨지기/귀중품: 칸은 서로 구별이 없다(그냥 개수). 클라이언트가 보낸 칸이 이미 남이 가져갔어도
+  //    같은 종류의 빈 칸 아무거나를 대신 준다. 종류 전체가 소진됐으면 그냥 무시(= 늦은 사람은 허탕).
+  //  * 확정 층수 택배: 칸이 곧 배송 층이라 서로 대체가 안 된다. 그 층을 이미 남이 가져갔으면 무시(선점자 우선).
+  // 포기(클라이언트가 이 메시지를 안 보내고 게임만 닫음)는 여기까지 오지 않으므로 보드는 그대로다.
   secureCell(seat, cellId) {
     if (this.state.phase !== "secure") return;
-    const cell = cellById(this.state, seat, cellId);
-    if (!cell || cell.taken) return; // already taken by this same seat (or unknown id) -- silent no-op
+    let cell = cellById(this.state, cellId);
+    if (!cell) return; // 모르는 id
+    if (cell.taken) {
+      if (cell.takenBy === seat) return; // 내가 이미 가진 칸에 대한 중복 메시지 -- 무시 (대체 칸을 또 주면 안 된다)
+      if (TYPES[cell.catIdx].fixedFloor) return;
+      cell = this.state.board.find((c) => c.catIdx === cell.catIdx && !c.taken) || null;
+      if (!cell) return;
+    }
     this.touch();
     cell.taken = true;
+    cell.takenBy = seat;
     this.state.acquireCounter[seat] += 1;
     cell.acquiredSeq = this.state.acquireCounter[seat];
-    const meta = cellMeta(cellId);
     const room = drawRoom(this.state.players[seat]);
-    this.state.players[seat].invoices.push(randomInvoice(seat, meta.catIdx, meta.num, cell.acquiredSeq, room));
+    this.state.players[seat].invoices.push(randomInvoice(seat, cell.catIdx, cell.num, cell.acquiredSeq, room));
+    // 2026-10-07: 보드가 다 비면 남은 시간을 기다리지 않고 곧 엘리베이터로 넘어간다(할 게 없는 빈 시간 방지).
+    // 클라이언트의 카운트다운이 secureEndsAt을 보므로 그 값을 짧게 당겨 둔다. _scheduleAt은 타이머 슬롯이 하나라
+    // 원래의 3분 타이머를 대체한다(낡은 타이머가 다음 하프의 확보 단계를 끊을 일 없음).
+    if (this.state.board.every((c) => c.taken)) {
+      this.state.secureEndsAt = Date.now() + SECURE_EARLY_END_MS;
+      this._scheduleAt(this.state.secureEndsAt, () => this._endSecurePhase());
+    }
     this.emit();
+  }
+
+  // 2026-10-07 레일 사이트(/rail): 공용 레일 화면에서 seat 쪽 버튼이 눌렸을 때 "그 좌석 플레이어가 풀 칸"을 정해 돌려준다.
+  // 상태는 바꾸지 않는다(칸은 플레이어가 미니게임을 끝내고 secure-cell을 보낼 때 확보됨 -- 위 secureCell 규칙 그대로).
+  //  * 일반/깨지기/귀중품: 그 종류의 아직 안 가져간 첫 칸. 없으면 null(소진).
+  //  * 확정 층수 택배: 레일 화면이 고른 층(cellId)이 아직 비어 있어야 한다. 아니면 null.
+  // 좌석 주인이 없거나 확보 단계가 아니면 null.
+  railCellFor(seat, catIdx, cellId) {
+    if (this.state.phase !== "secure") return null;
+    if (seat !== "1" && seat !== "2") return null;
+    if (!this.state.seatOwners[seat]) return null;
+    const t = TYPES[catIdx];
+    if (!t) return null;
+    if (t.fixedFloor) {
+      const c = cellById(this.state, cellId);
+      return c && c.catIdx === catIdx && !c.taken ? c.id : null;
+    }
+    const free = this.state.board.find((c) => c.catIdx === catIdx && !c.taken);
+    return free ? free.id : null;
   }
 
   _endSecurePhase() {
@@ -244,14 +286,15 @@ class GameRoom {
   }
 
   // ---- elevator phase ----
-  // 우선 택배 지정 (2026-08-27: 게임/하프 전체 1회 -> 매 라운드 새로 지정으로 변경). idle(라운드1
-  // 시작 전)/result(다음 라운드 시작 전) 게이트에서만 바꿀 수 있다 -- 그 라운드가 실제로 진행되는
-  // 동안(voting/choosing)은 고정. 최대 1개, 선택 사항이며 언제든 null로 되돌려 지정 해제 가능.
+  // 우선 택배 지정 (2026-08-27: 게임/하프 전체 1회 -> 매 라운드 새로 지정으로 변경). 2026-10-06부터는
+  // 게이트가 아니라 전용 "priority" 시간(PRIORITY_PICK_MS)에서만, 그리고 내가 아직 "확정"하지 않았을 때만
+  // 바꿀 수 있다 -- 그 라운드가 실제로 진행되는 동안(voting/choosing)은 고정. 최대 1개, 선택 사항이며
+  // 확정 전에는 null로 되돌려 지정 해제 가능.
   // 그 라운드에 정확히 그 송장이 배송돼야만 PRIORITY_MULTIPLIER가 적용된다 (다음 라운드로 안 넘어감).
   setPriorityPick(seat, invoiceId) {
     if (this.state.phase !== "elevator") return;
     const el = this.state.elevator;
-    if (el.state !== "idle" && el.state !== "result") return;
+    if (el.state !== "priority" || el.priorityConfirmed[seat]) return;
     if (invoiceId !== null) {
       const inv = this.state.players[seat].invoices.find((v) => v.id === invoiceId);
       if (!inv || inv.deliveredRound !== null) return; // 내 것이면서 아직 미배송인 송장만 지정 가능
@@ -274,9 +317,51 @@ class GameRoom {
   }
 
   // Used both for the pre-round-1 "idle" gate and the between-round "result" gate, once both
-  // players are ready: in 후반(half===2) a dedicated THIEF_PLACE_MS window comes first (see
-  // _startThiefWindow); in 전반 there's no thief mechanic at all, so it goes straight to voting.
+  // players are ready: the 10s priority-pick window (_startPriorityWindow) comes first, then in 후반
+  // (half===2) the THIEF_PLACE_MS window (_startThiefWindow); in 전반 there's no thief mechanic, so voting.
   _enterNextRound() {
+    this._startPriorityWindow();
+  }
+
+  // 우선 택배 지정 전용 시간 (2026-10-06 신설). 매 라운드 맨 처음 PRIORITY_PICK_MS(10초) 동안 열리고,
+  // 둘 다 "확정"(지정하거나 "지정 안 함")하면 시간을 다 기다리지 않고 곧장 다음 단계로 넘어간다.
+  // 지정할 미배송 택배가 없는 플레이어는 자동 확정이고, 둘 다 그렇다면 창 자체를 열지 않는다
+  // (thief 창과 같은 패턴). 지난 라운드의 지정값은 _finishRound에서 이미 비워져 있다.
+  _startPriorityWindow() {
+    const el = this.state.elevator;
+    el.priorityPick = { "1": null, "2": null };
+    ["1", "2"].forEach((s) => {
+      el.priorityConfirmed[s] = !this.state.players[s].invoices.some((v) => v.deliveredRound === null);
+    });
+    if (el.priorityConfirmed["1"] && el.priorityConfirmed["2"]) { this._afterPriorityWindow(); return; }
+    el.state = "priority";
+    const endsAt = Date.now() + PRIORITY_PICK_MS;
+    el.priorityWindowEndsAt = endsAt;
+    this._scheduleAt(endsAt, () => this._endPriorityWindow(endsAt));
+    this.emit();
+  }
+
+  confirmPriority(seat) {
+    if (this.state.phase !== "elevator") return;
+    const el = this.state.elevator;
+    if (el.state !== "priority" || el.priorityConfirmed[seat]) return;
+    this.touch();
+    el.priorityConfirmed[seat] = true;
+    if (el.priorityConfirmed["1"] && el.priorityConfirmed["2"]) { this._afterPriorityWindow(); return; }
+    this.emit();
+  }
+
+  // expectedEndsAt: 이전 라운드의 (조기 종료돼서 이미 쓸모없어진) 타이머가 이번 라운드의 새 창을
+  // 중간에 끊지 못하도록, 이 타이머가 연 바로 그 창일 때만 동작한다.
+  _endPriorityWindow(expectedEndsAt) {
+    const el = this.state.elevator;
+    if (this.state.phase !== "elevator" || el.state !== "priority") return;
+    if (expectedEndsAt !== undefined && el.priorityWindowEndsAt !== expectedEndsAt) return;
+    this._afterPriorityWindow();
+  }
+
+  _afterPriorityWindow() {
+    this.state.elevator.priorityWindowEndsAt = null;
     if (this.state.half === 2) this._startThiefWindow();
     else this._startVotingRound();
   }
@@ -293,11 +378,13 @@ class GameRoom {
       .map((s) => ({ seat: s, floorIdx: el.thieves.placedThisRound[s] }));
     el.thieves.placedThisRound = { "1": null, "2": null };
     el.thieves.skipped = { "1": false, "2": false };
-    // 이미 이 후반에 1회 배치를 다 쓴 플레이어는 이번 라운드도 자동으로 "넘김" 처리해서 굳이 화면에서
-    // 다시 액션을 요구하지 않는다 (2026-08-27, 후반 전체 1회 한도). 둘 다 이미 다 썼다면 아무도 놓을 수
-    // 없으니 thief 창 자체를 열지 않고 곧장 voting으로 넘어간다.
-    ["1", "2"].forEach((s) => { if (el.thieves.usedThisHalf[s]) el.thieves.skipped[s] = true; });
-    if (["1", "2"].every((s) => el.thieves.usedThisHalf[s])) { this._startVotingRound(); return; }
+    // 이미 이 후반의 배치 한도(THIEF_PER_HALF)를 다 쓴 플레이어는 이번 라운드도 자동으로 "넘김" 처리해서
+    // 굳이 화면에서 다시 액션을 요구하지 않는다. 둘 다 다 썼다면 아무도 놓을 수 없으니 thief 창 자체를
+    // 열지 않고 곧장 voting으로 넘어간다. 마지막 라운드도 창을 열지 않는다: 도둑은 "다음 라운드부터"
+    // 작동하는데 다음 라운드가 없어서, 놓으면 한도만 날리는 함정이 되기 때문 (2026-10-07).
+    const usedUp = (s) => el.thieves.usedThisHalf[s] >= THIEF_PER_HALF;
+    ["1", "2"].forEach((s) => { if (usedUp(s)) el.thieves.skipped[s] = true; });
+    if (el.round >= ELEVATOR_ROUNDS || ["1", "2"].every(usedUp)) { this._startVotingRound(); return; }
     el.state = "thief";
     el.thiefWindowEndsAt = Date.now() + THIEF_PLACE_MS;
     this._scheduleAt(el.thiefWindowEndsAt, () => this._endThiefWindow());
@@ -328,8 +415,7 @@ class GameRoom {
   }
 
   // 후반(half===2)에서만, 그리고 오직 전용 "thief" 시간에만 유효. 이번 라운드에 이미 배치했거나
-  // 넘겼다면 무시. 1인당 이 후반 전체 5라운드를 통틀어 배치는 딱 1번만 허용된다(2026-08-27 요청,
-  // usedThisHalf) -- 이미 썼다면 _startThiefWindow가 매 라운드 자동으로 스킵 처리해두므로 여기까지
+  // 넘겼다면 무시. 1인당 이 후반 전체를 통틀어 배치는 THIEF_PER_HALF(2)번까지만 허용된다(usedThisHalf) -- 이미 다 썼다면 _startThiefWindow가 매 라운드 자동으로 스킵 처리해두므로 여기까지
   // 오는 일 자체가 없다. 배치 직후엔 아무 효과 없고, 다음 라운드의 thief 창이 열릴 때
   // (_startThiefWindow) active로 넘어가 작동한다. floorIdx가 null이면 "이번 라운드엔 안 놓음"으로
   // 명시적으로 넘기는 것(usedThisHalf는 소진되지 않음) -- 두 플레이어 모두 배치/넘기기를 마치면
@@ -346,7 +432,7 @@ class GameRoom {
       el.thieves.skipped[seat] = true;
     } else {
       el.thieves.placedThisRound[seat] = floorIdx;
-      el.thieves.usedThisHalf[seat] = true; // 후반 전체 1회 한도 소진 (2026-08-27)
+      el.thieves.usedThisHalf[seat] += 1; // 후반 전체 한도(THIEF_PER_HALF)에서 1회 차감
     }
     const bothDone = ["1", "2"].every((s) => el.thieves.placedThisRound[s] !== null || el.thieves.skipped[s]);
     if (bothDone) { this._endThiefWindow(); return; }
@@ -490,7 +576,7 @@ class GameRoom {
 
   // Ends the current half: snapshots this half's per-player invoices + score into halfHistory.
   // After half 1, moves to a "halftime" transition screen (both press space to start half 2 --
-  // fresh boards/invoices, thief mechanic unlocked). After half 2, sums both halves' scores into
+  // fresh board/invoices, thief mechanic unlocked). After half 2, sums both halves' scores into
   // the grand total and moves to "end".
   _finishHalf() {
     const scores = this._computeHalfScores();
@@ -529,7 +615,7 @@ class GameRoom {
   }
 
   _restartGame() {
-    this.state.boards = { "1": freshBoard(), "2": freshBoard() };
+    this.state.board = freshBoard();
     this.state.acquireCounter = { "1": 0, "2": 0 };
     this.state.players = freshPlayers();
     this.state.elevator = freshElevator();
@@ -545,7 +631,7 @@ class GameRoom {
     this.touch();
     this.state.halftimeReady[seat] = true;
     if (!(this.state.halftimeReady["1"] && this.state.halftimeReady["2"])) { this.emit(); return; }
-    this.state.boards = { "1": freshBoard(), "2": freshBoard() };
+    this.state.board = freshBoard();
     this.state.acquireCounter = { "1": 0, "2": 0 };
     this.state.players = freshPlayers();
     this._startGame(); // phase="secure" again, fresh secure timer; also emits

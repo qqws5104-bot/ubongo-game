@@ -67,7 +67,12 @@ assert.strictEqual(room.state.half, 2, "still half 2");
 // ---- 후반 라운드 1: idle -> thief window. seat 1이 B1(floorIdx 0)에 도둑을 놓고, seat 2는 넘긴다.
 room.setElevatorReady("1");
 room.setElevatorReady("2");
-assert.strictEqual(room.state.elevator.state, "thief", "후반 round 1 should open the thief window");
+// 2026-10-06: 준비가 끝나면 우선 택배 지정 전용 시간("priority")이 맨 먼저 열린다 (seat 2는 미배송 송장이 있음).
+assert.strictEqual(room.state.elevator.state, "priority", "both ready -> the priority-pick window opens first");
+room.confirmPriority("1");
+assert.strictEqual(room.state.elevator.state, "priority", "one confirmation must not close the window");
+room.confirmPriority("2");
+assert.strictEqual(room.state.elevator.state, "thief", "후반 round 1 should open the thief window after both confirm the priority pick");
 
 room.placeThief("1", 0); // B1을 노림
 room.placeThief("2", null); // 넘김
@@ -85,6 +90,7 @@ assert.strictEqual(seat2Inv.deliveredRound, null, "seat 2's B1 invoice must stil
 room.setElevatorReady("1");
 room.setElevatorReady("2");
 assert.strictEqual(room.state.elevator.round, 2, "should now be round 2");
+room.confirmPriority("1"); room.confirmPriority("2"); // 우선 택배 지정 창 통과 (자동 확정 상태면 무시됨)
 assert.strictEqual(room.state.elevator.state, "thief", "round 2 should also open a thief window");
 assert.deepStrictEqual(
   room.state.elevator.thieves.active,
@@ -93,9 +99,10 @@ assert.deepStrictEqual(
 );
 log("confirmed: round-1 thief placement activated exactly one round later, as designed");
 
-// seat 1은 후반 전체 1회 한도를 이미 썼으므로 자동으로 스킵 처리돼 있어야 한다.
-assert.strictEqual(room.state.elevator.thieves.skipped["1"], true, "seat 1 should be auto-skipped (already used this half)");
-room.placeThief("2", null); // seat 2도 넘겨서 곧장 voting으로
+// seat 1은 후반 2회 한도 중 1회만 썼으므로 아직 자동 스킵이 아니다(2026-10-07: 1회 -> 2회). 둘 다 넘겨서 voting으로.
+assert.strictEqual(room.state.elevator.thieves.skipped["1"], false, "seat 1 still has 1 placement left (2 per half)");
+room.placeThief("1", null);
+room.placeThief("2", null);
 assert.strictEqual(room.state.elevator.state, "voting", "round 2 should now be voting");
 
 // 엘리베이터를 1F(idx 1) -> B1(idx 0)으로 이동시켜 seat 2의 그 송장을 이번 라운드에 배송시킨다.

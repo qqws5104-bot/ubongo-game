@@ -59,8 +59,8 @@ log("confirmed: seatOwners/courierPick survive the restart (no re-pick screen ne
 // 보드/송장은 완전히 새로 -- 이전 하프에서 확보했던 송장이 하나도 남아있으면 안 됨
 assert.strictEqual(room.state.players["1"].invoices.length, 0, "seat 1 must start the restarted game with zero invoices");
 assert.strictEqual(room.state.players["2"].invoices.length, 0, "seat 2 must start the restarted game with zero invoices");
-const takenCells = room.state.boards["1"].filter((c) => c.taken).length + room.state.boards["2"].filter((c) => c.taken).length;
-assert.strictEqual(takenCells, 0, "both boards must be completely fresh (no taken cells) after restart");
+const takenCells = room.state.board.filter((c) => c.taken).length;
+assert.strictEqual(takenCells, 0, "the shared board must be completely fresh (no taken cells) after restart");
 log("confirmed: boards/invoices fully reset after restart");
 
 // secure 타이머가 실제로 다시 걸렸는지

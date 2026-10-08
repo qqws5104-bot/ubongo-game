@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>레일 선택 시험장</title>
+<style>
+:root {
+  --bg: #f6ecd9; --bg2: #efe0c3; --panel: #fffcf4; --line: #dcc9a3; --ink: #2b1d12; --muted: #8a6f4e;
+  --accent: #e2691a; --navy: #16233f; --ok: #2f8f52; --danger: #c7402d;
+  --belt: #3a3f4a; --belt2: #2d313a;
+  --c0: #c9a576; --c1: #c7e29a; --c2: #f0b84a; --c3: #6dbbfd;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: linear-gradient(180deg, var(--bg), #fbf5e9); color: var(--ink); font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif; min-height: 100vh; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 18px 16px 40px; }
+h1 { margin: 0 0 2px; font-size: 1.35rem; }
+.sub { color: var(--muted); font-size: .88rem; margin-bottom: 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: .88rem; }
+.bar label { display: inline-flex; align-items: center; gap: 6px; }
+.bar select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: #fff; }
+.btn { font: inherit; font-weight: 700; border: 0; border-radius: 10px; padding: 8px 16px; cursor: pointer; background: var(--accent); color: #fff; }
+.btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+.btn:disabled { opacity: .45; cursor: default; }
+.clock { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 190px; }
+.clock b { font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--accent); min-width: 3ch; text-align: right; }
+.tbar { flex: 1; height: 8px; border-radius: 99px; background: rgba(43,29,18,.12); overflow: hidden; }
+.tbar i { display: block; height: 100%; width: 100%; background: var(--accent); transition: width .2s linear; }
+
+.stage { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(120px, 150px) minmax(220px, 280px) minmax(120px, 150px) minmax(150px, 1fr); gap: 0; align-items: stretch; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.stage.only1 .seat2, .stage.only1 .btns2 { visibility: hidden; }
+.stage.only2 .seat1, .stage.only2 .btns1 { visibility: hidden; }
+.col { display: grid; grid-template-rows: auto repeat(4, 1fr); gap: 10px; }
+.col .hd, .rail .hd { font-weight: 700; font-size: .9rem; text-align: center; padding-bottom: 2px; color: var(--muted); min-height: 2.6em; display: flex; align-items: center; justify-content: center; }
+.col.seat .hd { color: var(--ink); }
+.pick {
+  font: inherit; cursor: pointer; border: 2px solid var(--line); border-bottom-width: 5px; border-radius: 12px; background: #fff; color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 8px; min-height: 84px; position: relative;
+}
+.pick:active:not(:disabled) { transform: translateY(3px); border-bottom-width: 2px; }
+.pick:disabled { opacity: .5; cursor: default; }
+.pick .nm { font-weight: 700; font-size: .92rem; }
+.pick .rw { font-size: .78rem; color: var(--muted); }
+.pick .kh { position: absolute; top: 5px; right: 7px; font-size: .68rem; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; color: var(--muted); background: var(--bg); }
+.pick.empty { background: repeating-linear-gradient(45deg, #eee, #eee 6px, #f7f7f7 6px 12px); }
+.pick .sw { width: 100%; height: 6px; border-radius: 4px; }
+
+/* 레일 */
+.rail { position: relative; display: grid; grid-template-rows: auto repeat(4, 1fr); gap: 10px; }
+.rail .hd { text-align: center; font-weight: 700; font-size: .9rem; color: var(--muted); }
+.rail::before { content: ""; position: absolute; left: 12%; right: 12%; top: 30px; bottom: 0; border-radius: 12px;
+  background: repeating-linear-gradient(180deg, var(--belt) 0 16px, var(--belt2) 16px 20px); animation: belt 1.2s linear infinite; box-shadow: inset 0 0 0 4px #1f232b, 0 4px 0 rgba(43,29,18,.2); }
+.rail.stopped::before { animation: none; }
+@keyframes belt { from { background-position-y: 0; } to { background-position-y: 20px; } }
+.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; }
+.box { position: relative; width: 124px; height: 78px; filter: drop-shadow(0 4px 4px rgba(0,0,0,.35)); }
+.box .top { position: absolute; left: 0; right: 0; top: 0; height: 30%; background: linear-gradient(180deg, #e4cb9c, #d2b27c); clip-path: polygon(9% 0, 91% 0, 100% 100%, 0 100%); }
+.box .fr { position: absolute; left: 0; right: 0; top: 30%; bottom: 0; border-radius: 0 0 5px 5px; background: linear-gradient(180deg, #c9a576, #b08a58); border: 2px solid #7a5a30; border-top: 0;
+  display: flex; align-items: center; justify-content: center; }
+.box .tp { position: absolute; left: 44%; width: 12%; top: 0; bottom: 0; background: rgba(247,233,200,.85); }
+.box .tag { position: relative; z-index: 1; padding: 3px 8px; border-radius: 6px; background: var(--tc); color: var(--navy); font-weight: 800; font-size: .74rem; border: 1.5px solid rgba(22,35,63,.45); white-space: nowrap; }
+.stockrow { margin-top: 6px; display: flex; gap: 3px; z-index: 1; background: rgba(255,252,244,.9); padding: 3px 6px; border-radius: 99px; }
+.pip { width: 9px; height: 9px; border-radius: 50%; background: var(--tc); border: 1.5px solid rgba(22,35,63,.5); }
+.pip.gone { background: transparent; border-style: dashed; opacity: .45; }
+.stockq { font-size: .72rem; font-weight: 700; color: var(--muted); padding: 0 4px; }
+.slot.out .box { filter: grayscale(1) drop-shadow(0 2px 2px rgba(0,0,0,.3)); opacity: .55; }
+.slot.out::after { content: "소진"; position: absolute; top: 20px; font-weight: 800; color: #fff; background: var(--danger); padding: 2px 10px; border-radius: 6px; transform: rotate(-8deg); z-index: 3; }
+
+/* 내 자리 (받은 박스) */
+.seat .pile { border: 2px dashed var(--line); border-radius: 12px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; min-height: 84px; }
+.seat .pile .mini { width: 38px; height: 26px; border-radius: 4px; background: var(--tc); border: 2px solid rgba(22,35,63,.45); flex: none; }
+.seat .pile .n { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.6ch; }
+.seat .pile .lb { font-size: .76rem; color: var(--muted); line-height: 1.25; }
+.seat .pile.bump { animation: bump .25s ease; }
+@keyframes bump { 50% { transform: scale(1.06); background: #fff6df; } }
+.seat .tot { text-align: center; font-size: .88rem; font-weight: 700; padding-top: 2px; }
+.fly { position: fixed; z-index: 50; pointer-events: none; width: 60px; height: 40px; border-radius: 5px; background: var(--tc); border: 2px solid rgba(22,35,63,.5); box-shadow: 0 4px 10px rgba(0,0,0,.3); }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 8px 16px; border-radius: 99px; font-size: .86rem; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; }
+.toast.on { opacity: 1; }
+
+.result { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: none; }
+.result.on { display: block; }
+.result h2 { margin: 0 0 8px; font-size: 1.05rem; }
+.result table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.result th, .result td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+.result th:first-child, .result td:first-child { text-align: left; }
+.note { margin-top: 10px; font-size: .82rem; color: var(--muted); line-height: 1.5; }
+.log { margin-top: 8px; font-size: .78rem; color: var(--muted); max-height: 90px; overflow: auto; }
+
+@media (max-width: 860px) {
+  .stage { grid-template-columns: 1fr; gap: 12px; }
+  .rail, .seat1, .seat2, .btns1, .btns2 { grid-column: 1 / -1; }
+  .rail { order: 0; } .btns1 { order: 1; } .btns2 { order: 1; } .seat1 { order: 2; } .seat2 { order: 2; }
+  .rail::before { display: none; }
+  .col { grid-template-rows: auto; grid-template-columns: 1fr 1fr; } .col .hd { grid-column: 1 / -1; }
+  .rail { grid-template-rows: auto; grid-template-columns: repeat(4, 1fr); } .rail .hd { grid-column: 1 / -1; }
+  .box { width: 78px; height: 50px; } .box .tag { font-size: .6rem; padding: 1px 4px; }
+}
+@media (prefers-reduced-motion: reduce) { .rail::before { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>레일 선택 시험장</h1>
+  <div class="sub">레일 위 박스 4종 · 종류마다 6개(총 24개)를 두 사람이 나눠 가짐 · 같은 종류를 둘이 골라도 각자 1개씩 가져감. 실제 게임에서는 "내 자리" 쪽만 보입니다.</div>
+
+  <div class="bar">
+    <button class="btn" id="start">시작</button>
+    <button class="btn ghost" id="reset" disabled>초기화</button>
+    <label>제한 시간
+      <select id="optTime"><option value="30">30초</option><option value="45" selected>45초</option><option value="60">60초</option><option value="90">90초</option></select></label>
+    <label>1인당 선택 횟수
+      <select id="optBudget"><option value="0" selected>무제한</option><option value="6">6번</option><option value="8">8번</option><option value="10">10번</option><option value="12">12번</option></select></label>
+    <label><input type="checkbox" id="optStock" checked> 남은 개수 공개</label>
+    <label>화면
+      <select id="optView"><option value="all" selected>시험장(두 자리 다 보기)</option><option value="1">1번 자리 화면만</option><option value="2">2번 자리 화면만</option></select></label>
+    <div class="clock"><span class="tbar"><i id="tfill"></i></span><b id="tnum">45</b></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="col seat seat1" id="seat1"><div class="hd">1번 자리 · 받은 박스</div></div>
+    <div class="col btns1" id="btns1"><div class="hd">1번 버튼</div></div>
+    <div class="rail" id="rail"><div class="hd">레일</div></div>
+    <div class="col btns2" id="btns2"><div class="hd">2번 버튼</div></div>
+    <div class="col seat seat2" id="seat2"><div class="hd">2번 자리 · 받은 박스</div></div>
+  </div>
+
+  <div class="result" id="result"></div>
+  <div class="note" id="legend">키보드: 1번 자리 A·S·D·F / 2번 자리 J·K·L·; (왼쪽부터 일반·깨지기·귀중품·확정층수). 확정 층수 택배는 실제 게임에선 층(B1~5F)이 고정된 6개지만, 이 시험장에서는 종류만 봅니다.</div>
+  <div class="log" id="log"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var TYPES = [
+    { name: "일반택배", color: "#c9a576", reward: 2500, penalty: 1000 },
+    { name: "깨지기 쉬운 택배", color: "#c7e29a", reward: 5000, penalty: 2500 },
+    { name: "귀중품", color: "#f0b84a", reward: 10000, penalty: 5000 },
+    { name: "확정 층수 택배", color: "#6dbbfd", reward: 3000, penalty: 2500 }
+  ];
+  var PER_TYPE = 6;
+  var KEYS = { "1": ["a", "s", "d", "f"], "2": ["j", "k", "l", ";"] };
+  var $ = function (id) { return document.getElementById(id); };
+  var won = function (n) { return (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("ko-KR") + "원"; };
+
+  var S = null; // 진행 상태
+  var timer = null;
+
+  function newState() {
+    return {
+      running: false, endsAt: 0, total: 45000, budget: 0, publicStock: true,
+      stock: TYPES.map(function () { return PER_TYPE; }),
+      got: { "1": TYPES.map(function () { return 0; }), "2": TYPES.map(function () { return 0; }) },
+      used: { "1": 0, "2": 0 },
+      knownEmpty: { "1": [false, false, false, false], "2": [false, false, false, false] },
+      log: []
+    };
+  }
+
+  /* ---------- 화면 구성 (한 번만) ---------- */
+  function build() {
+    ["1", "2"].forEach(function (seat) {
+      var b = $("btns" + seat), p = $("seat" + seat);
+      TYPES.forEach(function (t, i) {
+        var btn = document.createElement("button");
+        btn.className = "pick"; btn.type = "button"; btn.dataset.seat = seat; btn.dataset.t = i; btn.style.setProperty("--tc", t.color);
+        btn.innerHTML = '<span class="sw" style="background:' + t.color + '"></span><span class="nm">' + t.name + '</span><span class="rw">+' + t.reward.toLocaleString("ko-KR") + '원</span><span class="kh">' + KEYS[seat][i].toUpperCase() + "</span>";
+        b.appendChild(btn);
+        var pile = document.createElement("div");
+        pile.className = "pile"; pile.id = "pile" + seat + "_" + i; pile.style.setProperty("--tc", t.color);
+        pile.innerHTML = '<span class="mini"></span><span class="n">0</span><span class="lb">' + t.name + "</span>";
+        p.appendChild(pile);
+      });
+    });
+    var rail = $("rail");
+    TYPES.forEach(function (t, i) {
+      var s = document.createElement("div");
+      s.className = "slot"; s.id = "slot" + i; s.style.setProperty("--tc", t.color);
+      s.innerHTML = '<div class="box" id="box' + i + '"><div class="top"></div><div class="fr"><div class="tp"></div><span class="tag">' + t.name + '</span></div></div><div class="stockrow" id="stock' + i + '"></div>';
+      rail.appendChild(s);
+    });
+    // 합계 줄 (자리 열 맨 아래에 붙이지 않고 hd에 표시)
+  }
+
+  /* ---------- 렌더 ---------- */
+  function render() {
+    var view = $("optView").value;
+    $("stage").className = "stage" + (view === "1" ? " only1" : view === "2" ? " only2" : "");
+    $("rail").classList.toggle("stopped", !S.running);
+    TYPES.forEach(function (t, i) {
+      var real = S.stock[i];
+      var showReal = S.publicStock;
+      var slot = $("slot" + i);
+      var row = $("stock" + i);
+      // 비공개 모드에서는 "소진된 걸 알아챈" 사람 화면에서만 소진 표시 -- 시험장(두 자리 화면)에서는 둘 중 하나라도 알면 표시
+      var knownOut = real === 0 && (showReal || S.knownEmpty["1"][i] || S.knownEmpty["2"][i]);
+      slot.classList.toggle("out", knownOut);
+      if (showReal) {
+        var h = "";
+        for (var k = 0; k < PER_TYPE; k++) h += '<span class="pip' + (k < real ? "" : " gone") + '"></span>';
+        row.innerHTML = h;
+      } else {
+        row.innerHTML = '<span class="stockq">남은 개수 ? / ' + PER_TYPE + "</span>";
+      }
+    });
+    ["1", "2"].forEach(function (seat) {
+      var total = 0, cnt = 0;
+      TYPES.forEach(function (t, i) {
+        var n = S.got[seat][i];
+        $("pile" + seat + "_" + i).querySelector(".n").textContent = n;
+        total += n * t.reward; cnt += n;
+        var btn = document.querySelector('.pick[data-seat="' + seat + '"][data-t="' + i + '"]');
+        var empty = S.knownEmpty[seat][i] || (S.publicStock && S.stock[i] === 0);
+        btn.disabled = !S.running || (S.budget && S.used[seat] >= S.budget) || (S.publicStock && S.stock[i] === 0);
+        btn.classList.toggle("empty", !!empty);
+      });
+      var hd = $("seat" + seat).querySelector(".hd");
+      hd.textContent = seat + "번 자리 · 받은 박스 " + cnt + "개" + (S.budget ? " (남은 선택 " + Math.max(0, S.budget - S.used[seat]) + ")" : "");
+    });
+  }
+
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("on");
+    clearTimeout(toast._h); toast._h = setTimeout(function () { t.classList.remove("on"); }, 1300);
+  }
+
+  /* ---------- 선택 ---------- */
+  function pick(seat, i) {
+    if (!S.running) return;
+    if (S.budget && S.used[seat] >= S.budget) { toast(seat + "번: 선택 횟수를 다 썼어요"); return; }
+    if (S.stock[i] <= 0) {
+      S.knownEmpty[seat][i] = true;
+      S.log.push(seat + "번 → " + TYPES[i].name + " 시도했지만 이미 소진");
+      toast(seat + "번: " + TYPES[i].name + "은(는) 이미 소진됐어요");
+      render(); writeLog(); return;
+    }
+    S.stock[i] -= 1; S.got[seat][i] += 1; S.used[seat] += 1;
+    S.log.push(seat + "번 → " + TYPES[i].name + " (남은 " + S.stock[i] + ")");
+    fly(seat, i);
+    render(); writeLog();
+    if (S.stock.every(function (n) { return n === 0; })) finish("박스 24개가 모두 나갔어요");
+  }
+
+  function fly(seat, i) {
+    var from = $("box" + i).getBoundingClientRect();
+    var to = $("pile" + seat + "_" + i);
+    var tr = to.getBoundingClientRect();
+    if (!from.width || !tr.width || $("stage").className.indexOf("only") > -1 && (($("stage").className.indexOf("only1") > -1 && seat === "2") || ($("stage").className.indexOf("only2") > -1 && seat === "1"))) return;
+    var f = document.createElement("div");
+    f.className = "fly"; f.style.setProperty("--tc", TYPES[i].color);
+    f.style.left = (from.left + from.width / 2 - 30) + "px"; f.style.top = (from.top + from.height / 2 - 20) + "px";
+    document.body.appendChild(f);
+    var dx = (tr.left + 36) - (from.left + from.width / 2), dy = (tr.top + tr.height / 2) - (from.top + from.height / 2);
+    var a = f.animate([{ transform: "translate(0,0) scale(1)", opacity: 1 }, { transform: "translate(" + dx + "px," + dy + "px) scale(.55)", opacity: .9 }], { duration: 420, easing: "cubic-bezier(.3,.7,.3,1)" });
+    a.onfinish = function () { f.remove(); to.classList.remove("bump"); void to.offsetWidth; to.classList.add("bump"); };
+  }
+
+  function writeLog() {
+    $("log").textContent = S.log.slice(-8).join("  ·  ");
+  }
+
+  /* ---------- 진행 ---------- */
+  function start() {
+    S = newState();
+    S.total = +$("optTime").value * 1000; S.budget = +$("optBudget").value; S.publicStock = $("optStock").checked;
+    S.running = true; S.endsAt = Date.now() + S.total;
+    $("result").classList.remove("on");
+    ["optTime", "optBudget", "optStock"].forEach(function (id) { $(id).disabled = true; });
+    $("start").disabled = true; $("reset").disabled = false;
+    clearInterval(timer); timer = setInterval(tick, 100); tick();
+    render(); writeLog();
+  }
+  function tick() {
+    var left = Math.max(0, S.endsAt - Date.now());
+    $("tnum").textContent = Math.ceil(left / 1000);
+    $("tfill").style.width = (left / S.total * 100) + "%";
+    if (left <= 0) finish("시간이 끝났어요");
+  }
+  function finish(why) {
+    if (!S.running) return;
+    S.running = false; clearInterval(timer);
+    ["optTime", "optBudget", "optStock"].forEach(function (id) { $(id).disabled = false; });
+    $("start").disabled = false; $("start").textContent = "한 번 더";
+    render(); showResult(why);
+  }
+  function showResult(why) {
+    var rows = TYPES.map(function (t, i) {
+      return "<tr><td>" + t.name + " (+" + t.reward.toLocaleString("ko-KR") + "원)</td><td>" + S.got["1"][i] + "개</td><td>" + S.got["2"][i] + "개</td><td>" + S.stock[i] + "개</td></tr>";
+    }).join("");
+    var tot = function (seat) { return TYPES.reduce(function (a, t, i) { return a + S.got[seat][i] * t.reward; }, 0); };
+    var cnt = function (seat) { return S.got[seat].reduce(function (a, n) { return a + n; }, 0); };
+    $("result").innerHTML = "<h2>끝 — " + why + "</h2><table><tr><th>종류</th><th>1번</th><th>2번</th><th>남음</th></tr>" + rows +
+      "<tr><th>합계</th><th>" + cnt("1") + "개 · " + won(tot("1")) + "</th><th>" + cnt("2") + "개 · " + won(tot("2")) + "</th><th>" + S.stock.reduce(function (a, n) { return a + n; }, 0) + "개</th></tr></table>" +
+      '<div class="note">위 금액은 "배송에 성공했을 때"의 보상 합계입니다(실패하면 종류별 벌금). 실제 게임에서는 이 박스를 5라운드 안에 엘리베이터로 배송해야 점수가 됩니다.</div>';
+    $("result").classList.add("on");
+  }
+  function reset() {
+    clearInterval(timer);
+    S = newState();
+    S.publicStock = $("optStock").checked;
+    ["optTime", "optBudget", "optStock"].forEach(function (id) { $(id).disabled = false; });
+    $("start").disabled = false; $("start").textContent = "시작"; $("reset").disabled = true;
+    $("tnum").textContent = $("optTime").value; $("tfill").style.width = "100%";
+    $("result").classList.remove("on"); $("log").textContent = "";
+    render();
+  }
+
+  /* ---------- 이벤트 ---------- */
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest(".pick") : null;
+    if (b && !b.disabled) pick(b.dataset.seat, +b.dataset.t);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = (e.key || "").toLowerCase();
+    ["1", "2"].forEach(function (seat) {
+      var i = KEYS[seat].indexOf(k);
+      if (i > -1) {
+        var view = $("optView").value;
+        if (view !== "all" && view !== seat) return; // 내 자리 화면만 볼 땐 내 키만
+        pick(seat, i);
+      }
+    });
+  });
+  $("start").addEventListener("click", start);
+  $("reset").addEventListener("click", reset);
+  $("optView").addEventListener("change", render);
+  $("optTime").addEventListener("change", function () { if (!S.running) $("tnum").textContent = $("optTime").value; });
+  $("optStock").addEventListener("change", function () { if (!S.running) { S.publicStock = $("optStock").checked; render(); } });
+
+  build();
+  S = newState();
+  $("tnum").textContent = $("optTime").value;
+  render();
+  window.__rail = { pick: pick, state: function () { return S; } };
+})();
+</script>
+</body>
+</html>
