@@ -82,3 +82,7 @@ body.main-view #app { height: 100vh; min-height: 0; }
 @media (prefers-reduced-motion: reduce) { .mv-car, .mv-bar > i { transition: none; } .mv-time.is-low { animation: none; } }
 .mv-join-rail { margin-top: 1.2vh; font-size: 2.4vh; }
 .mv-join-rail b { font-size: 3.2vh; }
+
+/* 2026-10-13 개선 1단계: 층별 배송비 배율 배지 (관전자도 어느 층이 비싼지 보이게) */
+.mv-floor-row .mv-mult { font-size:0.55em; font-weight:800; opacity:0.75; margin-left:0.3em; }
+.mv-floor-row .mv-mult.hi { color:#2F9E6E; opacity:1; }

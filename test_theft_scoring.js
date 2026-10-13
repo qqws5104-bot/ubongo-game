@@ -17,7 +17,7 @@
 // scoreInvoice/resultLabel 모두 "실패/미배송"으로 나와야 한다.
 "use strict";
 const assert = require("assert");
-const { GameRoom, scoreInvoice, resultLabel, totalScore } = require("./game-room.js");
+const { GameRoom, scoreInvoice, resultLabel, totalScore, LEGACY_RULES } = require("./game-room.js"); // 2026-10-13: 예전 흐름 회귀용. 새 규칙은 test_p1p2.js
 const { TYPES } = require("./game-data.js");
 
 function log(...args) { console.log("[test-theft]", ...args); }
@@ -27,7 +27,7 @@ assert(fixedFloorCatIdx === TYPES.length - 1, "assumption check: fixed-floor is 
 const fixedFloorPenalty = TYPES[fixedFloorCatIdx].penalty;
 
 let lastState = null;
-const room = new GameRoom("TEST", (state) => { lastState = state; });
+const room = new GameRoom("TEST", (state) => { lastState = state; }, LEGACY_RULES);
 
 // ---- 좌석/택배사 선택 ----
 let r = room.pickCourier("cookbang", "clientA");

@@ -216,8 +216,14 @@ async function main() {
 
   // ---- 확정 층수 택배(fixed-floor) cells must show their bound floor label even before securing,
   // and the resulting invoice must land on exactly that floor once secured. ----
-  const fixedFloorFace = await p1.evaluate(() => { const b = document.querySelector('[data-cell="fixed-floor-3"]'); return b ? b.textContent.trim() : null; });
+  // 2026-10-13: 층 버튼에 층 이름 + 그 층의 배송 금액(층 배율 적용)이 같이 나온다 -- 예: "2F" + "+3,900원"
+  const fixedFloorFace = await p1.evaluate(() => { const b = document.querySelector('[data-cell="fixed-floor-3"] span'); return b ? b.textContent.trim() : null; });
   if (fixedFloorFace !== "2F") throw new Error("fixed-floor floor button did not render its floor label (expected 2F, got " + fixedFloorFace + ")");
+  const fixedFloorPrice = await p1.evaluate(() => { const b = document.querySelector('[data-cell="fixed-floor-3"] small'); return b ? b.textContent.trim() : null; });
+  const { TYPES: _T, FLOOR_REWARD_MULT: _M } = require("./game-data.js");
+  const expect2F = "+" + Math.round(_T.find((t) => t.key === "fixed-floor").reward * _M[2]).toLocaleString("ko-KR") + "원";
+  if (fixedFloorPrice !== expect2F) throw new Error(`fixed-floor 2F button should show its floor price ${expect2F}, got ${fixedFloorPrice}`);
+  log(`confirmed: 확정 층수 2F 버튼에 층 배율 적용 금액 표시 (${fixedFloorPrice})`);
   await secureCell(p1, "fixed-floor-3"); // num index 2 -> FLOORS[2] = "2F"
   // 이미 p1이 선점한 층은 p2 화면에서 열 수 없다 (선점자 우선)
   // (상대 화면에 브로드캐스트가 도착하기까지 잠깐 걸린다 -- 즉시 세면 경쟁 상태로 가끔 실패했다)
@@ -283,8 +289,9 @@ async function main() {
   // ---- 우선 택배 지정 전용 10초 창 (2026-10-06). 둘 다 스페이스로 준비하면 맨 먼저 열린다.
   // mode: "pick"(지정/해제/재지정 + 확정 버튼 + 조기 진행 시간 측정) | "timeout"(아무도 확정 안 함 -> 10초 후 자동 진행)
   //       | "space"(스페이스로 확정) | 그 외(확정 버튼만). 창이 아예 안 열리는 경우(둘 다 지정할 택배 없음)도 허용. ----
+  // 2026-10-13 (P2-2): 후반에도 별도 thief 창은 없다 -- 택배도둑은 이 우선 지정 창 안(.priority-window .thief-window)에서 놓는다.
   async function priorityStep(label, round, mode, isHalf2) {
-    const nextSel = isHalf2 ? ".thief-window" : '[data-action="vote-up"]';
+    const nextSel = '[data-action="vote-up"]';
     await waitFor(async () => (await countSel(p1, ".priority-window")) > 0 || (await countSel(p1, nextSel)) > 0, { label: `${label} round ${round}: priority window (or straight on)`, timeout: 6000 });
     if (!(await countSel(p1, ".priority-window"))) { log(`${label} round ${round}: no priority window (nothing left to pick for either player)`); return; }
     if (round > 1 && (await countSel(p1, ".priority-window .invoice.is-priority")) !== 0) throw new Error(`${label} round ${round}: previous round's priority pick leaked into the new window -- should reset every round`);
@@ -315,6 +322,17 @@ async function main() {
       log(`${label} round ${round}: 확정 없이 ${(dt / 1000).toFixed(1)}초 후 자동 진행 (10초 타이머)`);
       return;
     }
+    if (isHalf2) {
+      if ((await countSel(p1, ".priority-window .thief-window")) !== 1) throw new Error(`${label} round ${round}: 후반 우선 지정 창 안에 택배도둑 영역이 있어야 한다`);
+      const thiefBtns = await countSel(p1, '.priority-window [data-action="place-thief"]');
+      if (round === 7 && thiefBtns) throw new Error("마지막 라운드엔 택배도둑 층 버튼이 없어야 한다");
+      if (round < 7 && thiefBtns) {
+        await clickSel(p1, '.priority-window [data-action="place-thief"]');
+        await waitFor(async () => (await bodyText(p1)).includes("배치했어요"), { label: `${label} round ${round}: p1's thief placement confirmed in UI`, timeout: 3000 });
+        if ((await countSel(p1, ".priority-window")) === 0) throw new Error("도둑을 놓았다고 창이 닫히면 안 된다 (확정해야 진행)");
+        log(`${label} round ${round}: 우선 지정 창 안에서 택배도둑 배치 OK`);
+      }
+    }
     const t1 = Date.now();
     if (mode === "space") { await pressSpace(p1); await pressSpace(p2); }
     else {
@@ -344,21 +362,9 @@ async function main() {
       const prioMode = halfLabel === "전반" ? ({ 1: "pick", 2: "timeout", 3: "space" }[round] || "confirm") : (round === 1 ? "space" : "confirm");
       await priorityStep(halfLabel, round, prioMode, isHalf2);
 
-      if (isHalf2 && round === 7) {
-        // 마지막 라운드엔 택배도둑 창이 열리지 않는다 (도둑은 다음 라운드부터 작동하는데 다음이 없음)
-        await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `${halfLabel} round 7: voting starts with no thief window`, timeout: 6000 });
-        if (await countSel(p1, ".thief-window")) throw new Error("thief window must not open in the final round");
-      } else if (isHalf2) {
-        await waitFor(async () => (await countSel(p1, ".thief-window")) > 0, { label: `${halfLabel} round ${round}: thief window`, timeout: 6000 });
-        if (await countSel(p1, '.thief-floors [data-action="place-thief"]')) {
-          await clickSel(p1, '.thief-floors [data-action="place-thief"]');
-          await waitFor(async () => (await bodyText(p1)).includes("배치했어요"), { label: `${halfLabel} round ${round}: p1's thief placement confirmed in UI`, timeout: 3000 });
-        }
-        if (await countSel(p2, '[data-action="skip-thief"]')) await clickSel(p2, '[data-action="skip-thief"]');
-        await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `${halfLabel} round ${round}: voting starts after thief window`, timeout: 6000 });
-      } else {
-        await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `${halfLabel} round ${round}: voting starts`, timeout: 6000 });
-      }
+      // (P2-2) 후반도 우선 지정 창(도둑 포함) 다음엔 곧장 voting -- 별도 thief 상태 화면은 없다.
+      await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `${halfLabel} round ${round}: voting starts`, timeout: 6000 });
+      if (await countSel(p1, ".thief-window")) throw new Error(`${halfLabel} round ${round}: voting 화면에 thief 창이 남아 있으면 안 된다`);
 
       if (halfLabel === "전반" && round === 1) {
         // no click count is ever shown -- neither mine nor the opponent's (checked once, here,
@@ -396,16 +402,29 @@ async function main() {
       const listUnderGaugeResult = await countSel(p1, ".elev-left .invoice-list");
       if (listUnderGaugeResult !== 1) throw new Error(`${halfLabel} round ${round}: expected my invoice list inside .elev-left (under the gauge), found ${listUnderGaugeResult} there`);
 
-      await pressSpace(p1);
-      await p1.waitForTimeout(150);
-      await pressSpace(p2);
-
+      // (P2-1, 2026-10-13) 결과 화면은 스페이스 없이 RESULT_AUTO_ADVANCE_MS 뒤 자동으로 넘어간다.
+      // 전반 1라운드만 "둘 다 스페이스 -> 즉시 진행"을 확인하고, 나머지는 손대지 않고 자동 진행을 확인한다.
+      // (자동 진행 뒤에 스페이스를 누르면 다음 라운드 우선 지정 창의 "확정"이 돼 버리므로 함부로 누르지 않는다.)
+      if (!(await bodyText(p1)).includes("초 뒤 자동으로")) throw new Error(`${halfLabel} round ${round}: 결과 화면에 자동 진행 카운트다운이 없다`);
+      const tRes = Date.now();
+      if (halfLabel === "전반" && round === 1) {
+        await pressSpace(p1);
+        await p1.waitForTimeout(150);
+        await pressSpace(p2);
+      }
       if (round < 7) {
         await waitFor(async () => {
           const t1 = await bodyText(p1);
           const t2 = await bodyText(p2);
           return t1.includes(`라운드 ${round + 1} / 7`) && t2.includes(`라운드 ${round + 1} / 7`);
-        }, { label: `${halfLabel}: advance to round ${round + 1}`, timeout: 5000 });
+        }, { label: `${halfLabel}: advance to round ${round + 1}`, timeout: 6000 });
+        const dt = Date.now() - tRes;
+        if (halfLabel === "전반" && round === 1) {
+          if (dt > 2000) throw new Error(`둘 다 스페이스를 눌렀는데 ${dt}ms 걸림 -- 즉시 진행돼야 한다`);
+          log(`결과 화면: 둘 다 스페이스 -> ${dt}ms 만에 진행`);
+        } else if (round === 2 && halfLabel === "전반") {
+          log(`결과 화면: 스페이스 없이 ${(dt / 1000).toFixed(1)}초 뒤 자동 진행`);
+        }
       }
     }
     log(`${halfLabel}: all 7 rounds completed`);

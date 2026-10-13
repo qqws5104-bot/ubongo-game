@@ -9,14 +9,14 @@
 //   - 오래된 타이머(이전 창의 endsAt)는 새 창을 끊지 못한다
 "use strict";
 const assert = require("assert");
-const { GameRoom } = require("./game-room.js");
+const { GameRoom, LEGACY_RULES } = require("./game-room.js"); // 2026-10-13: 예전 흐름(1F 시작, 별도 도둑 창, 스페이스 게이트) 회귀용. 새 규칙은 test_p1p2.js
 const { PRIORITY_PICK_MS } = require("./game-data.js");
 
 function log(...a) { console.log("[test-priority]", ...a); }
 assert.strictEqual(PRIORITY_PICK_MS, 10000, "우선 택배 지정 시간은 10초");
 
 function newRoom() {
-  const room = new GameRoom("TEST", () => {});
+  const room = new GameRoom("TEST", () => {}, LEGACY_RULES);
   room.pickCourier("cookbang", "clientA");
   room.pickCourier("cheonil", "clientB");
   room.setReady("1"); room.setReady("2");

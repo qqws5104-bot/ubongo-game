@@ -5,14 +5,14 @@
 //   - 6라운드에 놓은 도둑은 7라운드에 작동한다
 "use strict";
 const assert = require("assert");
-const { GameRoom } = require("./game-room.js");
+const { GameRoom, LEGACY_RULES } = require("./game-room.js"); // 2026-10-13: 예전 흐름 회귀용. 새 규칙은 test_p1p2.js
 const { ELEVATOR_ROUNDS, THIEF_PER_HALF } = require("./game-data.js");
 function log(...a) { console.log("[test-thief-limit]", ...a); }
 assert.strictEqual(ELEVATOR_ROUNDS, 7, "전/후반 각각 7라운드");
 assert.strictEqual(THIEF_PER_HALF, 2, "후반 도둑 1인당 2회");
 
 function newRoomInHalf2() {
-  const room = new GameRoom("TEST", () => {});
+  const room = new GameRoom("TEST", () => {}, LEGACY_RULES);
   room.pickCourier("cookbang", "clientA");
   room.pickCourier("cheonil", "clientB");
   room.setReady("1"); room.setReady("2");

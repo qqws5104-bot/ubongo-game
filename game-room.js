@@ -11,7 +11,26 @@ const SECURE_EARLY_END_MS = 1500;
 const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
+  FLOOR_REWARD_MULT, START_FLOOR_CHOICES, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
 } = require("./game-data");
+
+// 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
+// (기존 회귀 테스트는 LEGACY_RULES로 예전 흐름을 그대로 검증하고, test_p1p2.js가 새 흐름을 검증한다).
+const DEFAULT_RULES = {
+  floorRewardMult: FLOOR_REWARD_MULT,
+  startFloorChoices: START_FLOOR_CHOICES,
+  resultAutoAdvanceMs: RESULT_AUTO_ADVANCE_MS,
+  mergePriorityThief: !!MERGE_PRIORITY_THIEF,
+  sameFloorAutoPick: !!SAME_FLOOR_AUTO_PICK,
+};
+// 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
+const LEGACY_RULES = {
+  floorRewardMult: FLOORS.map(() => 1),
+  startFloorChoices: [START_FLOOR_IDX],
+  resultAutoAdvanceMs: 0,
+  mergePriorityThief: false,
+  sameFloorAutoPick: false,
+};
 
 // 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
 // 그 칸은 상대에게서도 사라진다. 그 전(2026-08-27~10-05)에는 플레이어별로 독립된 보드 사본이었다.
@@ -40,12 +59,19 @@ function drawRoom(playerState) {
 // fixedFloor 종류(확정 층수 택배)는 칸의 num(0..5)이 그대로 FLOORS 인덱스가 된다 -- 무작위가 아니라
 // 어느 칸을 확보했는지에 따라 배송지가 결정되어 있다. 그 외 종류는 기존처럼 무작위 층. room은 이제
 // 호출부(secureCell)에서 drawRoom()으로 뽑아 넘겨준다 (플레이어별 중복 방지, 위 참고).
-function randomInvoice(seat, catIdx, num, acquiredSeq, room) {
+// reward: 이 송장의 배송 성공 금액 = 종류 기본 금액 x 층 배율(P1-1, 2026-10-13). 층이 확보 순간 정해지므로 여기서 확정해
+// 송장에 박아 둔다 -- 점수 함수(scoreInvoice)는 계속 인자 하나로 순수하게 유지되고, 클라이언트 복제본도 같은 값을 읽는다.
+function rewardFor(catIdx, floorIdx, floorRewardMult) {
+  const mult = (floorRewardMult && floorRewardMult[floorIdx] != null) ? floorRewardMult[floorIdx] : 1;
+  return Math.round(TYPES[catIdx].reward * mult);
+}
+function randomInvoice(seat, catIdx, num, acquiredSeq, room, floorRewardMult) {
   const t = TYPES[catIdx];
   const floorIdx = t.fixedFloor ? num : Math.floor(Math.random() * FLOORS.length);
   return {
     id: "inv-" + seat + "-" + acquiredSeq,
     catIdx, floorIdx, room, acquiredSeq,
+    reward: rewardFor(catIdx, floorIdx, floorRewardMult),
     deliveredRound: null,
     stolen: false, // 택배도둑에게 뺏긴 경우 true (후반 전용, 확정 마이너스 점수)
     deliveredWasPriority: false, // 배송된 그 라운드에 우선 택배로 지정돼 있었는지 (확정, 이후 안 바뀜)
@@ -61,7 +87,8 @@ function scoreInvoice(inv) {
   const t = TYPES[inv.catIdx];
   if (inv.stolen) return -t.penalty;
   if (inv.deliveredRound === null) return -t.penalty;
-  const base = t.reward;
+  // inv.reward가 없는 송장(2026-10-13 이전 형식)은 종류 기본 금액 그대로.
+  const base = typeof inv.reward === "number" ? inv.reward : t.reward;
   return inv.deliveredWasPriority ? base * PRIORITY_MULTIPLIER : base;
 }
 // 2026-08-27: 도난당한 송장도 "미배송"으로 표기하도록 변경(사용자 요청 -- "배송이 되지 않았으니까").
@@ -88,7 +115,12 @@ function freshPlayers() {
   // (freshPlayers()가 다시 호출되면) 완전히 새로 셔플돼서 이전 하프의 소진 상태를 이어받지 않는다.
   return { "1": { invoices: [], roomBag: shuffledRooms() }, "2": { invoices: [], roomBag: shuffledRooms() } };
 }
-function freshElevator() {
+function pickStartFloor(choices) {
+  const list = choices && choices.length ? choices : [START_FLOOR_IDX];
+  return list[Math.floor(Math.random() * list.length)];
+}
+function freshElevator(rules) {
+  const startFloorIdx = pickStartFloor((rules || DEFAULT_RULES).startFloorChoices);
   return {
     // state: "idle" | "priority" | "thief" | "voting" | "choosing" | "result" | "done"
     // "priority": 매 라운드 게이트(idle/result)에서 둘 다 준비하면 맨 먼저 열리는 우선 택배 지정 전용 시간
@@ -99,11 +131,13 @@ function freshElevator() {
     // 그 플레이어(들)에게 5초간 어느 걸 먼저 보낼지 고르게 하는 중간 단계 (없으면 곧장 result로).
     // "result"는 5초 이동/선택이 끝난 뒤 두 플레이어 모두 스페이스바를 눌러야(readyNext) 다음
     // 라운드(또는 마지막 라운드라면 하프 종료)로 넘어가는 대기 단계.
-    round: 1, floorIdx: START_FLOOR_IDX, state: "idle", votingEndsAt: null,
+    round: 1, floorIdx: startFloorIdx, state: "idle", votingEndsAt: null,
+    // 결과 화면 자동 진행 시각 (RESULT_AUTO_ADVANCE_MS > 0일 때만, result 상태에서만 값이 있다). 클라이언트 카운트다운용.
+    resultEndsAt: null,
     // votes: per-seat click counters, kept purely for the round log -- they no longer decide
     // anything and are never shown to players. Real movement is immediate, see vote().
     votes: { "1": { up: 0, down: 0 }, "2": { up: 0, down: 0 } },
-    roundStartFloorIdx: START_FLOOR_IDX,
+    roundStartFloorIdx: startFloorIdx,
     readyNext: { "1": false, "2": false },
     pendingChoice: null, // { conflicts: {seat: [invoiceId,...]}, chosen: {seat: invoiceId|null}, endsAt }
     // priorityPick: 이번에 다가올 라운드에 한해 유효한 우선 택배 지정 (2026-08-27: 게임 시작 전
@@ -129,7 +163,7 @@ function freshElevator() {
   };
 }
 
-function initialState() {
+function initialState(rules) {
   return {
     phase: "lobby", // lobby -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
@@ -142,7 +176,7 @@ function initialState() {
     board: freshBoard(), // 두 플레이어가 공유하는 보드 (종류별 6칸 합계)
     acquireCounter: { "1": 0, "2": 0 },
     players: freshPlayers(),
-    elevator: freshElevator(),
+    elevator: freshElevator(rules),
     half: 1,
     halftimeReady: { "1": false, "2": false },
     halfHistory: [], // [{half, players, scores}, ...] -- snapshot taken at the end of each half
@@ -155,10 +189,11 @@ function initialState() {
 }
 
 class GameRoom {
-  constructor(code, onChange) {
+  constructor(code, onChange, rules) {
     this.code = code;
     this.onChange = onChange; // called with (state) whenever state mutates -- caller broadcasts it
-    this.state = initialState();
+    this.rules = Object.assign({}, DEFAULT_RULES, rules || {});
+    this.state = initialState(this.rules);
     this.timer = null;
     this.lastActivityAt = Date.now();
   }
@@ -248,7 +283,7 @@ class GameRoom {
     this.state.acquireCounter[seat] += 1;
     cell.acquiredSeq = this.state.acquireCounter[seat];
     const room = drawRoom(this.state.players[seat]);
-    this.state.players[seat].invoices.push(randomInvoice(seat, cell.catIdx, cell.num, cell.acquiredSeq, room));
+    this.state.players[seat].invoices.push(randomInvoice(seat, cell.catIdx, cell.num, cell.acquiredSeq, room, this.rules.floorRewardMult));
     // 2026-10-07: 보드가 다 비면 남은 시간을 기다리지 않고 곧 엘리베이터로 넘어간다(할 게 없는 빈 시간 방지).
     // 클라이언트의 카운트다운이 secureEndsAt을 보므로 그 값을 짧게 당겨 둔다. _scheduleAt은 타이머 슬롯이 하나라
     // 원래의 3분 타이머를 대체한다(낡은 타이머가 다음 하프의 확보 단계를 끊을 일 없음).
@@ -281,7 +316,7 @@ class GameRoom {
   _endSecurePhase() {
     if (this.state.phase !== "secure") return;
     this.state.phase = "elevator";
-    this.state.elevator = freshElevator();
+    this.state.elevator = freshElevator(this.rules);
     this.emit();
   }
 
@@ -329,9 +364,16 @@ class GameRoom {
   // (thief 창과 같은 패턴). 지난 라운드의 지정값은 _finishRound에서 이미 비워져 있다.
   _startPriorityWindow() {
     const el = this.state.elevator;
+    el.resultEndsAt = null;
     el.priorityPick = { "1": null, "2": null };
+    // P2-2 (2026-10-13): 후반이면 택배도둑 배치도 이 창에서 같이 받는다. 도둑 슬롯 준비(지난 라운드 배치분 activate,
+    // 이번 라운드 슬롯 초기화, 한도 소진/마지막 라운드 자동 넘김)는 원래 _startThiefWindow 앞부분과 똑같다.
+    const merged = this._mergedThiefWindow();
+    if (merged) this._prepareThiefSlots();
     ["1", "2"].forEach((s) => {
-      el.priorityConfirmed[s] = !this.state.players[s].invoices.some((v) => v.deliveredRound === null);
+      const nothingToPick = !this.state.players[s].invoices.some((v) => v.deliveredRound === null);
+      const thiefDone = !merged || el.thieves.skipped[s];
+      el.priorityConfirmed[s] = nothingToPick && thiefDone;
     });
     if (el.priorityConfirmed["1"] && el.priorityConfirmed["2"]) { this._afterPriorityWindow(); return; }
     el.state = "priority";
@@ -347,6 +389,8 @@ class GameRoom {
     if (el.state !== "priority" || el.priorityConfirmed[seat]) return;
     this.touch();
     el.priorityConfirmed[seat] = true;
+    // 합쳐진 창: 확정하면서 도둑을 안 놓았다면 "이번 라운드는 안 놓음"으로 처리한다 (한도는 소진되지 않음).
+    if (this._mergedThiefWindow() && el.thieves.placedThisRound[seat] === null) el.thieves.skipped[seat] = true;
     if (el.priorityConfirmed["1"] && el.priorityConfirmed["2"]) { this._afterPriorityWindow(); return; }
     this.emit();
   }
@@ -362,8 +406,28 @@ class GameRoom {
 
   _afterPriorityWindow() {
     this.state.elevator.priorityWindowEndsAt = null;
-    if (this.state.half === 2) this._startThiefWindow();
+    if (this.state.half === 2 && !this.rules.mergePriorityThief) this._startThiefWindow();
     else this._startVotingRound();
+  }
+
+  _mergedThiefWindow() {
+    return !!this.rules.mergePriorityThief && this.state.half === 2;
+  }
+
+  // 도둑 슬롯 준비 -- 지난 라운드에 놓은 도둑을 이번 라운드에 작동하도록 activate하고, 이번 라운드 몫의 배치 슬롯을 새로 연다.
+  // 한도(THIEF_PER_HALF)를 다 쓴 사람은 자동 넘김. 마지막 라운드는 놓아도 작동할 다음 라운드가 없으니 모두 자동 넘김.
+  // 반환값: 이번 라운드에 아무도 놓을 수 없으면 true.
+  _prepareThiefSlots() {
+    const el = this.state.elevator;
+    el.thieves.active = ["1", "2"]
+      .filter((s) => el.thieves.placedThisRound[s] !== null)
+      .map((s) => ({ seat: s, floorIdx: el.thieves.placedThisRound[s] }));
+    el.thieves.placedThisRound = { "1": null, "2": null };
+    el.thieves.skipped = { "1": false, "2": false };
+    const usedUp = (s) => el.thieves.usedThisHalf[s] >= THIEF_PER_HALF;
+    const lastRound = el.round >= ELEVATOR_ROUNDS;
+    ["1", "2"].forEach((s) => { if (usedUp(s) || lastRound) el.thieves.skipped[s] = true; });
+    return lastRound || ["1", "2"].every(usedUp);
   }
 
   // 후반 전용, 매 라운드 voting 시작 직전에 열리는 "택배도둑을 놓을지" 전용 시간 (2026-08-27 신설 --
@@ -378,6 +442,7 @@ class GameRoom {
       .map((s) => ({ seat: s, floorIdx: el.thieves.placedThisRound[s] }));
     el.thieves.placedThisRound = { "1": null, "2": null };
     el.thieves.skipped = { "1": false, "2": false };
+    // (P2-2 합친 창을 쓰지 않을 때만 오는 예전 경로. 합친 창은 _prepareThiefSlots를 쓴다.)
     // 이미 이 후반의 배치 한도(THIEF_PER_HALF)를 다 쓴 플레이어는 이번 라운드도 자동으로 "넘김" 처리해서
     // 굳이 화면에서 다시 액션을 요구하지 않는다. 둘 다 다 썼다면 아무도 놓을 수 없으니 thief 창 자체를
     // 열지 않고 곧장 voting으로 넘어간다. 마지막 라운드도 창을 열지 않는다: 도둑은 "다음 라운드부터"
@@ -424,7 +489,9 @@ class GameRoom {
     if (this.state.half !== 2) return;
     if (this.state.phase !== "elevator") return;
     const el = this.state.elevator;
-    if (el.state !== "thief") return;
+    const inMergedWindow = el.state === "priority" && this._mergedThiefWindow();
+    if (el.state !== "thief" && !inMergedWindow) return;
+    if (inMergedWindow && el.priorityConfirmed[seat]) return; // 확정한 뒤엔 못 바꿈
     if (el.thieves.placedThisRound[seat] !== null || el.thieves.skipped[seat]) return;
     if (floorIdx !== null && (typeof floorIdx !== "number" || floorIdx < 0 || floorIdx >= FLOORS.length)) return;
     this.touch();
@@ -434,6 +501,8 @@ class GameRoom {
       el.thieves.placedThisRound[seat] = floorIdx;
       el.thieves.usedThisHalf[seat] += 1; // 후반 전체 한도(THIEF_PER_HALF)에서 1회 차감
     }
+    // 합쳐진 창에서는 도둑을 놓아도 창이 닫히지 않는다 -- 둘 다 "확정"(confirmPriority)해야 진행.
+    if (inMergedWindow) { this.emit(); return; }
     const bothDone = ["1", "2"].every((s) => el.thieves.placedThisRound[s] !== null || el.thieves.skipped[s]);
     if (bothDone) { this._endThiefWindow(); return; }
     this.emit();
@@ -455,6 +524,12 @@ class GameRoom {
         .sort((a, b) => a.acquiredSeq - b.acquiredSeq);
       if (!invs.length) return;
       let v = invs[0];
+      // P2-3 (2026-10-13): 선택 창 없이 자동으로 -- 이번 라운드 우선 지정한 것 > 배송 금액이 큰 것 > 먼저 확보한 것.
+      if (this.rules.sameFloorAutoPick && invs.length > 1) {
+        const pick = el.priorityPick[seat];
+        const val = (x) => (typeof x.reward === "number" ? x.reward : TYPES[x.catIdx].reward);
+        v = invs.slice().sort((a, b) => ((b.id === pick) - (a.id === pick)) || (val(b) - val(a)) || (a.acquiredSeq - b.acquiredSeq))[0];
+      }
       const forcedId = forcedChoice && forcedChoice[seat];
       if (forcedId) {
         const chosen = invs.find((x) => x.id === forcedId);
@@ -467,6 +542,7 @@ class GameRoom {
       else if (wasPriority) v.deliveredWasPriority = true; // 도난당한 경우 우선 배수는 적용 안 함
       delivered.push({
         seat, catIdx: v.catIdx, floorIdx: v.floorIdx, room: v.room, invoiceId: v.id,
+        reward: typeof v.reward === "number" ? v.reward : TYPES[v.catIdx].reward, // 층 배율 적용된 금액 (표시용)
         stolen: !!thief, priority: !thief && wasPriority,
       });
     });
@@ -493,7 +569,34 @@ class GameRoom {
     // and see what was just delivered before moving on.
     el.state = "result";
     el.readyNext = { "1": false, "2": false };
+    // P2-1 (2026-10-13): 결과를 RESULT_AUTO_ADVANCE_MS 동안 보여준 뒤 스페이스 없이 자동으로 다음으로 넘어간다.
+    // 둘 다 스페이스를 누르면 그보다 일찍 넘어간다(setElevatorReady). 0이면 예전처럼 스페이스 게이트만.
+    el.resultEndsAt = null;
+    if (this.rules.resultAutoAdvanceMs > 0) {
+      const endsAt = Date.now() + this.rules.resultAutoAdvanceMs;
+      el.resultEndsAt = endsAt;
+      this._scheduleAt(endsAt, () => this._autoAdvanceFromResult(endsAt));
+    }
     this.emit();
+  }
+
+  _autoAdvanceFromResult(expectedEndsAt) {
+    const el = this.state.elevator;
+    if (this.state.phase !== "elevator" || el.state !== "result" || el.resultEndsAt !== expectedEndsAt) return;
+    this._advanceFromResult();
+  }
+
+  // result 게이트를 통과할 때(둘 다 스페이스 또는 자동 진행): 다음 라운드, 마지막 라운드였다면 하프 종료.
+  _advanceFromResult() {
+    const el = this.state.elevator;
+    el.resultEndsAt = null;
+    if (el.round >= ELEVATOR_ROUNDS) {
+      el.state = "done";
+      this._finishHalf();
+    } else {
+      el.round += 1;
+      this._enterNextRound(); // also emits
+    }
   }
 
   // The floor has already moved live, click by click, over the course of the round (see vote()) --
@@ -505,6 +608,7 @@ class GameRoom {
     if (this.state.phase !== "elevator" || this.state.elevator.state !== "voting") return;
     const el = this.state.elevator;
     const floorIdx = el.floorIdx;
+    if (this.rules.sameFloorAutoPick) { this._finishRound(el.round, null); return; }
     const conflicts = {};
     ["1", "2"].forEach((seat) => {
       const candidates = this.state.players[seat].invoices
@@ -565,13 +669,7 @@ class GameRoom {
       this._enterNextRound(); // begins round 1 (via thief window in 후반, or straight to voting); also emits
       return;
     }
-    if (el.round >= ELEVATOR_ROUNDS) {
-      el.state = "done";
-      this._finishHalf();
-    } else {
-      el.round += 1;
-      this._enterNextRound(); // also emits
-    }
+    this._advanceFromResult();
   }
 
   // Ends the current half: snapshots this half's per-player invoices + score into halfHistory.
@@ -618,7 +716,7 @@ class GameRoom {
     this.state.board = freshBoard();
     this.state.acquireCounter = { "1": 0, "2": 0 };
     this.state.players = freshPlayers();
-    this.state.elevator = freshElevator();
+    this.state.elevator = freshElevator(this.rules);
     this.state.half = 1;
     this.state.halfHistory = [];
     this.state.scores = null;
@@ -657,4 +755,4 @@ class GameRoom {
   }
 }
 
-module.exports = { GameRoom, initialState, scoreInvoice, resultLabel, totalScore };
+module.exports = { GameRoom, initialState, scoreInvoice, resultLabel, totalScore, rewardFor, DEFAULT_RULES, LEGACY_RULES };

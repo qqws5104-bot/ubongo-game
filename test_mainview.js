@@ -121,7 +121,11 @@ async function main() {
     time: document.querySelector(".mv-elev-main .mv-time") ? document.querySelector(".mv-elev-main .mv-time").textContent : null,
   }));
   let ei = await elevInfo();
-  assert(ei.floor === "1F" && /라운드 1 \/ 7/.test(ei.round) && ei.state.includes("출발 준비"), "elevator starts at 1F, round 1/7, waiting: " + JSON.stringify(ei));
+  // 2026-10-13 (P1-2): 시작 층은 2F/3F 중 무작위 (START_FLOOR_CHOICES)
+  const FLOORS_ = ["B1", "1F", "2F", "3F", "4F", "5F"];
+  const { START_FLOOR_CHOICES } = require("./game-data.js");
+  const s0 = FLOORS_.indexOf(ei.floor);
+  assert(START_FLOOR_CHOICES.includes(s0) && /라운드 1 \/ 7/.test(ei.round) && ei.state.includes("출발 준비"), "elevator starts at 2F/3F, round 1/7, waiting: " + JSON.stringify(ei));
   await shot(main, "main_5_elevator_idle");
   await pressSpace(p1); await pressSpace(p2);
   // 2026-10-06: 준비가 끝나면 우선 택배 지정 10초 창이 먼저 -- 메인에도 상태 이름과 남은 시간(~10초)이 보인다.
@@ -139,11 +143,11 @@ async function main() {
   const sec = parseInt(ei.time, 10);
   assert(sec >= 3 && sec <= 5, `moving timer should show the remaining ~5 seconds (server time), got "${ei.time}"`);
   await p1.keyboard.press("ArrowUp");
-  await waitFor(async () => (await elevInfo()).floor === "2F", { label: "main follows the car to 2F" });
+  await waitFor(async () => (await elevInfo()).floor === FLOORS_[s0 + 1], { label: "main follows the car up one floor" });
   ei = await elevInfo();
-  assert(ei.carTo === "2", "car element targets floor index 2");
+  assert(ei.carTo === String(s0 + 1), "car element targets the new floor index");
   await shot(main, "main_6_elevator_moving");
-  log(`엘리베이터 단계: 라운드 1/5, 현재 층 1F -> 이동 중(${sec}초 남음) -> ArrowUp 후 2F로 따라감`);
+  log(`엘리베이터 단계: 라운드 1/7, 시작 층 ${FLOORS_[s0]} -> 이동 중(${sec}초 남음) -> ArrowUp 후 ${FLOORS_[s0 + 1]}로 따라감`);
 
   // 메인이 아직 좌석 없음 확인: 서버 상태의 seatOwners는 두 플레이어뿐
   const owners = await main.evaluate(() => window.__bpOwners || null);

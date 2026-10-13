@@ -93,18 +93,17 @@ async function main() {
   log("전반 elevator phase 진입");
 
   // 전반 7라운드: 확보한 게 없어 배송도 없다 -- idle/result 게이트만 통과시키며 흘려보낸다.
+  // 2026-10-13 (P2-1): 결과 화면은 스페이스 없이 자동으로 넘어간다 -- 스페이스는 1라운드 전 idle 게이트에서만 누른다.
   for (let round = 1; round <= 7; round++) {
-    await pressSpace(p1); await pressSpace(p2); // idle 또는 이전 라운드의 result 게이트 통과
+    if (round === 1) { await pressSpace(p1); await pressSpace(p2); } // idle 게이트 통과
+    else await waitFor(async () => (await bodyText(p1)).includes(`라운드 ${round} / 7`), { label: `전반 round ${round} 자동 진행`, timeout: 8000 });
     await passPriority(p1, p2, '[data-action="vote-up"]');
     await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `전반 round ${round} voting 시작`, timeout: 8000 });
     await clickSel(p1, '[data-action="vote-up"]');
     await clickSel(p2, '[data-action="vote-up"]');
     await waitFor(async () => (await bodyText(p1)).includes(`라운드 ${round} 결과`), { label: `전반 round ${round} 결과`, timeout: 8000 });
   }
-  log("전반 7라운드 통과");
-  // 마지막(7) 라운드 결과 게이트도 다른 라운드와 동일하게 "둘 다 스페이스"로 넘겨야 half가 끝난다
-  // (setElevatorReady: el.state==="result"이고 round>=ELEVATOR_ROUNDS일 때 비로소 _finishHalf 호출).
-  await pressSpace(p1); await pressSpace(p2);
+  log("전반 7라운드 통과 (마지막 결과도 자동으로 하프타임까지 진행)");
 
   await waitFor(async () => (await bodyText(p1)).includes("전반 종료"), { label: "halftime 화면", timeout: 8000 });
   await pressSpace(p1); await pressSpace(p2);
@@ -123,30 +122,28 @@ async function main() {
     return t1.includes("엘리베이터") && t2.includes("엘리베이터");
   }, { label: "후반 elevator phase (idle gate) 도달", timeout: 15000 });
 
-  // ---- 후반 round 1: idle 게이트 통과 -> thief window. p1이 B1(층 인덱스 0)에 도둑 배치, p2는 넘김 ----
+  // ---- 후반 round 1 (2026-10-13 P2-2): idle 게이트 통과 -> 우선 지정 창 안에서 p1이 B1(층 인덱스 0)에 도둑 배치, 둘 다 확정 ----
   await pressSpace(p1); await pressSpace(p2);
-  await passPriority(p1, p2, ".thief-window");
-  await waitFor(async () => (await countSel(p1, ".thief-window")) > 0, { label: "후반 round 1 thief window", timeout: 8000 });
-  await clickSel(p1, '.thief-floors [data-action="place-thief"][data-floor-idx="0"]');
+  await waitFor(async () => (await countSel(p1, '.priority-window .thief-window [data-action="place-thief"]')) > 0, { label: "후반 round 1 우선 지정 창 안의 택배도둑", timeout: 8000 });
+  assert_((await countSel(p1, ".thief-window")) === 1, "택배도둑은 우선 지정 창 안에 한 번만 있다 (별도 thief 상태 화면 없음)");
+  await clickSel(p1, '.priority-window [data-action="place-thief"][data-floor-idx="0"]');
   await waitFor(async () => (await bodyText(p1)).includes("배치했어요"), { label: "p1 thief 배치 확인" });
-  await clickSel(p2, '[data-action="skip-thief"]');
+  assert_((await countSel(p1, ".priority-window")) === 1, "도둑을 놓아도 창은 확정 전까지 안 닫힌다");
+  await passPriority(p1, p2, '[data-action="vote-up"]');
   await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: "round 1 voting 시작" });
 
-  // round 1은 투표 없이(엘리베이터가 시작 층 1F에 그대로 머물도록) 그냥 흘려보낸다 -- p2의 B1행
+  // round 1은 투표 없이(엘리베이터가 시작 층 2F/3F에 그대로 머물도록) 그냥 흘려보낸다 -- p2의 B1행
   // 송장이 이 라운드에 배송되면(도둑이 아직 활성화 전이라 정상 성공) 시나리오가 깨진다.
   await waitFor(async () => (await bodyText(p1)).includes("라운드 1 결과"), { label: "round 1 결과", timeout: 8000 });
-  await pressSpace(p1); await pressSpace(p2);
 
-  // ---- 후반 round 2: 지난 라운드 도둑이 이제 활성화. 후반 2회 한도라 p1도 아직 1회 남아 있어 창이 뜬다 -> 둘 다 넘김 ----
-  await passPriority(p1, p2, ".thief-window");
-  await waitFor(async () => (await countSel(p1, ".thief-window")) > 0, { label: "후반 round 2 thief window", timeout: 8000 });
-  assert_(await countSel(p1, '[data-action="skip-thief"]') === 1 && (await bodyText(p1)).includes("남은 횟수 1회"), "p1은 후반 2회 중 1회를 썼으니 round 2에도 창이 뜨고 남은 횟수 1회로 표시");
-  await clickSel(p1, '[data-action="skip-thief"]');
-  await clickSel(p2, '[data-action="skip-thief"]');
+  // ---- 후반 round 2: 지난 라운드 도둑이 이제 활성화. 후반 2회 한도라 p1은 아직 1회 남음 -> 둘 다 놓지 않고 확정 ----
+  await waitFor(async () => (await countSel(p1, ".priority-window")) > 0, { label: "후반 round 2 우선 지정 창(자동 진행)", timeout: 8000 });
+  assert_((await bodyText(p1)).includes("남은 횟수 1/2"), "p1은 후반 2회 중 1회를 썼으니 남은 횟수 1/2로 표시");
+  await passPriority(p1, p2, '[data-action="vote-up"]');
   await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: "round 2 voting 시작" });
 
-  // 엘리베이터를 1F(시작) -> B1로 한 칸 내려서, p2의 B1행 송장이 이번 라운드에 배송(=도난)되게 한다.
-  await clickSel(p1, '[data-action="vote-down"]');
+  // 엘리베이터를 시작 층(2F/3F)에서 B1까지 내려서(바닥에서 멈춤), p2의 B1행 송장이 이번 라운드에 배송(=도난)되게 한다.
+  for (let i = 0; i < 4; i++) await clickSel(p1, '[data-action="vote-down"]');
   await waitFor(async () => (await bodyText(p1)).includes("라운드 2 결과"), { label: "round 2 결과", timeout: 8000 });
 
   // ---- 핵심 검증 1: p2의 라운드 결과 화면(내 송장 목록 + 이번 라운드 배송 안내) ----
@@ -181,23 +178,18 @@ async function main() {
   log("확인: 송장 목록에서도 도난 송장이 초록 '성공' 배지가 아니라 미배송(pending) 스타일로 표시됨");
 
   // ---- 나머지 라운드들은 그냥 흘려보내 후반 끝까지 진행, 최종 결과 화면 확인 ----
-  await pressSpace(p1); await pressSpace(p2);
   for (let round = 3; round <= 7; round++) {
-    if (round < 7) {
-      await passPriority(p1, p2, ".thief-window");
-      await waitFor(async () => (await countSel(p1, ".thief-window")) > 0, { label: `후반 round ${round} thief window`, timeout: 8000 });
-      if (await countSel(p1, '[data-action="skip-thief"]')) await clickSel(p1, '[data-action="skip-thief"]');
-      if (await countSel(p2, '[data-action="skip-thief"]')) await clickSel(p2, '[data-action="skip-thief"]');
-    } else {
-      // 마지막 라운드: 도둑은 "다음 라운드부터" 작동하는데 다음이 없으므로 창이 아예 열리지 않는다
-      await passPriority(p1, p2, '[data-action="vote-up"]');
-      assert_((await countSel(p1, ".thief-window")) === 0, "마지막 라운드엔 택배도둑 창이 열리지 않는다");
+    await waitFor(async () => (await bodyText(p1)).includes(`라운드 ${round} / 7`), { label: `후반 round ${round} 자동 진행`, timeout: 8000 });
+    if (round === 7) {
+      // 마지막 라운드: 도둑은 "다음 라운드부터" 작동하는데 다음이 없으므로 층 버튼이 나오지 않는다
+      await waitFor(async () => (await countSel(p1, ".priority-window")) > 0 || (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: "round 7 창 또는 voting", timeout: 8000 });
+      assert_((await countSel(p1, '[data-action="place-thief"]')) === 0, "마지막 라운드엔 택배도둑을 놓을 수 없다");
     }
+    await passPriority(p1, p2, '[data-action="vote-up"]');
     await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `후반 round ${round} voting`, timeout: 8000 });
     await clickSel(p1, '[data-action="vote-up"]');
     await clickSel(p2, '[data-action="vote-up"]');
     await waitFor(async () => (await bodyText(p1)).includes(`라운드 ${round} 결과`), { label: `후반 round ${round} 결과`, timeout: 8000 });
-    await pressSpace(p1); await pressSpace(p2);
   }
   log("후반 7라운드 전체 완료");
 

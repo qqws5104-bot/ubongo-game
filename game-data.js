@@ -91,7 +91,29 @@ const THIEF_PER_HALF = 2;
 // 둘 다 "확정"하면 10초를 다 기다리지 않고 곧장 다음으로 넘어간다 -- thief 창과 같은 조기-진행 패턴.
 const PRIORITY_PICK_MS = 10000;
 
+// ---- 2026-10-13 체키용 개선 1단계 (개선명세 P1 + P2) ----
+// 테스트 피드백: "B1·5F가 너무 쉽다"(끝에서 더 밀어도 그 층에 멈추니 한쪽으로 세게 누르면 끝층 배송이 확정됨),
+// 라운드 사이 대기가 길다. 엘리베이터(직선) 방향 싸움은 그대로 두고 숫자/흐름만 바꾼다.
+// 아래 값은 모두 시작값(제안값)이다 -- 플레이 테스트 로그를 보고 조정할 것. 0으로 두면 예전 동작으로 돌아가는 플래그도 있다.
+//
+// P1-1 층별 배송비 배율 (FLOORS 순서: B1, 1F, 2F, 3F, 4F, 5F). 끝층은 쉽지만 싸고, 가운데 층은 비싸지만 격전지.
+//   송장이 만들어질 때(확보 순간) 층이 정해지므로, 그때 inv.reward = round(TYPES[].reward x 배율)로 송장에 박아 둔다.
+//   미배송/도난 감점(penalty)은 층과 무관하게 그대로. 전부 1.0이면 예전과 같다.
+const FLOOR_REWARD_MULT = [0.7, 1.0, 1.3, 1.3, 1.0, 0.7];
+// P1-2 엘리베이터 시작 층: 하프마다 이 목록에서 무작위 (FLOORS 인덱스. 2 = 2F, 3 = 3F). 고정 시작층 공짜 배송 방지.
+//   [1]로 두면 예전처럼 항상 1F에서 시작.
+const START_FLOOR_CHOICES = [2, 3];
+// P2-1 라운드 결과 화면 자동 진행(ms). 결과를 이만큼 보여준 뒤 다음 라운드(또는 하프 종료)로 넘어간다.
+//   둘 다 스페이스를 누르면 더 일찍 넘어간다. 0이면 예전처럼 "둘 다 스페이스"를 눌러야만 넘어간다.
+const RESULT_AUTO_ADVANCE_MS = 3000;
+// P2-2 후반의 우선 택배 지정(10초)과 택배도둑 배치(5초)를 한 화면·한 창(PRIORITY_PICK_MS)으로 합친다. 1 = 합침, 0 = 예전처럼 따로.
+const MERGE_PRIORITY_THIEF = 1;
+// P2-3 같은 층에 내 미배송 택배가 2개 이상이면 10초 선택 창(choosing) 없이 자동으로 고른다
+//   (우선 지정한 것 > 배송비가 비싼 것 > 먼저 확보한 것). 1 = 자동, 0 = 예전처럼 선택 창. ※ 팀 확정 전 제안 사항.
+const SAME_FLOOR_AUTO_PICK = 1;
+
 module.exports = {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
+  FLOOR_REWARD_MULT, START_FLOOR_CHOICES, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
 };

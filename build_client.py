@@ -57,6 +57,10 @@ def load_shared_constants():
     halves = eval(grab("HALVES"))
     thief_place_ms = eval(grab("THIEF_PLACE_MS"))
     priority_pick_ms = eval(grab("PRIORITY_PICK_MS"))
+    # 2026-10-13 개선 1단계(P1+P2)
+    floor_reward_mult = json.loads(grab("FLOOR_REWARD_MULT"))
+    result_auto_advance_ms = eval(grab("RESULT_AUTO_ADVANCE_MS"))
+    merge_priority_thief = eval(grab("MERGE_PRIORITY_THIEF"))
 
     # TYPES uses plain (unquoted) JS object keys -- not valid JSON as-is. Quote bare
     # identifier keys before parsing (FLOORS/ROOMS are already flat string arrays, so this
@@ -72,11 +76,13 @@ def load_shared_constants():
     floors = json.loads(js_object_to_json(floors_js))
     rooms = json.loads(js_object_to_json(rooms_js))
     return (types, couriers, floors, rooms, elevator_rounds, secure_phase_ms, vote_ms,
-            priority_multiplier, same_floor_choice_ms, halves, thief_place_ms, priority_pick_ms)
+            priority_multiplier, same_floor_choice_ms, halves, thief_place_ms, priority_pick_ms,
+            floor_reward_mult, result_auto_advance_ms, merge_priority_thief)
 
 
 (TYPES, COURIERS, FLOORS, ROOMS, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
- PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, PRIORITY_PICK_MS) = load_shared_constants()
+ PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, PRIORITY_PICK_MS,
+ FLOOR_REWARD_MULT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF) = load_shared_constants()
 
 # 2026-08-27 개편: 보드가 20칸(4종류x5개 고정)에서 21칸(종류별 count가 다름, 확정 층수 택배만 6개)으로
 # 바뀌면서, 예전의 스와치 개수(2/3/4조각) 기준 이미지 그룹핑은 더 이상 종류별 칸 수와 맞물리지 않는다
@@ -176,8 +182,39 @@ def build_cells(half):
     return cells
 
 
-CELLS_1 = build_cells(1)   # 전반
-CELLS_2 = build_cells(2)   # 후반
+# 2026-10-13: 퍼즐 원본(REF_DIR_1/REF_DIR_2, COMPRESSED_DIR)은 저장소 밖(작업자 PC)에 있다. 그 폴더가 없는 환경에서
+# 게임 규칙/화면만 고쳐 재빌드할 때는, 이미 커밋된 public/index.html에 박혀 있는 퍼즐 이미지(CELLS_1/CELLS_2)를 그대로
+# 재사용한다 -- 이미지가 바뀌지 않으니 결과가 같다. 이미지를 교체하려면 원본 폴더가 있는 환경에서 빌드할 것(2.1절).
+PUBLIC_INDEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public", "index.html")
+
+
+def cells_from_previous_build(half):
+    html = open(PUBLIC_INDEX, encoding="utf-8").read()
+    m = re.search(r"var CELLS_%d = (\[.*?\]);\n" % half, html, re.S)
+    if not m:
+        raise RuntimeError("퍼즐 원본 폴더도 없고, 이전 빌드(public/index.html)에서 CELLS_%d도 못 찾았습니다." % half)
+    prev = {c["id"]: c for c in json.loads(m.group(1))}
+    cells = []
+    for cat_idx, t in enumerate(TYPES):
+        for num_idx in range(t["count"]):
+            cid = f"{t['key']}-{num_idx + 1}"
+            if cid not in prev:
+                raise RuntimeError(f"이전 빌드에 {cid} 칸이 없습니다 -- 보드 구성이 바뀌었다면 원본 폴더가 있는 환경에서 빌드하세요.")
+            # 디지털 미니게임 종류여도 이미지를 빼지 않는다 -- 빼 버리면 다음 빌드(우봉고로 복귀)에서 되살릴 원본이 없다.
+            src = prev[cid]["src"]
+            if t.get("mini") is None and not src:
+                raise RuntimeError(f"이전 빌드의 {cid} 칸에 퍼즐 이미지가 없습니다.")
+            cells.append({"id": cid, "catIdx": cat_idx, "num": num_idx, "src": src})
+    return cells
+
+
+if all(os.path.isdir(d) for d in (REF_DIR_1, REF_DIR_2, COMPRESSED_DIR)):
+    CELLS_1 = build_cells(1)   # 전반
+    CELLS_2 = build_cells(2)   # 후반
+else:
+    print("NOTE: 퍼즐 원본 폴더가 없어 이전 빌드(public/index.html)의 퍼즐 이미지를 재사용합니다.")
+    CELLS_1 = cells_from_previous_build(1)
+    CELLS_2 = cells_from_previous_build(2)
 
 
 def box_art_data_uri(key):
@@ -536,6 +573,13 @@ HEAD_HTML = """<!doctype html>
   .priority-window .pw-clock { display:flex; align-items:baseline; gap:0.6rem; margin-top:0.2rem; }
   .priority-window .pw-clock .time-left-big { margin-top:0; font-size:1.9rem; }
   .priority-window .timer-bar { margin:0.45rem 0 0.8rem; }
+  /* 2026-10-13 개선 1단계: 층별 배송비 배율 표시, 결과 자동 진행 안내, 우선 지정 창 안의 택배도둑 영역 */
+  .floor-stop .floor-mult { margin-left:auto; font-size:0.72rem; font-weight:800; padding:0.05rem 0.4rem; border-radius:999px; }
+  .floor-stop .floor-mult.hi { background:rgba(47,158,110,0.18); color:#2F9E6E; }
+  .floor-stop .floor-mult.lo { background:rgba(120,120,120,0.16); color:var(--muted); }
+  .floor-stop.current .floor-mult { background:rgba(0,0,0,0.12); color:inherit; }
+  .auto-advance { margin-top:0.6rem; font-size:0.9rem; color:var(--muted); font-weight:700; }
+  .priority-window .thief-window.merged { margin-top:0.8rem; }
   .priority-window .pw-actions { margin-top:0.7rem; display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; }
   .priority-window .pw-actions .key-hint { margin:0; }
 
@@ -631,6 +675,21 @@ APP_JS_TEMPLATE = r"""
   var HALVES = @@HALVES@@;
   var THIEF_PLACE_MS = @@THIEF_PLACE_MS@@;
   var PRIORITY_PICK_MS = @@PRIORITY_PICK_MS@@;
+  // 2026-10-13 개선 1단계(P1+P2) -- game-data.js 참고
+  var FLOOR_REWARD_MULT = @@FLOOR_REWARD_MULT@@;
+  var RESULT_AUTO_ADVANCE_MS = @@RESULT_AUTO_ADVANCE_MS@@;
+  var MERGE_PRIORITY_THIEF = @@MERGE_PRIORITY_THIEF@@;
+  // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
+  function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
+  function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
+  function multLabel(i) { var m = floorMult(i); return "x" + (Math.round(m * 10) / 10); }
+  // 종류 금액의 층별 범위 ("1,750~3,250원" 식) -- 층이 아직 안 정해진 레일 버튼용
+  function rewardRange(t) {
+    var lo = Infinity, hi = -Infinity;
+    FLOOR_REWARD_MULT.forEach(function (m) { var v = Math.round(t.reward * m); if (v < lo) lo = v; if (v > hi) hi = v; });
+    if (lo === hi) return fmtWon(lo);
+    return fmtWon(lo) + "~" + Math.abs(hi).toLocaleString("ko-KR") + "원";
+  }
   // 확정 층수 택배를 제외한 나머지 종류는 칸 번호 대신 A/B/C/D/E로 표기한다 (사용자 요청, 2026-08-27: 대문자로 변경).
   var CELL_LETTERS = ["A", "B", "C", "D", "E", "F"];
 
@@ -684,7 +743,7 @@ APP_JS_TEMPLATE = r"""
     var t = TYPES[inv.catIdx];
     if (inv.stolen) return -t.penalty;
     if (inv.deliveredRound === null) return -t.penalty;
-    var base = t.reward;
+    var base = invReward(inv); // 2026-10-13: 층 배율 적용 금액 (game-room.js scoreInvoice와 동일)
     return inv.deliveredWasPriority ? base * PRIORITY_MULTIPLIER : base;
   }
   function resultLabel(inv) {
@@ -939,7 +998,7 @@ APP_JS_TEMPLATE = r"""
         mine += '<div class="floor-btns">';
         for (var num = 0; num < t.count; num++) {
           var cell = boardById[t.key + "-" + (num + 1)];
-          if (!cell.taken) mine += '<button class="floor-btn" data-action="open-cell" data-cell="' + cell.id + '">' + esc(FLOORS[num]) + '</button>';
+          if (!cell.taken) mine += '<button class="floor-btn" data-action="open-cell" data-cell="' + cell.id + '"><span>' + esc(FLOORS[num]) + '</span><small>' + fmtWon(Math.round(t.reward * floorMult(num))) + '</small></button>';
           else if (cell.takenBy === seat) {
             var fInv = invFor(cell);
             mine += '<button class="floor-btn is-gone mine" disabled><span>' + esc(FLOORS[num]) + '</span>' + (fInv ? '<small>' + esc(roomCode(fInv.floorIdx, fInv.room)) + '</small>' : '') + '</button>';
@@ -951,7 +1010,7 @@ APP_JS_TEMPLATE = r"""
       } else {
         mine += '<button class="rail-btn" data-action="open-type" data-cat="' + catIdx + '"' + (left === 0 ? ' disabled' : '') + '>'
           + '<span class="rbt">' + (left === 0 ? '소진' : esc(MINI_NAME[t.mini] || '우봉고') + ' 시작') + '</span>'
-          + '<span class="rbp">성공 ' + fmtWon(t.reward) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
+          + '<span class="rbp">성공 ' + rewardRange(t) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
         mine += '<div class="my-chips">' + myCells.map(function (c) {
           var inv = invFor(c);
           return '<span class="my-chip">' + (inv ? esc(roomCode(inv.floorIdx, inv.room)) : '확보') + '</span>';
@@ -1079,7 +1138,9 @@ APP_JS_TEMPLATE = r"""
     // column-reverse, so rows[i] is still floor i no matter where it sits on screen. Tests rely on
     // that mapping.
     FLOORS.forEach(function (f, i) {
-      html += '<div class="floor-stop' + (i === floorIdx ? ' current' : '') + '"><span class="car"></span>' + f + '</div>';
+      html += '<div class="floor-stop' + (i === floorIdx ? ' current' : '') + '"><span class="car"></span>' + f
+        + (floorMult(i) !== 1 ? ' <span class="floor-mult' + (floorMult(i) > 1 ? ' hi' : ' lo') + '">' + multLabel(i) + '</span>' : '')
+        + '</div>';
     });
     html += '</div></div>';
     return html;
@@ -1101,7 +1162,7 @@ APP_JS_TEMPLATE = r"""
       var flagText = inv.deliveredWasPriority ? ('우선 x' + PRIORITY_MULTIPLIER + ' 성공') : (isPendingPriority ? ('이번 라운드 우선 x' + PRIORITY_MULTIPLIER) : '');
       return '<div class="invoice' + (delivered ? ' delivered' : '') + (isPriority ? ' is-priority' : '') + '">'
         + '<span class="swatch" style="background:' + t.color + '"></span>'
-        + '<div class="meta"><div class="t">' + esc(t.name) + (flagText ? ' <span class="priority-flag">' + flagText + '</span>' : '') + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + '</div></div>'
+        + '<div class="meta"><div class="t">' + esc(t.name) + (flagText ? ' <span class="priority-flag">' + flagText + '</span>' : '') + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + ' · ' + fmtWon(invReward(inv)) + '</div></div>'
         + '<span class="sticker' + (delivered && !inv.stolen ? '' : ' pending') + '">' + stickerText + '</span>'
         + '</div>';
     }).join("") + '</div>';
@@ -1115,7 +1176,7 @@ APP_JS_TEMPLATE = r"""
       var t = TYPES[d.catIdx];
       var note = d.stolen
         ? ' — <span style="color:var(--danger);font-weight:700;">택배도둑에게 도난당했어요! (' + fmtWon(-t.penalty) + ')</span>'
-        : ' (' + fmtWon(d.priority ? t.reward * PRIORITY_MULTIPLIER : t.reward) + (d.priority ? ' · 우선 x' + PRIORITY_MULTIPLIER : '') + ')';
+        : ' (' + fmtWon((typeof d.reward === "number" ? d.reward : t.reward) * (d.priority ? PRIORITY_MULTIPLIER : 1)) + (d.priority ? ' · 우선 x' + PRIORITY_MULTIPLIER : '') + ')';
       return '<div class="delivered-item"><span class="swatch" style="background:' + t.color + '"></span>'
         + roomCode(d.floorIdx, d.room) + ' ' + esc(t.name) + note
         + '</div>';
@@ -1140,25 +1201,59 @@ APP_JS_TEMPLATE = r"""
     html += '<div class="pw-clock"><span style="color:var(--muted);font-size:0.85rem;">남은 시간</span>'
       + '<span class="time-left-big" id="priority-clock">' + fmtClock(Math.max(0, (el.priorityWindowEndsAt || 0) - nowMs())) + '</span></div>';
     html += '<div class="timer-bar"><i id="priority-bar" style="width:100%"></i></div>';
+    if (!undelivered.length) html += '<div style="color:var(--muted);font-size:0.85rem;">지정할 미배송 택배가 없어요</div>';
     html += '<div class="invoice-list">' + undelivered.map(function (inv) {
       var t = TYPES[inv.catIdx];
       var picked = inv.id === pickedId;
       return '<div class="invoice' + (confirmed ? ' delivered' : ' pickable') + (picked ? ' is-priority' : '') + '"'
         + (confirmed ? '' : (' data-action="pick-priority" data-inv="' + (picked ? '' : inv.id) + '"')) + '>'
         + '<span class="swatch" style="background:' + t.color + '"></span>'
-        + '<div class="meta"><div class="t">' + esc(t.name) + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + ' · 성공 시 ' + fmtWon(t.reward) + '</div></div>'
+        + '<div class="meta"><div class="t">' + esc(t.name) + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + ' · 성공 시 ' + fmtWon(invReward(inv)) + '</div></div>'
         + '<span class="sticker' + (picked ? '' : ' pending') + '">' + (picked ? ('우선 x' + PRIORITY_MULTIPLIER) : '선택') + '</span>'
         + '</div>';
     }).join('') + '</div>';
+    // P2-2 (2026-10-13): 후반이면 같은 창에서 택배도둑도 놓는다 (game-room.js _mergedThiefWindow). 놓아도 창은 안 닫히고, "확정"해야 진행.
+    var merged = MERGE_PRIORITY_THIEF && st.half === 2;
+    if (merged) html += renderThiefPicker(st, seat, confirmed);
     if (confirmed) {
       html += '<div class="pw-actions"><span class="ready-chip is-ready">'
-        + (pickedId ? '우선 택배 확정' : '지정 안 함으로 확정') + '</span>'
+        + (merged ? '확정 완료' : (pickedId ? '우선 택배 확정' : '지정 안 함으로 확정')) + '</span>'
         + '<span class="ready-chip' + (el.priorityConfirmed[otherSeat] ? ' is-ready' : '') + '">' + seatName(otherSeat, st)
         + (el.priorityConfirmed[otherSeat] ? ' · 확정' : ' · 고르는 중') + '</span></div>';
     } else {
       html += '<div class="pw-actions"><button class="btn primary" data-action="confirm-priority">'
-        + (pickedId ? '이걸로 확정' : '지정 안 함으로 확정') + '</button>'
+        + (merged ? '확정' : (pickedId ? '이걸로 확정' : '지정 안 함으로 확정')) + '</button>'
         + '<span class="key-hint">Space로도 확정 · 고른 택배를 다시 누르면 선택 해제</span></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // 합쳐진 창 안의 택배도둑 영역 (P2-2). 배치 규칙은 예전 thief 창과 같다: 후반 통틀어 THIEF_PER_HALF회, 라운드당 1개,
+  // 다음 라운드부터 작동, 마지막 라운드 불가(서버가 자동 넘김). 확정 전에는 아직 안 놓았으면 층 버튼을 보여 준다.
+  function renderThiefPicker(st, seat, confirmed) {
+    var th = st.elevator.thieves;
+    var perHalf = th.perHalf || 1;
+    var usedCnt = th.usedThisHalf[seat] || 0;
+    var leftCnt = Math.max(0, perHalf - usedCnt);
+    var placed = th.placedThisRound[seat];
+    var hasPlaced = placed !== null && placed !== undefined;
+    var lastRound = st.elevator.round >= ELEVATOR_ROUNDS;
+    var html = '<div class="thief-window merged">';
+    html += '<h4>택배도둑 (남은 횟수 ' + leftCnt + '/' + perHalf + ')</h4>';
+    if (hasPlaced) {
+      html += '<div style="color:var(--muted);font-size:0.85rem;"><strong style="color:var(--danger)">' + esc(FLOORS[placed]) + '</strong>에 배치했어요. 다음 라운드에 상대가 그 층에 배송하면 가로채요.</div>';
+    } else if (lastRound) {
+      html += '<div style="color:var(--muted);font-size:0.85rem;">마지막 라운드엔 놓을 수 없어요.</div>';
+    } else if (leftCnt === 0) {
+      html += '<div style="color:var(--muted);font-size:0.85rem;">이번 후반에 택배도둑을 다 썼어요.</div>';
+    } else if (confirmed) {
+      html += '<div style="color:var(--muted);font-size:0.85rem;">이번 라운드는 놓지 않았어요.</div>';
+    } else {
+      html += '<div style="color:var(--muted);font-size:0.85rem;margin-bottom:0.5rem;">층을 고르면 다음 라운드에 상대가 그 층에 배송할 때 가로채요 (선택 사항).</div>';
+      html += '<div class="thief-floors">' + FLOORS.map(function (f, i) {
+        return '<button class="btn ghost" data-action="place-thief" data-floor-idx="' + i + '">' + esc(f) + '</button>';
+      }).join('') + '</div>';
     }
     html += '</div>';
     return html;
@@ -1300,11 +1395,15 @@ APP_JS_TEMPLATE = r"""
       var myReady = !!st.elevator.readyNext[seat];
       var otherReady = !!st.elevator.readyNext[otherSeat];
       var nextLabel = st.elevator.round >= ELEVATOR_ROUNDS ? "최종 결과 보기" : "다음 라운드로";
+      // P2-1 (2026-10-13): 결과는 RESULT_AUTO_ADVANCE_MS 뒤 자동으로 넘어간다. 둘 다 Space면 더 빨리.
+      if (st.elevator.resultEndsAt) {
+        html += '<div class="auto-advance" id="result-clock">' + Math.max(0, Math.ceil((st.elevator.resultEndsAt - nowMs()) / 1000)) + '초 뒤 자동으로 ' + nextLabel.replace(" 보기", "") + '</div>';
+      }
       html += '<div class="ready-row">'
         + '<span class="ready-chip' + (myReady ? ' is-ready' : '') + '">나 · ' + seatName(seat, st) + (myReady ? ' · 준비 완료' : ' · 스페이스바 대기') + '</span>'
         + '<span class="ready-chip' + (otherReady ? ' is-ready' : '') + '">' + seatName(otherSeat, st) + (otherReady ? ' · 준비 완료' : ' · 대기 중') + '</span>'
         + '</div>'
-        + '<div class="space-hint">Space · ' + nextLabel + '</div>';
+        + '<div class="space-hint">Space · ' + (st.elevator.resultEndsAt ? '둘 다 누르면 바로 넘어가요' : nextLabel) + '</div>';
     }
     html += '</div>';
 
@@ -1479,14 +1578,14 @@ APP_JS_TEMPLATE = r"""
         var cell = boardCell(st, t.key + "-" + (num + 1));
         var off = !here || busy || (cell && cell.taken);
         html += '<button class="floor-btn' + (cell && cell.taken ? ' is-gone' : '') + '" data-action="rail-press" data-side="' + side + '" data-cat="' + catIdx + '" data-cell="' + t.key + '-' + (num + 1) + '"'
-          + (off ? ' disabled' : '') + '>' + esc(FLOORS[num]) + '</button>';
+          + (off ? ' disabled' : '') + '><span>' + esc(FLOORS[num]) + '</span><small>' + fmtWon(Math.round(t.reward * floorMult(num))) + '</small></button>';
       }
       html += '</div>';
     } else {
       var off2 = !here || busy || left === 0;
       html += '<button class="rail-btn' + (busy ? ' is-busy' : '') + '" data-action="rail-press" data-side="' + side + '" data-cat="' + catIdx + '"' + (off2 ? ' disabled' : '') + '>'
         + '<span class="rbt">' + (left === 0 ? '소진' : (busy ? '게임 중...' : esc(MINI_NAME[t.mini] || '우봉고') + ' 시작')) + '</span>'
-        + '<span class="rbp">성공 ' + fmtWon(t.reward) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
+        + '<span class="rbp">성공 ' + rewardRange(t) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
     }
     return html + '</div>';
   }
@@ -1628,14 +1727,14 @@ APP_JS_TEMPLATE = r"""
       var el = st.elevator, floorIdx = el.floorIdx;
       var stateLabel = "", ends = null, wait = "";
       if (el.state === "idle") { stateLabel = "출발 준비 중"; wait = "두 플레이어가 준비하면 출발해요"; }
-      else if (el.state === "priority") { stateLabel = "우선 택배 지정 시간"; ends = el.priorityWindowEndsAt; }
+      else if (el.state === "priority") { stateLabel = (MERGE_PRIORITY_THIEF && st.half === 2) ? "우선 택배 지정 · 택배도둑 배치 시간" : "우선 택배 지정 시간"; ends = el.priorityWindowEndsAt; }
       else if (el.state === "thief") { stateLabel = "택배도둑 배치 시간"; ends = el.thiefWindowEndsAt; }
       else if (el.state === "voting") { stateLabel = "엘리베이터 이동 중!"; ends = el.votingEndsAt; }
       else if (el.state === "choosing") { stateLabel = "같은 층 택배 선택 중"; ends = el.pendingChoice && el.pendingChoice.endsAt; }
-      else if (el.state === "result") { stateLabel = "라운드 결과 확인 중"; wait = "다음 라운드 준비 대기"; }
+      else if (el.state === "result") { stateLabel = "라운드 결과 확인 중"; if (el.resultEndsAt) ends = el.resultEndsAt; else wait = "다음 라운드 준비 대기"; }
       else { stateLabel = "배송 종료"; }
       var rows = '';
-      FLOORS.forEach(function (f, i) { rows += '<div class="mv-floor-row' + (i === floorIdx ? ' is-current' : '') + '">' + f + '</div>'; });
+      FLOORS.forEach(function (f, i) { rows += '<div class="mv-floor-row' + (i === floorIdx ? ' is-current' : '') + '">' + f + (floorMult(i) !== 1 ? ' <span class="mv-mult' + (floorMult(i) > 1 ? ' hi' : '') + '">' + multLabel(i) + '</span>' : '') + '</div>'; });
       var carFrom = mvPrevFloor === null ? floorIdx : mvPrevFloor;
       html = head("엘리베이터 · " + halfName) + '<div class="mv-body"><div class="mv-elev">'
         + '<div class="mv-shaft"><div class="mv-floors">' + rows + '</div>'
@@ -1838,6 +1937,12 @@ APP_JS_TEMPLATE = r"""
       var left = state.elevator.votingEndsAt - nowMs();
       var clockEl = document.getElementById("round-clock");
       if (clockEl) clockEl.textContent = "남은 시간 " + fmtClock(Math.max(0, left));
+    } else if (state.phase === "elevator" && state.elevator.state === "result" && state.elevator.resultEndsAt) {
+      var resEl = document.getElementById("result-clock");
+      if (resEl) {
+        var nextTxt = state.elevator.round >= ELEVATOR_ROUNDS ? "최종 결과" : "다음 라운드로";
+        resEl.textContent = Math.max(0, Math.ceil((state.elevator.resultEndsAt - nowMs()) / 1000)) + "초 뒤 자동으로 " + nextTxt;
+      }
     } else if (state.phase === "elevator" && state.elevator.state === "choosing" && state.elevator.pendingChoice) {
       var seatNow = mySeat();
       var alreadyChosen = seatNow && state.elevator.pendingChoice.chosen[seatNow];
@@ -1881,6 +1986,9 @@ APP_JS = (APP_JS_TEMPLATE
           .replace("@@ELEVATOR_ROUNDS@@", str(ELEVATOR_ROUNDS))
           .replace("@@SECURE_PHASE_MS@@", str(SECURE_PHASE_MS))
           .replace("@@PRIORITY_MULTIPLIER@@", str(PRIORITY_MULTIPLIER))
+          .replace("@@FLOOR_REWARD_MULT@@", json.dumps(FLOOR_REWARD_MULT))
+          .replace("@@RESULT_AUTO_ADVANCE_MS@@", str(RESULT_AUTO_ADVANCE_MS))
+          .replace("@@MERGE_PRIORITY_THIEF@@", "true" if MERGE_PRIORITY_THIEF else "false")
           .replace("@@SAME_FLOOR_CHOICE_MS@@", str(SAME_FLOOR_CHOICE_MS))
           .replace("@@HALVES@@", str(HALVES))
           .replace("@@THIEF_PLACE_MS@@", str(THIEF_PLACE_MS))
