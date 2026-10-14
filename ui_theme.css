@@ -219,3 +219,144 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
 .race-slip .rs-code { font-family: monospace; letter-spacing: -1px; color: #2b1d12; margin-top: 6px; }
 @keyframes race-print { 0% { transform: scaleY(0.1); opacity: 0.4; } 100% { transform: none; opacity: 1; } }
 @media (max-width: 900px) { .race-wrap.has-slip { grid-template-columns: 1fr; } .race-rail { grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 12px 8px 26px; } }
+
+/* ---------- 5) 엘리베이터 단계 일러스트 (2026-10-14) ----------
+ * 엘리베이터 단계는 카트 틀 대신 엘리베이터 그림. 왼쪽: 엘리베이터(층 표시창 + 버튼판이 실시간) + 층 띠 + 내 택배, 오른쪽: 라운드 카드. */
+.elev-frame { background: rgba(255, 250, 240, 0.93); border-radius: 18px; padding: clamp(12px, 2vw, 24px); box-shadow: 0 18px 40px rgba(20, 30, 60, 0.25); }
+.elev-frame .elev-layout { grid-template-columns: minmax(260px, 40%) minmax(0, 1fr); }
+.elev-art { position: relative; width: 100%; aspect-ratio: 1402 / 1122; border-radius: 14px; overflow: hidden; container-type: inline-size;
+  background: #c9ced9 url("@@ELEVATOR_BG@@") center / 100% 100% no-repeat; box-shadow: 0 6px 16px rgba(30, 35, 60, 0.2); }
+/* 층 표시창 (그림의 검은 창 위치에 맞춤) */
+.ea-ind { position: absolute; left: 42.6%; top: 15.3%; width: 15.1%; height: 3.1%; display: flex; align-items: center; justify-content: space-between; padding: 0 1.6cqw; }
+.ea-ind b { color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 3.1cqw; line-height: 1; }
+.ea-ind i { font-style: normal; font-size: 1.9cqw; color: #7d8496; line-height: 1; }
+.ea-ind i.ea-up.on { color: #ef4444; text-shadow: 0 0 1cqw rgba(239, 68, 68, 0.8); }
+.ea-ind i.ea-down.on { color: #facc15; text-shadow: 0 0 1cqw rgba(250, 204, 21, 0.8); }
+/* 층 버튼판 (오른쪽 벽의 판 위치): 5 / 4 3 / 2 1 / B1 */
+.ea-panel { position: absolute; left: 79.4%; top: 27.9%; width: 5%; height: 19.4%; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr);
+  gap: 0.45cqw 0.35cqw; align-items: center; justify-items: center; }
+.ea-btn { width: 100%; aspect-ratio: 1; border-radius: 50%; background: #9aa1b4; color: #f4f5f8; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 1.25cqw; box-shadow: inset 0 -0.25cqw 0 rgba(0, 0, 0, 0.2); }
+.ea-btn.on { background: #F5C842; color: #5a3a00; box-shadow: 0 0 0.9cqw #ffd84d; }
+.ea-mult { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); padding: 0.4cqw 1.6cqw; border-radius: 999px; font-weight: 900; font-size: 2.2cqw;
+  background: rgba(255, 255, 255, 0.9); color: #8a7256; }
+.ea-mult.hi { color: #1f6e4b; background: #dff3e6; }
+/* 층 띠: 그림 아래에 가로로 (B1 ... 5F, 배율 배지) */
+.elev-frame .elev-left .shaft { padding: 0.5rem; background: rgba(239, 220, 178, 0.6); }
+.elev-frame .elev-left .shaft-track { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+.elev-frame .elev-left .floor-stop { flex: 1 1 0; min-width: 44px; padding: 0.35rem 0.3rem; justify-content: center; flex-direction: column; gap: 0.1rem; font-size: 0.85rem; }
+.elev-frame .elev-left .floor-stop .car { display: none; }
+.elev-frame .elev-left .floor-stop .floor-mult { margin-left: 0; font-size: 0.62rem; padding: 0 0.3rem; }
+@media (max-width: 820px) { .elev-frame .elev-layout { grid-template-columns: 1fr; } }
+
+/* ===== 6. 엘리베이터 이동 표시 = 건물 단면도 (2026-10-14) =====
+   ui_art/building.jpg (667x1179). 층 칸 위치: B1 위쪽 81.17%, 한 층 14.606%, 칸 높이 12.4%.
+   이름표 x 2.7~16.5%, 유리 승강로 x 65.8~80.5% (카트는 66.3%, 폭 12.9%). */
+.bld { --row: 14.606%; --b1: 81.17%; --h: 12.4%; position: relative; width: 100%; aspect-ratio: 667 / 1179; container-type: inline-size;
+  border-radius: 14px; overflow: hidden; background: #cfe3f5 url("@@BUILDING_BG@@") center / 100% 100% no-repeat; box-shadow: 0 6px 16px rgba(30, 35, 60, 0.2); }
+.bld-stop { position: absolute; left: 2.7%; width: 13.8%; top: calc(var(--b1) - var(--i) * var(--row)); height: var(--h); border-radius: 2.2cqw 0 0 2.2cqw; }
+.bld .floor-stop.bld-stop, .bld .floor-stop.bld-stop.current { display: block; padding: 0; gap: 0; background: transparent; color: transparent; font-weight: inherit; box-shadow: none; transform: none; }
+.bld-stop .bld-name { position: absolute; opacity: 0; pointer-events: none; }
+.bld-stop::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: rgba(236, 240, 248, 0.55); transition: background 0.3s; }
+.bld-stop.current::before { background: transparent; outline: 0.9cqw solid #fff; box-shadow: 0 0 2.6cqw 0.8cqw rgba(255, 214, 64, 0.95); }
+.bld-stop.current::after { content: ""; position: absolute; left: 100%; top: 0; width: 357%; height: 100%; background: rgba(255, 226, 120, 0.22);
+  box-shadow: inset 0 0 0 0.7cqw rgba(255, 196, 40, 0.85); }
+.bld .bld-stop .floor-mult { position: absolute; left: calc(100% + 1.4cqw); top: 7%; z-index: 1; margin: 0; padding: 0.4cqw 1.4cqw; border-radius: 999px;
+  font-size: 2.9cqw; font-weight: 900; line-height: 1.2; background: rgba(255, 255, 255, 0.92); color: #7a6f63 !important; box-shadow: 0 0.3cqw 0.8cqw rgba(30, 35, 60, 0.18); }
+.bld .bld-stop .floor-mult.hi, .bld .bld-stop.current .floor-mult.hi { color: #1f6e4b !important; background: #dff3e6; }
+.bld-car { position: absolute; left: 65.4%; width: 15.5%; top: calc(var(--b1) - var(--i) * var(--row)); height: var(--h); z-index: 2;
+  transition: top 0.6s cubic-bezier(.4, .1, .2, 1); }
+.bld-cab { position: absolute; left: 0; right: 0; top: 4%; bottom: 13%; border-radius: 1cqw; border: 1.3cqw solid #ec2f3a; border-top-width: 2.6cqw;
+  background: linear-gradient(180deg, #eef1f6, #d3d9e4); box-shadow: 0 0 0 0.35cqw #b91c25, 0 1.2cqw 2.4cqw rgba(185, 28, 37, 0.45); }
+.bld-cab::before { content: ""; position: absolute; left: 6%; right: 6%; top: -2.1cqw; height: 0.6cqw; border-radius: 1cqw; background: #ffb3b7; }
+.bld-wheels { position: absolute; left: 6%; right: 6%; bottom: 0; height: 16%;
+  background: radial-gradient(circle at 18% 50%, #1f2433 0 1.6cqw, transparent 1.7cqw), radial-gradient(circle at 82% 50%, #1f2433 0 1.6cqw, transparent 1.7cqw); }
+.bld-arw { position: absolute; left: 0; right: 0; display: none; flex-direction: column; align-items: center; gap: 0.2cqw; font-style: normal; }
+.bld-arw b { color: #fff; font-size: 6cqw; line-height: 0.9; text-shadow: 0 0 1.2cqw rgba(30, 80, 200, 0.9); animation: bldArw 0.9s linear infinite; }
+.bld-arw.up { bottom: 100%; padding-bottom: 1cqw; }
+.bld-arw.down { top: 100%; padding-top: 1cqw; }
+.bld-arw.up b:nth-child(1), .bld-arw.down b:nth-child(3) { animation-delay: 0s; }
+.bld-arw.up b:nth-child(2), .bld-arw.down b:nth-child(2) { animation-delay: 0.3s; }
+.bld-arw.up b:nth-child(3), .bld-arw.down b:nth-child(1) { animation-delay: 0.6s; }
+.bld.is-up .bld-arw.up, .bld.is-down .bld-arw.down { display: flex; }
+@keyframes bldArw { 0%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bld-car { transition: none; } .bld-arw b { animation: none; } }
+
+/* 플레이어 화면: 건물 | 엘리베이터 안 + 내 택배 | 조작 */
+.elev-frame .elev-layout { grid-template-columns: clamp(200px, 24vw, 330px) minmax(0, 1fr) minmax(0, 1.12fr); }
+.elev-frame .elev-left { gap: 0; }
+.elev-mid { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.elev-mid .player-col.me { max-width: none; }
+.elev-mid .invoice { padding: 0.5rem 0.6rem; gap: 0.55rem; }
+.elev-mid .invoice .meta .t { font-size: 0.82rem; }
+.elev-mid .invoice .sticker { font-size: 0.68rem; padding: 0.18rem 0.4rem; }
+@media (max-width: 1000px) { .elev-frame .elev-layout { grid-template-columns: clamp(200px, 30vw, 300px) minmax(0, 1fr); }
+  .elev-frame .elev-layout > div:last-child { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .elev-frame .elev-layout { grid-template-columns: 1fr; } .elev-frame .elev-left .bld { max-width: 300px; margin: 0 auto; } }
+
+/* 메인 모니터: 건물이 왼쪽 칸 높이를 꽉 채운다 */
+.mv-bld { height: 100%; min-height: 0; display: flex; justify-content: center; }
+.mv-bld .bld { height: 100%; width: auto; max-width: 100%; border-radius: 2vh; }
+
+/* 화살표 글자는 CSS로 (본문 글자에 ▲숫자가 섞이지 않게 -- test_nudge의 "클릭 수 표시 없음" 검사) */
+.ea-ind i.ea-up::before, .bld-arw.up b::before { content: "▲"; }
+.ea-ind i.ea-down::before, .bld-arw.down b::before { content: "▼"; }
+
+/* ===== 7. 택배 쌓기 문제는 레일 화면에 하나만 (2026-10-14) ===== */
+/* 플레이어 화면: 그림 없이 안내 + 포기/투입 */
+.race-wrap.has-puzzle { grid-template-columns: minmax(0, 1fr) minmax(260px, 34%); }
+.race-pad { background: #fffcf4; border-radius: 14px; padding: 18px 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.race-pad .rpad-ico { font-size: 2.6rem; line-height: 1; color: #e2691a; animation: rpadBob 1.1s ease-in-out infinite; }
+.race-pad .rpad-t { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; color: #2b1d12; }
+.race-pad .rpad-s { font-weight: 700; color: #8a7256; font-size: 0.9rem; }
+.race-pad .puzzle-actions { display: flex; gap: 10px; justify-content: center; margin-top: 10px; width: 100%; }
+.race-pad .puzzle-actions .btn { flex: 1 1 0; min-width: 0; padding-top: 0.9rem; padding-bottom: 0.9rem; }
+@keyframes rpadBob { 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .race-pad .rpad-ico { animation: none; } }
+/* 레일 화면 / 메인 모니터: 레이스 + 문제 그림 나란히 */
+.race-watch.has-puzzle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 42%); gap: 16px; align-items: start; }
+.race-watch.has-puzzle .race-puzzle { margin-top: 0; padding: 14px; box-shadow: 0 8px 22px rgba(43, 29, 18, 0.18); border: 3px solid #e2691a; }
+.race-watch.has-puzzle .race-puzzle .rp-cap { font-size: 1.05rem; color: #2b1d12; }
+.race-watch.has-puzzle .race-puzzle img { max-height: 62vh; width: 100%; object-fit: contain; }
+.race-watch.has-puzzle .race-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 900px) { .race-watch.has-puzzle { grid-template-columns: 1fr; } }
+
+/* ===== 8. 덜컹 (2026-10-14): 팽팽하게 비기면 엘리베이터가 한 층 떨어지거나 튀어 오른다 ===== */
+@keyframes joltShake { 0%, 100% { transform: translate(0, 0) rotate(0); } 10% { transform: translate(-1.2%, 0.8%) rotate(-1.2deg); } 25% { transform: translate(1.4%, -0.6%) rotate(1.4deg); }
+  40% { transform: translate(-1%, 0.6%) rotate(-0.8deg); } 55% { transform: translate(0.8%, -0.4%) rotate(0.6deg); } 70% { transform: translate(-0.4%, 0.2%) rotate(-0.3deg); } }
+.bld.is-jolt, .elev-art.is-jolt { animation: joltShake 0.7s ease-out 0.55s both; }
+.bld.is-jolt .bld-car { transition: top 0.35s cubic-bezier(.5, -0.4, .5, 1.6); }
+.jolt-pop { position: absolute; left: 50%; top: 4%; transform: translateX(-50%) rotate(-6deg); z-index: 5; padding: 1cqw 3.4cqw; border-radius: 2cqw;
+  background: #ffd84d; color: #5a3a00; border: 0.8cqw solid #2b1d12; font-family: var(--font-display); font-weight: 900; font-size: 8cqw; letter-spacing: 0.04em;
+  box-shadow: 0 1cqw 0 #2b1d12; }
+.bld.is-jolt .jolt-pop { animation: joltPop 0.5s cubic-bezier(.3, 1.6, .5, 1) 0.5s both; }
+@keyframes joltPop { from { transform: translateX(-50%) rotate(-6deg) scale(0.2); opacity: 0; } to { transform: translateX(-50%) rotate(-6deg) scale(1); opacity: 1; } }
+.round-result .jolt-word { color: #c7402d; font-size: 1.15em; }
+@media (prefers-reduced-motion: reduce) { .bld.is-jolt, .elev-art.is-jolt, .bld.is-jolt .jolt-pop { animation: none; } }
+
+/* ===== 9. 레일 화면 엘리베이터 단계 (2026-10-14): 건물 단면도 | 엘리베이터 안 + 상태 ===== */
+.rv-elev { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2.4vw; align-items: start; padding: 1vh 2vw; height: calc(100vh - 120px); box-sizing: border-box; }
+.rv-elev-bld { height: 100%; min-height: 0; display: flex; }
+.rv-elev-bld .bld { height: 100%; width: auto; max-width: 42vw; }
+.rv-elev-main { display: flex; flex-direction: column; gap: 1.6vh; min-width: 0; }
+.rv-elev-main .elev-art { width: min(100%, calc(60vh * 1402 / 1122)); align-self: center; }
+.rv-elev-info { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.6rem; padding: 1.2rem 1.4rem; border-radius: 16px; background: rgba(255, 250, 240, 0.93); box-shadow: 0 8px 22px rgba(43, 29, 18, 0.15); }
+.rv-elev-floor { font-family: var(--font-display); font-weight: 700; font-size: 1.4rem; }
+.rv-elev-floor b { color: var(--gold); font-size: 2.4rem; margin-left: 0.3rem; }
+.rv-elev-state { font-weight: 800; font-size: 1.25rem; flex: 1 1 12rem; }
+.rv-elev-info .race-count { font-family: var(--font-display); font-size: 2.4rem; color: #2b1d12; }
+.rv-elev-wait { color: var(--muted); font-weight: 700; }
+@media (max-width: 820px) { .rv-elev { grid-template-columns: 1fr; height: auto; } .rv-elev-bld .bld { height: auto; width: min(100%, 360px); margin: 0 auto; } }
+
+/* ===== 10. 레이스: 플레이어 화면 빈 단계 + 레일 화면 문제만 (2026-10-14) ===== */
+.race-blank { min-height: clamp(360px, 62vh, 560px); display: flex; flex-direction: column; }
+.race-blank .rb-center { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
+.race-blank .race-msg { width: 100%; font-size: 1.25rem; }
+.race-blank .rb-actions { display: flex; gap: 10px; opacity: 0.85; }
+.race-blank .rb-actions .btn { min-width: 120px; padding: 0.55rem 1rem; font-size: 0.9rem; }
+.rv-puzzle-only { height: 100vh; box-sizing: border-box; padding: 2vh 2vw; display: flex; }
+.rv-puzzle-only .race-puzzle { flex: 1 1 auto; margin: 0; display: flex; flex-direction: column; border: 4px solid #e2691a; border-radius: 22px; padding: 1.4vh 1.4vw; }
+.rv-puzzle-only .rp-cap { font-size: clamp(1.1rem, 2.6vh, 1.8rem); color: #2b1d12; margin-bottom: 1vh; }
+.rv-puzzle-only .race-puzzle img { flex: 1 1 auto; min-height: 0; width: 100%; max-height: none; object-fit: contain; }
+.rv-race-wait .rv-center { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2vh; }
+.rv-race-wait h2 { font-size: clamp(2rem, 6vh, 3.6rem); margin: 0; }

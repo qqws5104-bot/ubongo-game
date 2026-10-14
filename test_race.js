@@ -14,7 +14,8 @@ const { TYPES, RACE_PUZZLE_ORDER } = require("./game-data.js");
 
 function log(...a) { console.log("[test-race]", ...a); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const FAST = { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300 };
+// 자동 선택은 기본이 꺼짐(RACE_AUTO_PICK = 0). 자동 선택 규칙도 함께 검증하려고 여기선 켠다 -- 꺼진 경우는 맨 아래에서 따로 확인.
+const FAST = { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: true, raceAutoPickMode: "best" };
 function newRoom(rules) {
   const room = new GameRoom("RACE", () => {}, Object.assign({}, FAST, rules || {}));
   room.pickCourier("cookbang", "a"); room.pickCourier("cheonil", "b");
@@ -139,6 +140,44 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
   const total = room.state.players["1"].invoices.length + room.state.players["2"].invoices.length;
   assert.strictEqual(total, 17, "두 사람이 매 라운드 다 끝내면 17개가 전부 나뉜다");
   log("택배 17개가 다 떨어지면 엘리베이터로 (라운드 " + rounds + "번)");
+
+  // 자동 선택 꺼짐(raceAutoPick:false): 고를 때까지 기다린다
+  room.destroy();
+  room = new GameRoom("NOAUTO", () => {}, { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: false });
+  room.pickCourier("cookbang", "a"); room.pickCourier("cheonil", "b"); room.setReady("1"); room.setReady("2");
+  r = race(room);
+  finishBoth(room, "1"); finishBoth(room, "2");
+  assert.strictEqual(r.pickEndsAt, null, "자동 선택 꺼지면 고르기 마감 없음");
+  await sleep(700);
+  assert.strictEqual(r.status, "picking"); assert.strictEqual(r.picks["1"], null, "1등이 안 고르면 계속 기다림");
+  room.racePick("1", 0);
+  await sleep(700);
+  assert.strictEqual(r.status, "picking"); assert.strictEqual(r.picks["2"], null, "2등도 고를 때까지 기다림");
+  room.racePick("2", 1);
+  assert.strictEqual(r.status, "reveal");
+  log("raceAutoPick:false: 1등·2등 모두 직접 고를 때까지 넘어가지 않음");
+  room.destroy();
+
+  // 기본값(2026-10-14): 투입 순간부터 RACE_PICK_MS(20초) 안에 고름, 지나면 남은 것 중 무작위
+  {
+    const { RACE_PICK_MS, RACE_AUTO_PICK, RACE_AUTO_PICK_MODE } = require("./game-data.js");
+    assert.strictEqual(RACE_PICK_MS, 20000); assert.strictEqual(RACE_AUTO_PICK, 1); assert.strictEqual(RACE_AUTO_PICK_MODE, "random");
+    const seenPick = new Set();
+    for (let k = 0; k < 24; k++) {
+      const rm = new GameRoom("RND" + k, () => {}, { racePickMs: 120, raceSecondMs: 400, raceRevealMs: 5000 });
+      rm.pickCourier("cookbang", "a"); rm.pickCourier("cheonil", "b"); rm.setReady("1"); rm.setReady("2");
+      const rr = race(rm);
+      const t0 = Date.now();
+      finishBoth(rm, "1");
+      assert.ok(rr.pickEndsAt >= t0 + 120 && rr.pickEndsAt <= Date.now() + 120, "1등 마감 = 투입 순간 + RACE_PICK_MS");
+      await sleep(200);
+      assert.notStrictEqual(rr.picks["1"], null, "마감 지나면 자동으로 골라짐");
+      seenPick.add(rr.picks["1"]);
+      rm.destroy();
+    }
+    assert.ok(seenPick.size >= 2, "자동 선택은 무작위 (여러 칸이 나와야 함): " + [...seenPick]);
+    log("기본: 투입 후 20초 안에 고르기, 안 고르면 무작위 (24번 중 " + seenPick.size + "가지 칸)");
+  }
 
   // 예전 방식 플래그
   const legacy = new GameRoom("L", () => {}, { raceMode: false });

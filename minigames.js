@@ -1,10 +1,10 @@
-/* minigames.js -- 택배 확보 미니게임 4종 (박스 포장 / 이상 확인 / 송장 붙이기 / 지도 배달)
+/* minigames.js -- 택배 확보 미니게임 7종 (박스 포장 / 이상 확인 / 송장 붙이기 / 지도 배달 + 2026-10-14 레이스용 택배 짝 찾기 / 무게 맞추기 / 테이프 봉하기)
  *
  * 바닐라 JS, 의존성 없음. 게임 본체(build_client.py)에 그대로 인라인하거나, 단독 시험장 페이지에서
  * 똑같이 쓸 수 있게 만들었다.
  *
  *   var ctl = MiniGames.start(hostElement, {
- *     kind: "pack" | "inspect" | "sticker" | "map",
+ *     kind: "pack" | "inspect" | "sticker" | "map" | "match" | "weigh" | "tape",
  *     level: 1 | 2 | 3,              // 쉬움 / 보통 / 어려움
  *     label: "B08호",                // 송장 붙이기에서 송장에 찍을 목적지 (없으면 임의 생성)
  *     onDone:   function (res) {},   // res = { ok:true, kind, level, ms, mistakes }
@@ -22,6 +22,9 @@
     inspect: { name: "이상 확인" },
     sticker: { name: "송장 붙이기" },
     map:     { name: "지도 배달" },
+    match:   { name: "택배 짝 찾기" },   // 2026-10-14 레이스 라운드용 짧은 게임
+    weigh:   { name: "무게 맞추기" },
+    tape:    { name: "테이프 봉하기" },
   };
   var LEVEL_NAME = ["쉬움", "보통", "어려움"];
 
@@ -557,6 +560,7 @@
     var narrow = stage.clientWidth > 0 && stage.clientWidth < 460;
     var lw = LW, lh = LH, ty = TRAY_Y;
     if (narrow) { stage.classList.add("is-narrow"); lw = 38; lh = 19.5; ty = 76.5; }
+    if (n === 4) stage.classList.add("is-2x2"); // 2026-10-14: 박스 4개는 3+1이 아니라 2x2로 가지런히 (사용자 요청)
     if (n > 6) { stage.style.setProperty("--bw", narrow ? "29cqw" : "21cqw"); stage.style.setProperty("--ggap", narrow ? "2.6cqw 2.4cqw" : "2.2cqw 2.2cqw"); } // 7개 이상: 한 줄 4개(넓은 화면) / 3개(폰)
     if (c.testHooks) body.setAttribute("data-plan", JSON.stringify({ seq: plan.seq, near: plan.near }));
     var boxes = Array.prototype.slice.call(body.querySelectorAll(".mg-bx"));
@@ -901,7 +905,222 @@
     };
   }
 
-  var GAMES = { pack: packGame, inspect: inspectGame, sticker: stickerGame, map: mapGame };
+  // ======================================================================
+  // 2026-10-14 레이스 라운드용 짧은 게임 3종 (10~20초). 입력은 레일 앞 물리 버튼과 같은 ← ↑ → / SPACE만 쓴다.
+  // ======================================================================
+  var PICK_KEYS = [{ a: "left", g: "←" }, { a: "up", g: "↑" }, { a: "right", g: "→" }];
+  function arrowAct(e) {
+    if (e.key === "ArrowLeft") return "left";
+    if (e.key === "ArrowUp") return "up";
+    if (e.key === "ArrowRight") return "right";
+    if (e.code === "Space" || e.key === " ") return "space";
+    if (e.key === "ArrowDown") return "down";
+    return null;
+  }
+  function bindKeys(c, fn) {
+    function onKey(e) {
+      if (c.isFinished()) return;
+      var a = arrowAct(e);
+      if (!a) return;
+      e.preventDefault(); e.stopPropagation();
+      fn(a, e);
+    }
+    document.addEventListener("keydown", onKey, true);
+    c.onCleanup(function () { document.removeEventListener("keydown", onKey, true); });
+  }
+  function bindPads(body, fn) {
+    Array.prototype.forEach.call(body.querySelectorAll("[data-a]"), function (b) {
+      b.addEventListener("pointerdown", function (e) { e.preventDefault(); fn(b.getAttribute("data-a")); });
+    });
+  }
+
+  // ---- 택배 짝 찾기 (2026-10-14 사용자 요청으로 재설계): 뒤집힌 카드 8장 = 4쌍. 카드 앞면은 모양이 조금씩 다른 택배 그림
+  //   (상자 비율 / 테이프 / 송장 위치 / 취급 표시 중 일부만 다르다). 두 장을 뒤집어 같으면 열린 채로, 다르면 잠깐 보여 주고 다시 덮는다.
+  //   입력: ← → 커서 이동, ↑(↓) 윗줄/아랫줄, SPACE 뒤집기 (레일 앞 버튼과 같은 키). 카드를 직접 눌러도 된다.
+  //   난이도: 쉬움 = 쌍끼리 두 군데 다름, 보통 이상 = 한 군데만 다름 (더 헷갈림).
+  var MEMO_CARDS = 8, MEMO_COLS = 4;
+  var MEMO_SHOW_MS = 750;   // 틀린 두 장을 보여 주는 시간
+  var MEMO_ATTRS = [3, 3, 3, 3]; // shape, tape, label, mark 각각의 경우 수
+  function memoVariants(diff) {
+    var base = MEMO_ATTRS.map(function (n) { return rand(n); });
+    var out = [base];
+    var key = function (v) { return v.join(""); };
+    var guard = 0;
+    while (out.length < 4 && guard++ < 500) {
+      var v = base.slice();
+      shuffle([0, 1, 2, 3]).slice(0, diff).forEach(function (k) { v[k] = (v[k] + 1 + rand(MEMO_ATTRS[k] - 1)) % MEMO_ATTRS[k]; });
+      if (!out.some(function (o) { return key(o) === key(v); })) out.push(v);
+    }
+    return out;
+  }
+  // 택배 그림: v = [shape(0 넓음 / 1 높음 / 2 정육면체), tape(0 세로 / 1 십자 / 2 가로), label(0 없음 / 1 왼쪽 아래 / 2 오른쪽 위), mark(0 없음 / 1 위 화살표 / 2 유리잔)]
+  function memoSvg(v) {
+    var W = [74, 52, 62][v[0]], H = [48, 66, 58][v[0]];
+    var x = (100 - W) / 2, y = 92 - H, cx = 50, cy = y + H / 2;
+    var s = '<svg viewBox="0 0 100 100" aria-hidden="true"><ellipse cx="50" cy="94" rx="40" ry="3.5" fill="rgba(43,29,18,.18)"/>'
+      + '<rect x="' + x + '" y="' + y + '" width="' + W + '" height="' + H + '" rx="2.5" fill="#cfae7a" stroke="#6b4e26" stroke-width="2"/>';
+    if (v[1] === 0 || v[1] === 1) s += '<rect x="' + (cx - 5.5) + '" y="' + y + '" width="11" height="' + H + '" fill="#ead8b0"/>';
+    if (v[1] === 1 || v[1] === 2) s += '<rect x="' + x + '" y="' + (cy - 5.5) + '" width="' + W + '" height="11" fill="#ead8b0"/>';
+    if (v[2] === 1) s += '<rect x="' + (x + 5) + '" y="' + (y + H - 19) + '" width="22" height="14" rx="1.5" fill="#fffefa" stroke="#9a8460" stroke-width="1.2"/><rect x="' + (x + 5) + '" y="' + (y + H - 19) + '" width="22" height="4" fill="#E8681C"/>';
+    if (v[2] === 2) s += '<rect x="' + (x + W - 27) + '" y="' + (y + 5) + '" width="22" height="14" rx="1.5" fill="#fffefa" stroke="#9a8460" stroke-width="1.2"/><rect x="' + (x + W - 27) + '" y="' + (y + 5) + '" width="22" height="4" fill="#E8681C"/>';
+    var mx = v[2] === 2 ? x + 13 : x + W - 13, my = v[2] === 2 ? y + H - 14 : y + 14;
+    if (v[3] === 1) s += '<path d="M' + (mx - 4) + ' ' + (my + 6) + 'v-7M' + (mx - 7) + ' ' + (my - 1) + 'l3-4 3 4M' + (mx + 4) + ' ' + (my + 6) + 'v-7M' + (mx + 1) + ' ' + (my - 1) + 'l3-4 3 4" fill="none" stroke="#3a2812" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+    if (v[3] === 2) s += '<path d="M' + (mx - 5) + ' ' + (my - 7) + 'h10l-1.2 6.5a3.8 3.8 0 0 1-7.6 0Z M' + mx + ' ' + (my + 3) + 'v4M' + (mx - 3.5) + ' ' + (my + 7) + 'h7" fill="rgba(255,255,255,.6)" stroke="#3a2812" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>';
+    return s + '</svg>';
+  }
+  function matchGame(body, c) {
+    var vars = memoVariants(c.level === 1 ? 2 : 1);
+    var deck = shuffle([0, 0, 1, 1, 2, 2, 3, 3]);
+    if (c.testHooks) {
+      var pairs = [0, 1, 2, 3].map(function (k) { var at = []; deck.forEach(function (d, i) { if (d === k) at.push(i); }); return at.join("-"); });
+      body.setAttribute("data-seq", pairs.join(","));
+    }
+    var cards = '';
+    deck.forEach(function (d, i) {
+      cards += '<button type="button" class="mg-mm-card" data-a="card-' + i + '"><span class="mg-mm-in"><span class="mg-mm-back">?</span>'
+        + '<span class="mg-mm-face">' + memoSvg(vars[d]) + '</span></span></button>';
+    });
+    body.innerHTML = '<div class="mg-mm">' + cards + '</div>'
+      + '<p class="mg-progress">찾은 짝 <em class="mg-found">0</em> / 4</p><p class="mg-freeze-note"></p>';
+    var els = body.querySelectorAll(".mg-mm-card"), found = body.querySelector(".mg-found"), note = body.querySelector(".mg-freeze-note");
+    var cur = 0, open = [], done = {}, nDone = 0, locked = false;
+    function draw() {
+      Array.prototype.forEach.call(els, function (e, i) {
+        e.classList.toggle("is-cur", i === cur);
+        e.classList.toggle("is-open", !!done[i] || open.indexOf(i) >= 0);
+        e.classList.toggle("is-done", !!done[i]);
+      });
+      found.textContent = nDone;
+    }
+    function flip(i) {
+      if (locked || done[i] || open.indexOf(i) >= 0) return;
+      cur = i; open.push(i); draw();
+      if (open.length < 2) return;
+      var a = open[0], b = open[1];
+      if (deck[a] === deck[b]) {
+        done[a] = done[b] = true; nDone++; open = []; draw();
+        restartAnim(els[a], "is-ok"); restartAnim(els[b], "is-ok");
+        if (nDone === 4) c.later(c.finish, 300);
+        return;
+      }
+      c.addMistake(); locked = true;
+      note.textContent = "모양이 달라요 — 기억해 두세요";
+      c.later(function () { open = []; locked = false; note.textContent = ""; draw(); }, MEMO_SHOW_MS);
+    }
+    function act(a) {
+      if (a.indexOf("card-") === 0) { flip(parseInt(a.slice(5), 10)); return; }
+      if (a === "left") cur = (cur + MEMO_CARDS - 1) % MEMO_CARDS;
+      else if (a === "right") cur = (cur + 1) % MEMO_CARDS;
+      else if (a === "up" || a === "down") cur = (cur + MEMO_COLS) % MEMO_CARDS;
+      else if (a === "space") { flip(cur); return; }
+      draw();
+    }
+    bindKeys(c, function (a) { act(a); });
+    bindPads(body, act);
+    draw();
+    return { hint: function () { return "뒤집힌 카드 8장에서 똑같은 택배 4쌍을 찾으세요. ← → 이동, ↑ 윗줄/아랫줄, SPACE 뒤집기. 모양이 조금씩 달라요 — 테이프·송장·표시를 잘 보세요."; } };
+  }
+
+  // ---- 무게 맞추기: 택배 3개 중 둘을 저울에 올려 기준 무게에 딱 맞춘다. ← ↑ → 로 올리고/내리기. 넘치면 실수 + 저울 비움.
+  var WEIGH_ROUNDS = [3, 4, 5];
+  function weighRound() {
+    for (;;) {
+      var a = 1 + rand(9), b = 1 + rand(9), cc = 1 + rand(9), T = a + b;
+      if (a === b && Math.random() < 0.7) continue;
+      if (a === T || b === T || cc === T || a + cc === T || b + cc === T || a + b + cc === T) continue;
+      var w = shuffle([a, b, cc]);
+      // 정답 쌍 (같은 무게가 둘이면 아무 쌍이나 맞으면 된다 -- 판정은 합으로 한다)
+      var pair = [];
+      for (var i = 0; i < 3 && pair.length === 0; i++) for (var j = i + 1; j < 3; j++) if (w[i] + w[j] === T) { pair = [i, j]; break; }
+      return { w: w, T: T, pair: pair };
+    }
+  }
+  function weighGame(body, c) {
+    var total = WEIGH_ROUNDS[c.level - 1];
+    var rounds = []; for (var i = 0; i < total; i++) rounds.push(weighRound());
+    if (c.testHooks) body.setAttribute("data-seq", rounds.map(function (r) { return r.pair.map(function (k) { return PICK_KEYS[k].a; }).join("+"); }).join(","));
+    body.innerHTML = '<div class="mg-wg"><div class="mg-wg-scale"><span class="mg-wg-goal">기준 <b class="mg-wg-t"></b>kg</span>'
+      + '<div class="mg-wg-plate"><div class="mg-wg-on"></div></div><span class="mg-wg-sum"><b class="mg-wg-s">0</b>kg</span></div>'
+      + '<div class="mg-wg-opts">' + PICK_KEYS.map(function (k) {
+        return '<button type="button" class="mg-wg-pkg" data-a="' + k.a + '"><span class="mg-mt-k">' + k.g + '</span><b></b><small>kg</small></button>';
+      }).join('') + '</div></div>'
+      + '<p class="mg-progress">맞춤 <em class="mg-found">0</em> / ' + total + '</p><p class="mg-freeze-note"></p>';
+    var tEl = body.querySelector(".mg-wg-t"), sEl = body.querySelector(".mg-wg-s"), onEl = body.querySelector(".mg-wg-on");
+    var pk = body.querySelectorAll(".mg-wg-pkg"), found = body.querySelector(".mg-found"), note = body.querySelector(".mg-freeze-note"), scale = body.querySelector(".mg-wg-scale");
+    var idx = 0, on = [false, false, false], locked = false;
+    function sum() { var r = rounds[idx], t = 0; on.forEach(function (v, i) { if (v) t += r.w[i]; }); return t; }
+    function draw() {
+      var r = rounds[idx], t = sum();
+      tEl.textContent = r.T; sEl.textContent = t;
+      onEl.innerHTML = on.map(function (v, i) { return v ? '<span class="mg-wg-chip">' + r.w[i] + '</span>' : ''; }).join('');
+      Array.prototype.forEach.call(pk, function (b, i) { b.querySelector("b").textContent = r.w[i]; b.classList.toggle("is-on", on[i]); });
+      scale.style.setProperty("--tilt", Math.max(-1, Math.min(1, (t - r.T) / r.T)).toFixed(2));
+      scale.classList.toggle("is-hit", t === r.T);
+    }
+    function act(a) {
+      if (locked || idx >= total) return;
+      var k = ["left", "up", "right"].indexOf(a);
+      if (k < 0) return;
+      on[k] = !on[k];
+      draw();
+      var r = rounds[idx], t = sum();
+      if (t === r.T) {
+        locked = true; idx++; found.textContent = idx;
+        if (idx === total) { c.later(c.finish, 300); return; }
+        c.later(function () { on = [false, false, false]; locked = false; draw(); }, 380);
+      } else if (t > r.T) {
+        c.addMistake(); locked = true;
+        restartAnim(scale, "mg-shake");
+        note.textContent = "너무 무거워요! 저울을 비웠어요";
+        c.later(function () { on = [false, false, false]; locked = false; note.textContent = ""; draw(); }, 650);
+      }
+    }
+    bindKeys(c, function (a) { act(a); });
+    bindPads(body, act);
+    draw();
+    return { hint: function () { return "택배 두 개를 저울에 올려 기준 무게에 딱 맞추세요. ← ↑ → 로 올리고 한 번 더 누르면 내려요. 넘치면 저울이 비워져요."; } };
+  }
+
+  // ---- 테이프 봉하기: SPACE 연타로 상자 테이프를 끝까지 붙인다. 손을 멈추면 테이프가 조금씩 다시 떨어진다. 상자 3개.
+  var TAPE_PRESS = [12, 15, 18];  // 상자 하나당 눌러야 하는 횟수
+  var TAPE_BOXES = 3;
+  var TAPE_DRAIN_MS = 260;        // 이 시간 동안 안 누르면 한 칸씩 떨어진다
+  function tapeGame(body, c) {
+    var need = TAPE_PRESS[c.level - 1];
+    if (c.testHooks) body.setAttribute("data-seq", String(need * TAPE_BOXES));
+    var boxes = '';
+    for (var i = 0; i < TAPE_BOXES; i++) boxes += '<div class="mg-tp-box" data-i="' + i + '"><span class="mg-tp-flap"></span><span class="mg-tp-tape"></span></div>';
+    body.innerHTML = '<div class="mg-tp"><div class="mg-tp-row">' + boxes + '</div>'
+      + '<button type="button" class="mg-bin mg-discard mg-tp-btn" data-a="space"><span class="mg-bin-k">SPACE</span><span class="mg-bin-n">연타!</span></button></div>'
+      + '<p class="mg-progress">봉한 상자 <em class="mg-found">0</em> / ' + TAPE_BOXES + '</p>';
+    var els = body.querySelectorAll(".mg-tp-box"), found = body.querySelector(".mg-found"), btn = body.querySelector(".mg-tp-btn");
+    var box = 0, n = 0, last = performance.now();
+    function draw() {
+      Array.prototype.forEach.call(els, function (e, i) {
+        e.style.setProperty("--p", i < box ? 1 : (i === box ? (n / need).toFixed(3) : 0));
+        e.classList.toggle("is-done", i < box); e.classList.toggle("is-now", i === box);
+      });
+      found.textContent = box;
+    }
+    function press() {
+      if (box >= TAPE_BOXES) return;
+      last = performance.now(); n++;
+      restartAnim(btn, "is-ok");
+      if (n >= need) { box++; n = 0; if (box >= TAPE_BOXES) { draw(); c.later(c.finish, 200); return; } }
+      draw();
+    }
+    function drain() {
+      if (c.isFinished()) return;
+      if (n > 0 && performance.now() - last > TAPE_DRAIN_MS) { n--; draw(); }
+      c.later(drain, 120);
+    }
+    bindKeys(c, function (a, e) { if (a === "space" && !e.repeat) press(); });
+    bindPads(body, function () { press(); });
+    draw(); c.later(drain, 120);
+    return { hint: function () { return "SPACE를 빠르게 연타해서 상자 3개에 테이프를 끝까지 붙이세요. 멈추면 테이프가 조금씩 떨어져요."; } };
+  }
+
+  var GAMES = { pack: packGame, inspect: inspectGame, sticker: stickerGame, map: mapGame, match: matchGame, weigh: weighGame, tape: tapeGame };
 
   // ======================================================================
   // 공통 진행: 헤더(제목/시간/실수/포기), 타이머, 완료 배너, 정리

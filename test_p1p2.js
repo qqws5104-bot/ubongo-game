@@ -16,8 +16,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const el = (room) => room.state.elevator;
 const catIdx = (key) => TYPES.findIndex((t) => t.key === key);
 
+// 2026-10-14: 기본값은 층 배율 끔(전부 1.0, 사용자 결정). 여기서는 배율 기능 자체를 켜고 검사한다.
+const P1_MULT = [0.7, 1.0, 1.3, 1.3, 1.0, 0.7];
 function newRoom() {
-  const room = new GameRoom("TEST", () => {}, { raceMode: false }); // 확보는 예전 방식으로 칸을 직접 지정 (레이스는 test_race.js)
+  const room = new GameRoom("TEST", () => {}, { raceMode: false, floorRewardMult: P1_MULT }); // 확보는 예전 방식으로 칸을 직접 지정 (레이스는 test_race.js)
   room.pickCourier("cookbang", "clientA");
   room.pickCourier("cheonil", "clientB");
   room.setReady("1"); room.setReady("2");
@@ -33,13 +35,14 @@ const confirmBoth = (room) => { room.confirmPriority("1"); room.confirmPriority(
 
 (async () => {
   // ---------- P1-1: 배율 값 ----------
-  assert.strictEqual(FLOOR_REWARD_MULT.length, FLOORS.length, "배율은 층마다 하나");
-  assert.ok(FLOOR_REWARD_MULT[0] < FLOOR_REWARD_MULT[2] && FLOOR_REWARD_MULT[5] < FLOOR_REWARD_MULT[3], "끝층이 가운데 층보다 싸야 한다");
+  assert.ok(FLOOR_REWARD_MULT.every((m) => m === 1), "기본값은 층 배율 끔 (2026-10-14)");
+  assert.strictEqual(P1_MULT.length, FLOORS.length, "배율은 층마다 하나");
+  assert.ok(P1_MULT[0] < P1_MULT[2] && P1_MULT[5] < P1_MULT[3], "끝층이 가운데 층보다 싸야 한다");
   const ff = catIdx("fixed-floor");
   for (let f = 0; f < FLOORS.length; f++) {
-    assert.strictEqual(rewardFor(ff, f, FLOOR_REWARD_MULT), Math.round(TYPES[ff].reward * FLOOR_REWARD_MULT[f]));
+    assert.strictEqual(rewardFor(ff, f, P1_MULT), Math.round(TYPES[ff].reward * P1_MULT[f]));
   }
-  log("배율:", FLOORS.map((f, i) => f + " x" + FLOOR_REWARD_MULT[i]).join(", "));
+  log("배율:", FLOORS.map((f, i) => f + " x" + P1_MULT[i]).join(", "));
 
   // ---------- P1-2: 시작 층 ----------
   const seen = new Set();
@@ -56,13 +59,13 @@ const confirmBoth = (room) => { room.confirmPriority("1"); room.confirmPriority(
   room.secureCell("2", "fixed-floor-4"); // 3F
   const p1 = room.state.players["1"].invoices;
   assert.strictEqual(p1[0].floorIdx, 0); assert.strictEqual(p1[1].floorIdx, 2);
-  assert.strictEqual(p1[0].reward, Math.round(TYPES[ff].reward * FLOOR_REWARD_MULT[0]), "B1 송장 금액에 배율 적용");
-  assert.strictEqual(p1[1].reward, Math.round(TYPES[ff].reward * FLOOR_REWARD_MULT[2]), "2F 송장 금액에 배율 적용");
+  assert.strictEqual(p1[0].reward, Math.round(TYPES[ff].reward * P1_MULT[0]), "B1 송장 금액에 배율 적용");
+  assert.strictEqual(p1[1].reward, Math.round(TYPES[ff].reward * P1_MULT[2]), "2F 송장 금액에 배율 적용");
   assert.ok(p1[0].reward < p1[1].reward, "같은 종류라도 B1이 2F보다 싸다");
   // 일반 택배(층 무작위)도 송장마다 reward가 층에 맞게 들어간다
   room.secureCell("2", "normal-1");
   const n = room.state.players["2"].invoices[1];
-  assert.strictEqual(n.reward, Math.round(TYPES[n.catIdx].reward * FLOOR_REWARD_MULT[n.floorIdx]));
+  assert.strictEqual(n.reward, Math.round(TYPES[n.catIdx].reward * P1_MULT[n.floorIdx]));
   log("송장 금액에 층 배율이 박힌다 (B1", p1[0].reward, "/ 2F", p1[1].reward, ")");
 
   room._endSecurePhase();

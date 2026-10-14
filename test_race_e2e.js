@@ -1,5 +1,6 @@
 // 2026-10-14 확보 단계 레이스 라운드 -- 진짜 브라우저 2개 + 레일 화면 + 메인 모니터로 처음부터 엘리베이터 진입까지.
-//   - 확보가 시작되면 두 사람 모두 송장 붙이기 화면이 자동으로 뜬다 (상대 진행 띠 포함)
+//   - 확보가 시작되면 두 사람 모두 같은 첫 게임(5종 중 무작위)이 자동으로 뜬다 (상대 진행 띠 포함)
+//   - 택배 쌓기 문제 그림은 레일 화면(과 메인 모니터)에만 하나, 플레이어 화면엔 투입/포기 버튼만
 //   - 송장 붙이기를 끝내면 우봉고 문제 + 투입 버튼, 상대 화면에는 내 진행 단계가 보인다
 //   - 택배 3개는 종류만 보인다. 먼저 투입한 사람이 ← ↑ → 로 고르면 자기 화면에만 송장(층·금액)이 나온다
 //   - 늦은 사람은 마감 안에 투입하면 남은 것 중 고른다, 마감을 넘기면 못 가져감, 남은 건 레일로 돌아감
@@ -38,37 +39,46 @@ async function main() {
   await waitFor(async () => (await text(p2)).includes("내 좌석 · 천일배송"), { label: "p2 seat" });
   await key(p1, "Space", " "); await key(p2, "Space", " ");
 
-  // ---- 라운드 1: 둘 다 송장 붙이기 화면 ----
-  await waitFor(() => count(p1, "#mg-layer .mg-kind-sticker").then((n) => n === 1), { label: "p1 sticker game opens" });
-  await waitFor(() => count(p2, "#mg-layer .mg-kind-sticker").then((n) => n === 1), { label: "p2 sticker game opens" });
-  assert((await p1.evaluate(() => document.getElementById("race-strip").textContent)).includes("송장 붙이는 중"), "상대 진행 띠");
+  // ---- 라운드 1: 둘 다 같은 첫 게임 화면 (2026-10-14: RACE_GAME_POOL 중 무작위) ----
+  const gameKind = (p) => p.evaluate(() => { const r = document.querySelector("#mg-layer .mg-root"); if (!r) return null; const m = r.className.match(/mg-kind-(\w+)/); return m ? m[1] : null; });
+  await waitFor(() => count(p1, "#mg-layer .mg-root").then((n) => n === 1), { label: "p1 first game opens" });
+  await waitFor(() => count(p2, "#mg-layer .mg-root").then((n) => n === 1), { label: "p2 first game opens" });
+  const g1 = await gameKind(p1);
+  assert(g1 && g1 === (await gameKind(p2)), "두 사람이 같은 게임: " + g1);
+  assert(["sticker", "inspect", "match", "weigh", "tape"].includes(g1), "게임 후보 안: " + g1);
+  const g1name = await p1.evaluate((k) => MiniGames.KINDS[k].name, g1);
+  assert((await p1.evaluate(() => document.getElementById("race-strip").textContent)).includes(g1name + " 중"), "상대 진행 띠에 게임 이름");
   await shot(p1, "race_1_sticker");
-  log("확보 시작 -> 두 사람 모두 송장 붙이기 자동 시작, 상대 진행 띠 표시");
+  log("확보 시작 -> 두 사람 모두 같은 첫 게임(" + g1name + ") 자동 시작, 상대 진행 띠 표시");
+  assert((await count(rail, ".race-puzzle")) === 0, "첫 게임 중엔 레일에 문제 없음");
+  await waitFor(async () => (await text(rail)).includes(g1name + " 중"), { label: "rail waiting screen" });
+  assert((await count(p1, ".race-parcel")) === 0, "첫 게임 중 플레이어 화면엔 택배 없음");
   // 레일/메인: 택배 3개, 종류만
-  await waitFor(() => count(rail, ".race-parcel").then((n) => n === 3), { label: "rail shows 3 parcels" });
   await waitFor(() => count(mainv, ".race-parcel").then((n) => n === 3), { label: "main shows 3 parcels" });
-  assert((await text(rail)).includes("층은 송장에서"), "레일 화면엔 층 대신 안내");
   await shot(rail, "race_r_rail_playing"); await shot(mainv, "race_m_main_playing");
 
   // p1 송장 끝 -> 우봉고
   await p1.evaluate(() => window.__mgFinish());
-  await waitFor(() => count(p1, ".race-puzzle img").then((n) => n === 1), { label: "p1 ubongo puzzle shows" });
+  await waitFor(() => count(p1, ".race-blank [data-action=\"race-done\"]").then((n) => n === 1), { label: "p1 blank during ubongo" });
+  assert((await count(p1, ".race-puzzle")) === 0 && (await count(p1, ".race-parcel")) === 0, "택배 쌓기 중 플레이어 화면엔 문제도 택배도 없음");
+  await waitFor(() => count(rail, ".race-puzzle img").then((n) => n === 1), { label: "rail shows the single puzzle" });
+  assert((await count(rail, ".race-parcel")) === 0 && (await count(rail, ".race-lane")) === 0, "레일 화면엔 택배 쌓기 문제만");
+  await waitFor(() => count(mainv, ".race-puzzle img").then((n) => n === 1), { label: "main shows the puzzle" });
+  await shot(rail, "race_r_rail_puzzle");
   assert((await count(p1, "#mg-layer .mg-root")) === 0, "송장 게임 닫힘");
   await waitFor(async () => (await p2.evaluate(() => document.getElementById("race-strip") && document.getElementById("race-strip").textContent)).includes("택배 쌓기"), { label: "p2 strip shows p1 on ubongo" });
   await shot(p1, "race_2_ubongo");
-  // 두 사람의 우봉고 문제가 같은지(p2도 송장 끝낸 뒤 확인)
   await p2.evaluate(() => window.__mgFinish());
-  await waitFor(() => count(p2, ".race-puzzle img").then((n) => n === 1), { label: "p2 ubongo" });
-  const src1 = await p1.evaluate(() => document.querySelector(".race-puzzle img").src.slice(-80));
-  const src2 = await p2.evaluate(() => document.querySelector(".race-puzzle img").src.slice(-80));
-  assert(src1 === src2, "두 사람이 같은 우봉고 문제");
-  log("송장 -> 우봉고: 같은 문제가 두 화면에, 상대 화면에 내 단계가 보임");
+  await waitFor(() => count(p2, ".race-blank [data-action=\"race-done\"]").then((n) => n === 1), { label: "p2 blank during ubongo" });
+  assert((await count(p2, ".race-puzzle")) === 0 && (await count(rail, ".race-puzzle img")) === 1, "문제는 레일 화면에 하나만");
+  log("첫 게임 -> 택배 쌓기: 문제는 레일 화면(과 메인 모니터)에만 하나, 플레이어 화면엔 투입/포기만");
 
   // p1 Space로 투입 -> 고르기
   await key(p1, "Space", " ");
-  await waitFor(() => count(p1, "button.race-parcel.can-pick").then((n) => n === 3), { label: "p1 can pick 3" });
+  await waitFor(() => count(p1, "button.race-parcel.can-pick").then((n) => n === 3), { label: "p1 can pick 3 (투입 뒤에야 택배가 보임)" });
   assert((await count(p2, "button.race-parcel.can-pick")) === 0, "p2는 아직 못 고름");
   assert((await text(p2)).includes("안에 투입하면 남은 택배"), "p2에게 남은 시간 안내");
+  assert((await count(p2, ".race-parcel")) === 0, "늦은 사람은 투입 전까지 택배가 안 보임");
   await shot(p1, "race_3_pick_first"); await shot(p2, "race_3_pick_second"); await shot(rail, "race_r_rail_picking");
   log("먼저 투입 -> 1등만 고르기(3개), 늦은 사람에게 마감 안내");
 
@@ -91,10 +101,14 @@ async function main() {
   log("1등이 →로 고르면 자기 화면에만 송장 출력, 2등이 남은 2개 중 고름, 남은 1개는 레일로");
 
   // ---- 라운드 2: 늦은 사람이 마감을 넘김 ----
-  await waitFor(() => count(p1, "#mg-layer .mg-kind-sticker").then((n) => n === 1), { label: "round 2 sticker", timeout: 8000 });
+  await waitFor(() => count(p1, "#mg-layer .mg-root").then((n) => n === 1), { label: "round 2 first game", timeout: 8000 });
   assert((await text(p1)).includes("레이스 2"), "라운드 2");
+  await waitFor(() => count(rail, ".race-puzzle").then((n) => n === 0), { label: "새 라운드 시작하면 레일 문제 내려감" });
+  const g2 = await gameKind(p1);
+  assert(g2 !== g1, "바로 앞 라운드와 다른 게임: " + g1 + " -> " + g2);
+  log("라운드 2 게임: " + g2 + " (라운드 1과 다름)");
   await p1.evaluate(() => window.__mgFinish()); await p2.evaluate(() => window.__mgFinish());
-  await waitFor(() => count(p2, ".race-puzzle").then((n) => n === 1), { label: "p2 ubongo r2" });
+  await waitFor(() => count(p2, ".race-blank [data-action=\"race-done\"]").then((n) => n === 1), { label: "p2 ubongo r2" });
   await click(p2, '[data-action="race-done"]');
   await waitFor(() => count(p2, "button.race-parcel.can-pick").then((n) => n >= 1), { label: "p2 can pick r2" });
   await key(p2, "ArrowLeft", "ArrowLeft");
@@ -105,7 +119,7 @@ async function main() {
   log("라운드 2: 늦은 사람이 마감을 넘기면 못 가져감");
 
   // ---- 라운드 3: 송장 단계에서 포기 ----
-  await waitFor(() => count(p1, "#mg-layer .mg-kind-sticker").then((n) => n === 1), { label: "round 3 sticker", timeout: 8000 });
+  await waitFor(() => count(p1, "#mg-layer .mg-root").then((n) => n === 1), { label: "round 3 first game", timeout: 8000 });
   await click(p1, "#mg-layer .mg-giveup");
   await waitFor(async () => (await text(p1)).includes("포기했어요"), { label: "p1 gave up" });
   await waitFor(async () => (await p2.evaluate(() => (document.getElementById("race-strip") || {}).textContent || "")).includes("탈락"), { label: "p2 sees p1 out" });

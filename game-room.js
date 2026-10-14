@@ -11,8 +11,8 @@ const SECURE_EARLY_END_MS = 1500;
 const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
-  FLOOR_REWARD_MULT, START_FLOOR_CHOICES, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
-  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN,
+  FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -30,6 +30,10 @@ const DEFAULT_RULES = {
   raceRevealMs: RACE_REVEAL_MS,
   raceParcels: RACE_PARCELS,
   raceLeftoverReturn: !!RACE_LEFTOVER_RETURN,
+  raceAutoPick: !!RACE_AUTO_PICK,
+  raceGamePool: RACE_GAME_POOL,
+  raceAutoPickMode: RACE_AUTO_PICK_MODE,
+  elevatorJolt: !!ELEVATOR_JOLT,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -39,6 +43,7 @@ const LEGACY_RULES = {
   mergePriorityThief: false,
   sameFloorAutoPick: false,
   raceMode: false,
+  elevatorJolt: false,
 };
 
 // 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
@@ -204,8 +209,9 @@ function initialState(rules) {
 //   pair        : [{ cellId, catIdx, floorIdx, reward }] -- 이번 라운드에 걸린 택배 1~RACE_PARCELS개. 화면에는 종류만 그리고,
 //                 층·금액은 고른 사람의 화면(자기 자리 송장)에만 그린다(서버는 원래 전체 상태를 방송하는 구조라 "화면에서 숨김" 수준의
 //                 비공개다 -- 송장과 같은 원칙)
+//   game        : 이번 라운드 첫 게임(화면 미니게임 kind, rules.raceGamePool에서 무작위 -- 두 사람 같은 게임)
 //   puzzleId    : 이번 라운드 우봉고 문제(퍼즐 이미지가 있는 칸 id, RACE_PUZZLE_ORDER 순서). 두 사람이 같은 문제를 푼다.
-//   stage       : 좌석별 "sticker"(송장 붙이기 중) | "ubongo"(우봉고 중) | "done"(투입 완료) | "out"(포기/시간 초과)
+//   stage       : 좌석별 "sticker"(첫 게임 중 -- 이름은 예전 그대로, 실제 게임은 game) | "ubongo"(우봉고 중) | "done"(투입 완료) | "out"(포기/시간 초과)
 //   finishedAt  : 좌석별 우봉고 완료 시각 (서버 시각)
 //   first       : 먼저 끝낸 좌석 (없으면 null)
 //   status      : "playing" | "picking"(먼저 끝낸 사람/늦은 사람이 고르는 중, 늦은 사람 마감 대기) | "reveal"(결과 보여 주는 중)
@@ -312,7 +318,7 @@ class GameRoom {
       return { cellId: c.id, catIdx: c.catIdx, floorIdx, reward: rewardFor(c.catIdx, floorIdx, this.rules.floorRewardMult) };
     });
     this.state.race = {
-      round: roundNo, pair,
+      round: roundNo, pair, game: this._raceNextGame(),
       puzzleId: RACE_PUZZLE_ORDER[(roundNo - 1) % RACE_PUZZLE_ORDER.length],
       stage: { "1": "sticker", "2": "sticker" },
       finishedAt: { "1": null, "2": null },
@@ -321,6 +327,17 @@ class GameRoom {
       picks: { "1": null, "2": null }, invoiceIds: { "1": null, "2": null }, discarded: [],
     };
     this._raceAt(null);
+  }
+
+  // 섞은 순서대로 꺼내고, 다 쓰면 다시 섞는다(새로 섞은 첫 게임이 직전 게임과 같으면 한 칸 미룬다)
+  _raceNextGame() {
+    const pool = (this.rules.raceGamePool && this.rules.raceGamePool.length) ? this.rules.raceGamePool : ["sticker"];
+    if (!this.raceGameBag || !this.raceGameBag.length) {
+      this.raceGameBag = shuffled(pool);
+      if (this.raceGameBag.length > 1 && this.raceGameBag[0] === this.raceLastGame) this.raceGameBag.push(this.raceGameBag.shift());
+    }
+    this.raceLastGame = this.raceGameBag.shift();
+    return this.raceLastGame;
   }
 
   // 클라이언트가 보내는 진행 신호: "sticker-done"(송장 붙이기 끝 -> 우봉고로) / "ubongo-done"(우봉고 완료 = 투입) / "give-up"(이번 라운드 포기)
@@ -344,7 +361,7 @@ class GameRoom {
       if (!r.first) {
         r.first = seat;
         r.status = "picking";
-        r.pickEndsAt = now + this.rules.racePickMs;
+        r.pickEndsAt = this.rules.raceAutoPick ? now + this.rules.racePickMs : null;
         r.secondEndsAt = now + this.rules.raceSecondMs;
       }
     } else if (step === "give-up") {
@@ -389,15 +406,16 @@ class GameRoom {
     r.invoiceIds[seat] = this.state.players[seat].invoices[this.state.players[seat].invoices.length - 1].id;
   }
 
-  // 안 고르고 마감이 지나면: 남은 것 중 "기본 금액"이 가장 비싼 종류 (층·금액은 고르기 전엔 모르는 정보라 그걸로 고르지 않는다)
+  // 안 고르고 마감이 지나면: 남은 것 중 무작위(기본, raceAutoPickMode "random") 또는 "기본 금액"이 가장 비싼 종류("best").
+  //   (층·금액은 고르기 전엔 모르는 정보라 그걸로 고르지 않는다)
   _raceAutoPick(seat) {
     const r = this.state.race;
-    let best = -1;
-    r.pair.forEach((it, i) => {
-      if (r.picks["1"] === i || r.picks["2"] === i) return;
-      if (best < 0 || TYPES[it.catIdx].reward > TYPES[r.pair[best].catIdx].reward) best = i;
-    });
-    if (best >= 0) this._raceGrant(seat, best);
+    const rest = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
+    if (!rest.length) return;
+    if (this.rules.raceAutoPickMode !== "best") { this._raceGrant(seat, rest[Math.floor(Math.random() * rest.length)]); return; }
+    let best = rest[0];
+    rest.forEach((i) => { if (TYPES[r.pair[i].catIdx].reward > TYPES[r.pair[best].catIdx].reward) best = i; });
+    this._raceGrant(seat, best);
   }
 
   // 상태를 한 단계씩 진행시키고 다음 마감 타이머를 건다. 모든 액션/타이머가 여기를 거친다.
@@ -412,16 +430,16 @@ class GameRoom {
     }
     if (r.status === "picking") {
       const f = r.first, s2 = other(f);
-      if (r.picks[f] === null && now >= r.pickEndsAt) this._raceAutoPick(f);
+      if (this.rules.raceAutoPick && r.picks[f] === null && now >= r.pickEndsAt) this._raceAutoPick(f);
       if (r.picks[f] !== null) {
         const rest = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
         // 늦은 사람이 마감 안에 투입하지 못했으면 탈락
         if (r.stage[s2] !== "done" && r.stage[s2] !== "out" && now >= r.secondEndsAt) r.stage[s2] = "out";
         if (r.stage[s2] === "done" && r.picks[s2] === null && rest.length) {
           // 늦은 사람의 고르기 창: 먼저 끝낸 사람이 고른 뒤(또는 늦은 사람이 그 뒤에 투입한 뒤)부터 RACE_PICK_MS
-          if (!r.secondPickEndsAt) r.secondPickEndsAt = now + this.rules.racePickMs;
+          if (!r.secondPickEndsAt && this.rules.raceAutoPick) r.secondPickEndsAt = now + this.rules.racePickMs;
           if (rest.length === 1) this._raceGrant(s2, rest[0]); // 하나 남았으면 고를 것 없이 그것
-          else if (now >= r.secondPickEndsAt) this._raceAutoPick(s2);
+          else if (this.rules.raceAutoPick && now >= r.secondPickEndsAt) this._raceAutoPick(s2);
         }
         const secondSettled = r.stage[s2] === "out" || r.picks[s2] !== null || !rest.length;
         if (secondSettled) this._raceReveal();
@@ -438,9 +456,9 @@ class GameRoom {
     if (cur.status === "picking") {
       const cand = [];
       const s2 = other(cur.first);
-      if (cur.picks[cur.first] === null) cand.push(cur.pickEndsAt);
+      if (this.rules.raceAutoPick && cur.picks[cur.first] === null) cand.push(cur.pickEndsAt);
       if (cur.stage[s2] !== "done" && cur.stage[s2] !== "out") cand.push(cur.secondEndsAt);
-      if (cur.secondPickEndsAt && cur.picks[s2] === null) cand.push(cur.secondPickEndsAt);
+      if (this.rules.raceAutoPick && cur.secondPickEndsAt && cur.picks[s2] === null) cand.push(cur.secondPickEndsAt);
       if (cand.length) nextTs = Math.min.apply(null, cand);
     } else if (cur.status === "reveal") nextTs = cur.revealEndsAt;
     this._raceAt(nextTs);
@@ -760,13 +778,29 @@ class GameRoom {
     return { "1": totalScore("1", this.state), "2": totalScore("2", this.state) };
   }
 
+  // 2026-10-14 덜컹 (ELEVATOR_JOLT): 두 사람 모두 눌렀는데 시작 층 그대로면 무작위로 한 층 위/아래. el.jolt = { from, to, dir }.
+  _maybeJolt() {
+    const el = this.state.elevator;
+    el.jolt = null;
+    if (!this.rules.elevatorJolt || el.floorIdx !== el.roundStartFloorIdx) return;
+    const pressed = (s) => (el.votes[s].up + el.votes[s].down) > 0;
+    if (!pressed("1") || !pressed("2")) return;
+    const from = el.floorIdx;
+    let d = Math.random() < 0.5 ? -1 : 1;
+    if (from + d < 0 || from + d >= FLOORS.length) d = -d;
+    el.floorIdx = from + d;
+    el.jolt = { from, to: el.floorIdx, dir: d > 0 ? "up" : "down" };
+  }
+
   _finishRound(round, forcedChoice) {
     const el = this.state.elevator;
     const v1 = el.votes["1"], v2 = el.votes["2"];
     const totalUp = v1.up + v2.up, totalDown = v1.down + v2.down;
-    const dir = el.floorIdx > el.roundStartFloorIdx ? "up" : (el.floorIdx < el.roundStartFloorIdx ? "down" : "tie");
+    // 덜컹했으면 줄다리기 결과는 "동률"이고, 실제 층은 덜컹한 층이다 (log.jolt)
+    const dir = el.jolt ? "tie" : (el.floorIdx > el.roundStartFloorIdx ? "up" : (el.floorIdx < el.roundStartFloorIdx ? "down" : "tie"));
     const delivered = this._applyDeliveries(round, forcedChoice);
-    el.log.push({ round, up: totalUp, down: totalDown, dir, floorIdx: el.floorIdx, delivered });
+    el.log.push({ round, up: totalUp, down: totalDown, dir, floorIdx: el.floorIdx, delivered, jolt: el.jolt || null });
+    el.jolt = null;
     el.pendingChoice = null;
     // 이번 라운드의 우선 택배 지정은 이번 라운드 배송에만 유효했다 -- 다음 라운드 게이트에서는
     // 다시 비어 있는 상태로 새로 골라야 한다 ("매 라운드마다 지정").
@@ -814,6 +848,7 @@ class GameRoom {
   _resolveRound() {
     if (this.state.phase !== "elevator" || this.state.elevator.state !== "voting") return;
     const el = this.state.elevator;
+    this._maybeJolt();
     const floorIdx = el.floorIdx;
     if (this.rules.sameFloorAutoPick) { this._finishRound(el.round, null); return; }
     const conflicts = {};

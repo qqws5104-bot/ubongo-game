@@ -13,7 +13,7 @@ run(){ echo "== $1"; timeout 400 node $1 2>&1 | tail -3; echo "exit=${PIPESTATUS
 echo "######## 실물 우봉고 모드 (기본)"
 python3 set_mini.py ubongo >/dev/null
 setsec "3 * 60 * 1000"
-for t in test_race.js test_p1p2.js test_priority_window.js test_thief_limit.js test_shared_board.js test_theft_scoring.js test_restart.js test_minigames.js; do run $t; done
+for t in test_race.js test_jolt.js test_p1p2.js test_priority_window.js test_thief_limit.js test_shared_board.js test_theft_scoring.js test_restart.js test_minigames.js; do run $t; done
 setsec "10 * 1000"
 for t in test_hosted.js test_theft_e2e.js test_nudge.js; do run $t; done
 setsec "20 * 1000"; run test_mainview.js
@@ -27,4 +27,4 @@ setsec "40 * 1000"; run test_minigames_live.js; run test_rail_site.js
 echo "######## 확보 단계 레이스 라운드 (기본 모드, 2026-10-14)"
 python3 set_mini.py ubongo >/dev/null
 RACE_ENV=1
-setsec "60 * 1000"; run test_race_e2e.js
+setsec "60 * 1000"; run test_race_e2e.js; run test_race_games.js

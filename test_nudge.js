@@ -110,8 +110,8 @@ async function main() {
   // cells, so the panel may legitimately show the empty-state text rather than a populated
   // .invoice-list -- what's being checked here is where the panel itself lives, not its contents;
   // test_hosted.js separately covers a populated list.)
-  const listInLeftColumn = await p1.evaluate(() => !!document.querySelector(".elev-left .player-col.me"));
-  if (!listInLeftColumn) throw new Error("my package-list panel is not rendered inside .elev-left (under the gauge)");
+  const listInLeftColumn = await p1.evaluate(() => !!document.querySelector(".elev-mid .player-col.me"));
+  if (!listInLeftColumn) throw new Error("my package-list panel is not rendered inside .elev-mid");
   log("confirmed: my package list panel renders directly under the gauge in the left column");
 
   await browser.close();

@@ -10,6 +10,7 @@ const { GameRoom } = require("./game-room");
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
 const INDEX_HTML = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf-8");
+const BUILD_TAG = ((INDEX_HTML.match(/var BUILD_TAG = "([^"]*)"/) || [])[1]) || "unknown";
 // 클라이언트의 자동 재접속 지연(1.2초, build_client.py의 connectWS)보다 넉넉히 길게 잡아서, 순간적인
 // 연결 끊김 정도는 "진짜로 나감"으로 오인하지 않도록 하는 유예 시간. ws.on("close")에서 사용.
 const SEAT_RELEASE_GRACE_MS = 5000;
@@ -28,7 +29,9 @@ function getOrCreateRoom(code) {
   let entry = rooms.get(code);
   if (!entry) {
     // 2026-10-14: RACE_MODE=0 환경변수로 띄우면 확보 단계가 예전 방식(레일에서 각자 골라 확보) -- 예전 회귀 테스트용(regress.sh).
-    const rules = process.env.RACE_MODE === "0" ? { raceMode: false } : undefined;
+    let rules = process.env.RACE_MODE === "0" ? { raceMode: false } : undefined;
+    // RACE_GAMES=sticker,tape 처럼 주면 레이스 첫 게임 후보를 그걸로 (테스트/현장 고정용)
+    if (process.env.RACE_GAMES) rules = Object.assign({}, rules || {}, { raceGamePool: process.env.RACE_GAMES.split(",").map((x) => x.trim()).filter(Boolean) });
     const room = new GameRoom(code, (state) => broadcast(code, state), rules);
     // busy: 레일 화면(/rail)이 열어 준 미니게임을 그 좌석 플레이어가 지금 하고 있는가 (레일 화면에 "플레이 중" 표시 + 중복 지시 방지).
     entry = { room, sockets: new Set(), busy: { "1": false, "2": false } };
@@ -73,7 +76,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://" + req.headers.host);
   if (url.pathname === "/health") {
     res.writeHead(200, { "content-type": "text/plain" });
-    res.end("ok");
+    res.end("ok " + BUILD_TAG); // 2026-10-14: 배포된 빌드 확인용 (화면 왼쪽 위 작은 글씨와 같은 값)
     return;
   }
   // 2026-10-07: /rail 은 레일 사이트(공용 레일 화면). 방 코드가 없으면 화면이 코드 입력칸을 보여 주므로(새 방을 만들지 않는다 --

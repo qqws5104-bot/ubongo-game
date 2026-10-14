@@ -99,10 +99,16 @@ const PRIORITY_PICK_MS = 10000;
 // P1-1 층별 배송비 배율 (FLOORS 순서: B1, 1F, 2F, 3F, 4F, 5F). 끝층은 쉽지만 싸고, 가운데 층은 비싸지만 격전지.
 //   송장이 만들어질 때(확보 순간) 층이 정해지므로, 그때 inv.reward = round(TYPES[].reward x 배율)로 송장에 박아 둔다.
 //   미배송/도난 감점(penalty)은 층과 무관하게 그대로. 전부 1.0이면 예전과 같다.
-const FLOOR_REWARD_MULT = [0.7, 1.0, 1.3, 1.3, 1.0, 0.7];
+// 2026-10-14 (사용자 결정: "층별 비용을 적으면 어려워진다"): 일단 끔(전부 1.0) -- 화면의 배율 배지·층별 금액도 같이 사라진다.
+//   다시 켜려면 [0.7, 1.0, 1.3, 1.3, 1.0, 0.7].
+const FLOOR_REWARD_MULT = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
 // P1-2 엘리베이터 시작 층: 하프마다 이 목록에서 무작위 (FLOORS 인덱스. 2 = 2F, 3 = 3F). 고정 시작층 공짜 배송 방지.
 //   [1]로 두면 예전처럼 항상 1F에서 시작.
 const START_FLOOR_CHOICES = [2, 3];
+// 2026-10-14 (사용자 결정, 실패의 재미): 엘리베이터 "덜컹". 이동 시간 동안 두 사람이 모두 눌렀는데 엘리베이터가 시작 층 그대로면
+//   (팽팽하게 비김) 결과 직전에 무작위로 한 층 떨어지거나 튀어 오른다(맨 아래/맨 위에선 가능한 쪽으로). 배송은 덜컹한 뒤의 층에서.
+//   아무도 안 눌렀거나 한 사람만 눌렀으면 덜컹하지 않는다(둘 다 그 층을 원한 것일 수 있으니까). 0이면 끔.
+const ELEVATOR_JOLT = 1;
 // P2-1 라운드 결과 화면 자동 진행(ms). 결과를 이만큼 보여준 뒤 다음 라운드(또는 하프 종료)로 넘어간다.
 //   둘 다 스페이스를 누르면 더 일찍 넘어간다. 0이면 예전처럼 "둘 다 스페이스"를 눌러야만 넘어간다.
 const RESULT_AUTO_ADVANCE_MS = 3000;
@@ -124,11 +130,21 @@ const SAME_FLOOR_AUTO_PICK = 1;
 const RACE_MODE = 1;
 const RACE_PARCELS = 3;
 const RACE_LEFTOVER_RETURN = 1;
-const RACE_PICK_MS = 3000;
+// 2026-10-14 (사용자 요청): 투입(Space) 순간부터 20초 안에 고른다. 20초가 지나도 안 고르면 남은 것 중 무작위.
+//   늦은 사람의 20초는 "내 투입"과 "1등이 고른 순간" 중 늦은 쪽부터 센다(1등이 고르기 전엔 고를 수 없으니까).
+//   RACE_AUTO_PICK = 0이면 시간 제한 없이 직접 고를 때까지 기다린다. RACE_AUTO_PICK_MODE "best"면 무작위 대신 기본 금액이 비싼 종류.
+//   (늦은 사람의 "투입" 마감 RACE_SECOND_MS는 그대로)
+const RACE_PICK_MS = 20000;
+const RACE_AUTO_PICK = 1;
+const RACE_AUTO_PICK_MODE = "random";
 const RACE_SECOND_MS = 5000;
 const RACE_REVEAL_MS = 2500;
 // 송장 붙이기 난이도 [전반, 후반] (minigames.js: 1 = 박스 4개/송장 2장, 2 = 박스 7개/송장 4장)
 const RACE_STICKER_LEVEL = [1, 1];
+// 2026-10-14 (사용자 요청): 라운드 첫 게임은 송장 붙이기 고정이 아니라 아래 5종 중 무작위. 한 라운드에서 두 사람은 같은 게임을 한다.
+//   바로 앞 라운드와 같은 게임은 안 나온다(5종을 섞은 순서대로 돌고, 다 돌면 다시 섞음). 박스 포장은 실물 택배 쌓기와 같은 퍼즐이라,
+//   지도 배달은 길어서 뺐다. 한 종류로 고정하려면 ["sticker"]처럼 하나만 두면 된다. 난이도는 RACE_STICKER_LEVEL(전반/후반)을 같이 쓴다.
+const RACE_GAME_POOL = ["sticker", "inspect", "match", "weigh", "tape"];
 // 라운드마다 띄울 우봉고 문제(퍼즐 이미지가 있는 칸 id). 내용물(택배 종류)과는 무관 -- 라운드가 갈수록 조각이 늘게(2 -> 3 -> 4조각) 배치.
 // 현장에서는 이 순서대로 두 스테이션에 같은 실물 퍼즐을 준비한다. 끝까지 가면 처음부터 다시.
 const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1", "fixed-floor-2", "fragile-2", "valuable-1", "fixed-floor-3", "valuable-2", "valuable-3"];
@@ -136,6 +152,6 @@ const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1",
 module.exports = {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
-  FLOOR_REWARD_MULT, START_FLOOR_CHOICES, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
-  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_STICKER_LEVEL, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN,
+  FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_STICKER_LEVEL, RACE_GAME_POOL, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_AUTO_PICK_MODE,
 };

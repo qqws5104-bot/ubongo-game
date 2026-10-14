@@ -267,8 +267,9 @@ async function main() {
   // package list under the gauge (.elev-left), and once more inside the embedded priority-picker
   // card (which reuses the same list markup for its pickable items) -- so the meaningful
   // assertion is specifically about the one under the gauge, checked here.
-  const listUnderGauge = await countSel(p1, ".elev-left .invoice-list");
-  if (listUnderGauge !== 1) throw new Error(`expected my invoice list inside .elev-left (under the gauge), found ${listUnderGauge} there`);
+  // 2026-10-14: 3단 배치(건물 | 엘리베이터 안 + 내 택배 | 조작) -- 내 택배 목록은 .elev-mid에 있다.
+  const listUnderGauge = await countSel(p1, ".elev-mid .invoice-list");
+  if (listUnderGauge !== 1) throw new Error(`expected my invoice list inside .elev-mid (under the elevator art), found ${listUnderGauge} there`);
 
   // 2026-10-06: the priority picker no longer lives in the ready-gate -- it has its own 10s timed
   // "priority" window that opens once both players are ready (see priorityStep below).
@@ -399,8 +400,8 @@ async function main() {
       const hasCallout = (await countSel(p1, ".delivered-callout")) > 0;
       if (!hasCallout) throw new Error(`${halfLabel} round ${round}: delivered-items callout did not render on the result screen`);
 
-      const listUnderGaugeResult = await countSel(p1, ".elev-left .invoice-list");
-      if (listUnderGaugeResult !== 1) throw new Error(`${halfLabel} round ${round}: expected my invoice list inside .elev-left (under the gauge), found ${listUnderGaugeResult} there`);
+      const listUnderGaugeResult = await countSel(p1, ".elev-mid .invoice-list");
+      if (listUnderGaugeResult !== 1) throw new Error(`${halfLabel} round ${round}: expected my invoice list inside .elev-mid, found ${listUnderGaugeResult} there`);
 
       // (P2-1, 2026-10-13) 결과 화면은 스페이스 없이 RESULT_AUTO_ADVANCE_MS 뒤 자동으로 넘어간다.
       // 전반 1라운드만 "둘 다 스페이스 -> 즉시 진행"을 확인하고, 나머지는 손대지 않고 자동 진행을 확인한다.
