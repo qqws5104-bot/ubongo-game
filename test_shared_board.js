@@ -7,7 +7,7 @@ const { TYPES } = require("./game-data.js");
 function log(...a) { console.log("[test-shared-board]", ...a); }
 
 function newRoom() {
-  const room = new GameRoom("T", () => {});
+  const room = new GameRoom("T", () => {}, { raceMode: false }); // 2026-10-14: 예전 확보 방식(공유 보드 선착순) 회귀용. 레이스는 test_race.js
   room.pickCourier("cookbang", "A"); room.pickCourier("cheonil", "B");
   room.setReady("1"); room.setReady("2"); // -> secure
   assert.strictEqual(room.state.phase, "secure");

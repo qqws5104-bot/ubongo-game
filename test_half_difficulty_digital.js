@@ -84,7 +84,9 @@ async function main() {
 
   // 전반 5라운드: 확보한 게 없어 배송도 없다 -- idle/result 게이트만 통과시키며 흘려보낸다.
   for (let round = 1; round <= 7; round++) {
-    await pressSpace(p1); await pressSpace(p2); // idle 또는 이전 라운드의 result 게이트 통과
+    // 2026-10-13: 결과 화면은 자동 진행 -- 스페이스는 1라운드 전 idle 게이트에서만 (자동 진행 뒤 누르면 다음 창의 "확정"이 된다)
+    if (round === 1) { await pressSpace(p1); await pressSpace(p2); }
+    else await waitFor(async () => (await bodyText(p1)).includes(`라운드 ${round} / 7`), { label: `전반 round ${round} 자동 진행`, timeout: 8000 });
     await passPriority(p1, p2, '[data-action="vote-up"]');
     await waitFor(async () => (await countSel(p1, '[data-action="vote-up"]')) > 0, { label: `전반 round ${round} voting 시작`, timeout: 8000 });
     await clickSel(p1, '[data-action="vote-up"]');
@@ -92,9 +94,7 @@ async function main() {
     await waitFor(async () => (await bodyText(p1)).includes(`라운드 ${round} 결과`), { label: `전반 round ${round} 결과`, timeout: 8000 });
   }
   log("전반 7라운드 통과");
-  // 7라운드 결과 게이트도 다른 라운드와 동일하게 "둘 다 스페이스"로 넘겨야 half가 끝난다
-  // (setElevatorReady: el.state==="result"이고 round>=ELEVATOR_ROUNDS일 때 비로소 _finishHalf 호출).
-  await pressSpace(p1); await pressSpace(p2);
+  // (2026-10-13) 7라운드 결과도 자동으로 하프타임까지 넘어간다.
 
   await waitFor(async () => (await bodyText(p1)).includes("전반 종료"), { label: "halftime 화면", timeout: 8000 });
   await pressSpace(p1); await pressSpace(p2);

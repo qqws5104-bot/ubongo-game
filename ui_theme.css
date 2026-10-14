@@ -1,0 +1,221 @@
+/* ui_theme.css -- 2026-10-14 UI 리스킨 (사용자 제공 레퍼런스 3장: ui_art/warehouse_src.png, ui_art/ref/cart_ref.png, ui_art/ref/fee_poster_ref.png)
+ *   1) 화면 전체 배경 = 물류창고 그림 (build_client.py가 @@WAREHOUSE_BG@@ 자리에 ui_art/warehouse.jpg를 data URI로 넣는다)
+ *   2) 가운데 패널(좌석 선택/대기/엘리베이터/하프타임/결과/확보 보드) = 빨간 택배 카트 틀. 그림이 아니라 CSS로 그린다
+ *      (어떤 크기로 늘어나도 바퀴/문이 찌그러지지 않게). 구조는 build_client.py의 cartWrap() 참고:
+ *      .cart > .cart-door.l/.r + .cart-body > .cart-screen(회색 화면 = 내용) + .cart-base + .cart-wheel.l/.r
+ *   3) 택배 요금표 = 포스터 디자인을 HTML로 다시 그림 (renderFeePoster / renderFeeMini). 숫자는 game-data.js에서 자동.
+ * 플레이어 화면/레일 화면/메인 모니터 공통으로 이 파일 하나만 보면 된다. */
+
+:root {
+  --cart-red: #E5443D; --cart-red-dark: #C7372F; --cart-red-light: rgba(255,255,255,0.22);
+  --cart-screen: #B7BBC8; --cart-base: #3B3F55; --cart-wheel: #212530; --cart-hub: #565B70;
+  --door-w: clamp(26px, 3.6vw, 62px); --frame: clamp(14px, 2.2vw, 30px); --base-h: 20px; --wheel: clamp(40px, 4.6vw, 64px);
+  --fee-orange: #F77013; --fee-title: #F26B1D; --fee-row: #FDF8E7;
+}
+
+/* ---------- 1) 창고 배경 ---------- */
+html, body { background: #6fb2ec url("@@WAREHOUSE_BG@@") center bottom / cover no-repeat fixed; }
+.topbar { background: rgba(255, 250, 240, 0.9); border-bottom: 2px solid rgba(43, 29, 18, 0.12);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+/* 예전 좌석 선택 화면의 흩뿌린 박스 장식은 배경 그림에 이미 상자가 있어서 숨긴다 */
+.lobby-box-deco { display: none; }
+
+/* ---------- 2) 빨간 택배 카트 틀 ---------- */
+.cart { position: relative; margin: 0 var(--door-w) calc(var(--base-h) + var(--wheel) * 0.62); width: calc(100% - var(--door-w) * 2); }
+.cart-body { position: relative; z-index: 2; background-color: var(--cart-red); border: 3px solid var(--cart-red-dark); border-radius: 16px 16px 4px 4px;
+  padding: var(--frame);
+  /* 테두리 부분의 세로 골(레퍼런스의 얇은 세로줄) + 위쪽 진한 띠 */
+  background-image:
+    linear-gradient(180deg, transparent 6px, rgba(0,0,0,0.08) 6px, rgba(0,0,0,0.08) 14px, transparent 14px),
+    repeating-linear-gradient(90deg, transparent 0 46px, rgba(0,0,0,0.07) 46px 48px);
+  box-shadow: 0 18px 40px rgba(20, 30, 60, 0.28); }
+.cart-screen { position: relative; background: var(--cart-screen); border: 4px solid var(--cart-red-dark); border-radius: 12px;
+  padding: clamp(0.8rem, 1.8vw, 1.4rem); box-shadow: inset 0 2px 0 rgba(255,255,255,0.35); }
+/* 문짝: 바깥(테두리색) 사다리꼴 + 안쪽(빨강) 사다리꼴. 리벳 2개와 밝은 세로줄은 배경으로 */
+.cart-door { position: absolute; z-index: 1; top: 3%; bottom: 1%; width: var(--door-w); background: var(--cart-red-dark); }
+.cart-door i { position: absolute; inset: 3px; background-color: var(--cart-red);
+  background-image:
+    radial-gradient(circle at 42% 16%, rgba(255,255,255,0.45) 0 4px, transparent 5px),
+    radial-gradient(circle at 42% 84%, rgba(255,255,255,0.45) 0 4px, transparent 5px); }
+.cart-door i::after { content: ""; position: absolute; top: 6%; bottom: 6%; width: 3px; background: var(--cart-red-light); }
+.cart-door.l { right: 100%; clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%); }
+.cart-door.l i { clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%); }
+.cart-door.l i::after { right: 22%; }
+.cart-door.r { left: 100%; clip-path: polygon(0 0, 100% 5%, 100% 95%, 0 100%); }
+.cart-door.r i { clip-path: polygon(0 0, 100% 5%, 100% 95%, 0 100%); }
+.cart-door.r i::after { left: 22%; }
+/* 받침대 + 후미등 + 바퀴 */
+.cart-base { position: absolute; z-index: 3; left: 0; right: 0; top: 100%; height: var(--base-h); background: var(--cart-base); border-radius: 0 0 6px 6px;
+  display: flex; justify-content: space-between; align-items: center; padding: 0 12px; }
+.cart-base b { width: 34px; height: 60%; border-radius: 4px; background: #E04A42; }
+.cart-wheel { position: absolute; z-index: 1; top: calc(100% + var(--base-h) - var(--wheel) * 0.45); width: var(--wheel); height: var(--wheel); border-radius: 50%;
+  background: radial-gradient(circle, var(--cart-hub) 0 40%, var(--cart-wheel) 41%); }
+.cart-wheel.l { left: 15%; transform: translateX(-50%); }
+.cart-wheel.r { left: 85%; transform: translateX(-50%); }
+
+/* 화면별 배치 */
+.center-screen > .cart { max-width: 760px; }
+.center-screen .cart .card { box-shadow: 0 6px 16px rgba(30, 35, 60, 0.18); }
+.cart .seat-pick, .cart .lobby-box, .cart .halftime-box { margin: 0 auto; }
+.center-screen:has(> .cart-lobby) { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+.cart-lobby { display: flex; gap: clamp(1.2rem, 3vw, 2.6rem); align-items: center; justify-content: center; width: 100%; max-width: 1240px; flex-wrap: wrap; }
+.cart-lobby > .cart { flex: 1 1 460px; max-width: 640px; width: auto; }
+.cart-lobby > .fee-poster { flex: 0 0 auto; }
+/* 엘리베이터: 카트 안에 샤프트 + 오른쪽 카드 */
+main.stage > .cart.cart--elev { width: calc(100% - var(--door-w) * 2); }
+.cart--elev .elev-layout { margin: 0; }
+.cart--elev .shaft { background: rgba(255, 250, 240, 0.92); }
+.cart--elev .player-col h3 { color: var(--ink); }
+/* 결과 화면: 카트 안에 전부 (길면 페이지가 스크롤) */
+.cart--end .cart-screen > * + * { margin-top: 1.2rem; }
+/* 확보 보드: 화면 높이에 맞춰 늘어나는 레이아웃(stage--secure) 안에서 카트도 같이 늘어난다. 틀은 조금 얇게. */
+.stage--secure > .cart { --frame: clamp(10px, 1.4vw, 18px); --base-h: 16px; --wheel: clamp(30px, 3.4vw, 46px);
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.stage--secure > .cart > .cart-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.stage--secure > .cart .cart-screen { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: clamp(0.4rem, 1vw, 0.8rem); }
+.stage--secure > .cart .cart-screen > .card { flex: 1 1 auto; min-height: 0; }
+@media (max-width: 900px) {
+  :root { --door-w: 18px; }
+  .cart-lobby > .fee-poster { width: 100%; max-width: 640px; }
+}
+
+/* ---------- 3) 택배 요금표 (포스터) ---------- */
+.fee-poster { width: 320px; background: #FCF8ED; border-radius: 16px; padding: 0 0 12px; overflow: hidden; box-shadow: 0 16px 36px rgba(20, 30, 60, 0.28); }
+.fee-head { position: relative; display: flex; align-items: flex-end; justify-content: space-between; padding: 10px 14px 5px; }
+.fee-title { font-family: 'Noto Sans KR', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: -0.02em; color: var(--fee-title); line-height: 1;
+  text-shadow: 0 2px 0 #c4520f; }
+.fee-truck { width: 74px; height: 40px; flex: 0 0 auto; }
+.fee-road { height: 12px; margin-bottom: 8px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 16px, transparent 16px 30px) center / 100% 2px no-repeat, #F77B22; }
+.fee-cards { display: flex; flex-direction: column; gap: 7px; padding: 0 10px; }
+.fee-card { --fc: #F8C984; --fb: #6B3A12; --fr: var(--fee-row); background: var(--fc); border: 3px solid var(--fb); border-radius: 14px; padding: 6px 8px 8px; }
+.fee-name { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 16px; color: #2b1d12; margin: 0 2px 4px; }
+.fee-name .ico { width: 24px; height: 24px; color: var(--fb); flex: 0 0 auto; }
+.fee-name .ico svg { width: 100%; height: 100%; display: block; stroke-width: 2.2; }
+.fee-name .up { margin-left: auto; width: 24px; height: 22px; border: 2px solid #2b1d12; border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+.fee-name .up svg { width: 14px; height: 14px; }
+.fee-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 9px; overflow: hidden; font-size: 13px; }
+.fee-table th { background: var(--fee-orange); color: #fff; font-weight: 800; padding: 3px 6px; }
+.fee-table td { background: var(--fr); padding: 3px 6px; text-align: center; font-weight: 800; color: #2b1d12; border-top: 1px solid rgba(43,29,18,0.12); }
+.fee-table td + td, .fee-table th + th { border-left: 1px solid rgba(43,29,18,0.15); }
+.fee-table td small { display: block; font-size: 10px; font-weight: 700; color: #8a7256; }
+.fee-foot { display: flex; gap: 8px; align-items: flex-start; margin: 10px 10px 0; padding: 8px 10px; background: #FFF8E3; border: 2px solid #F9BC6D; border-radius: 14px; font-size: 11.5px; font-weight: 700; color: #2b1d12; line-height: 1.45; }
+.fee-foot .i { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; background: var(--fee-orange); color: #fff; font-weight: 900; font-family: Georgia, serif; display: flex; align-items: center; justify-content: center; }
+.fee-foot ul { margin: 0; padding-left: 1em; }
+.fee-mults { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.fee-mults span { padding: 0 6px; border-radius: 999px; background: #fff; border: 1px solid rgba(43,29,18,0.18); font-size: 10.5px; }
+.fee-mults span.hi { background: #dff3e6; border-color: #2F9E6E; color: #1f6e4b; }
+.fee-mults span.lo { background: #eee; }
+/* 확보 보드의 "상대 자리" 칸: 그 줄 종류의 작은 요금 카드 (같은 포스터 디자인) */
+.rail-side.theirs.has-fee { opacity: 1; align-items: stretch; justify-content: center; }
+.fee-mini { --fc: #F8C984; --fb: #6B3A12; --fr: var(--fee-row); background: var(--fc); border: 3px solid var(--fb); border-radius: 12px; padding: 4px 6px 6px; max-width: 260px; width: 100%; margin: 0 auto; }
+.fee-mini .fee-name { font-size: clamp(11px, 1.1vw, 14px); margin-bottom: 3px; }
+.fee-mini .fee-name .ico { width: 18px; height: 18px; }
+.fee-mini .fee-table { font-size: clamp(10px, 1vw, 12px); }
+.fee-mini .fee-table th, .fee-mini .fee-table td { padding: 1px 4px; }
+/* 포스터의 종류별 색 (TYPES 순서: 일반, 깨지기 쉬운, 귀중품, 확정 층수) */
+.fee-t0 { --fc: #F8C984; --fb: #6B3A12; }
+.fee-t1 { --fc: #C0E79A; --fb: #1E6A1C; }
+.fee-t2 { --fc: #FDDD59; --fb: #8A5A08; }
+.fee-t3 { --fc: #87CCFD; --fb: #0B3C86; --fr: #E8F6FD; }
+
+/* ---------- 레일 화면 / 메인 모니터: 배경 그림 위에 옅은 크림색을 깔아 큰 글씨가 읽히게 ---------- */
+.rv { background: linear-gradient(180deg, rgba(247,236,217,0.94), rgba(247,236,217,0.82) 30%, rgba(247,236,217,0.78)) !important; }
+.mv { background: linear-gradient(180deg, rgba(247,236,217,0.95), rgba(247,236,217,0.86) 30%, rgba(247,236,217,0.82)) !important; }
+
+/* 확보 보드에서는 요금 카드가 같은 줄에 보이므로 버튼 안의 금액 줄은 숨긴다 (좁은 화면에선 요금 카드가 숨으니 그대로 둔다) */
+@media (min-width: 901px) { .stage--secure .rail-side.mine .rail-btn .rbp { display: none; } }
+/* 대기 화면의 요금표: 세로가 짧은 화면(노트북)에서는 통째로 줄여서 잘리지 않게 */
+@media (max-height: 900px) and (min-width: 901px) { .cart-lobby > .fee-poster { zoom: 0.84; } }
+@media (max-height: 780px) and (min-width: 901px) { .cart-lobby > .fee-poster { zoom: 0.72; } }
+@media (max-height: 680px) and (min-width: 901px) { .cart-lobby > .fee-poster { zoom: 0.62; } }
+
+/* ---------- 4) 확보 단계 레이스 라운드 (2026-10-14) ---------- */
+.race { display: flex; flex-direction: column; gap: 14px; }
+.race-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.race-head .round-pill { font-size: 1rem; }
+.race-clock { font-weight: 800; color: #2b1d12; background: rgba(255,250,240,0.9); border-radius: 999px; padding: 4px 14px; }
+.race-clock b { color: var(--gold); font-family: var(--font-display); font-size: 1.25rem; margin-left: 4px; font-variant-numeric: tabular-nums; }
+/* 레일(컨베이어) 위 택배 2개 */
+.race-rail { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(14px, 3vw, 40px); padding: 18px clamp(14px, 3vw, 40px) 30px;
+  background: #3a3f55; border-radius: 16px; border: 3px solid #262a3a; }
+.race-belt { position: absolute; left: 10px; right: 10px; bottom: 8px; height: 12px; border-radius: 6px;
+  background: repeating-linear-gradient(90deg, #1d2130 0 14px, #565b70 14px 18px); }
+.race-parcel { position: relative; font: inherit; min-height: clamp(130px, 22vh, 210px); border-radius: 14px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px; padding: 12px 10px 34px; color: #2b1d12; text-align: center; transition: transform .15s ease, opacity .2s; }
+.race-parcel.is-hidden { background: linear-gradient(180deg, transparent 44%, rgba(120,70,20,0.25) 44% 56%, transparent 56%), #E2A65B; border: 4px solid #7a4a1f; }
+.rp-box b { font-family: var(--font-display); font-size: clamp(48px, 7vw, 84px); color: #fff8ef; text-shadow: 0 3px 0 #7a4a1f; line-height: 1; }
+.rp-label { font-weight: 800; color: #5a3410; }
+.race-parcel.is-open { background: var(--fc); border: 4px solid var(--fb); animation: race-pop .35s ease-out; }
+.rp-ico { width: 30px; height: 30px; color: var(--fb); } .rp-ico svg { width: 100%; height: 100%; }
+.rp-name { font-weight: 900; font-size: clamp(15px, 1.6vw, 20px); }
+.rp-floor { font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 3vw, 38px); line-height: 1; }
+.rp-floor small { font-size: 0.45em; padding: 1px 6px; border-radius: 999px; background: rgba(255,255,255,0.7); vertical-align: middle; }
+.rp-amt { font-weight: 900; font-size: clamp(16px, 1.8vw, 22px); }
+.rp-owner { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); white-space: nowrap; padding: 3px 12px; border-radius: 999px;
+  font-weight: 900; font-size: 0.85rem; background: #2b1d12; color: #fff; }
+.rp-owner.gone { background: #8a8f9f; }
+.rp-owner.pick { background: var(--fee-orange); }
+.race-parcel.is-owned { box-shadow: 0 0 0 4px #fff, 0 0 0 8px var(--fee-orange); }
+.race-parcel.is-gone { opacity: 0.4; filter: grayscale(0.7); }
+button.race-parcel.can-pick { cursor: pointer; animation: race-pulse 0.8s ease-in-out infinite; }
+button.race-parcel.can-pick:hover { transform: translateY(-4px); }
+@keyframes race-pop { 0% { transform: scale(0.85) rotate(-2deg); } 70% { transform: scale(1.05); } 100% { transform: none; } }
+@keyframes race-pulse { 50% { box-shadow: 0 0 0 6px rgba(247,112,19,0.55); } }
+/* 안내 문구 */
+.race-msg { text-align: center; font-weight: 900; font-size: clamp(15px, 1.6vw, 20px); color: #2b1d12; background: rgba(255,250,240,0.92); border-radius: 12px; padding: 8px 12px; }
+.race-msg.hot { background: var(--fee-orange); color: #fff; }
+.race-msg.reveal { background: #2b1d12; color: #fff; }
+.race-msg .sep { margin: 0 12px; opacity: 0.4; }
+.race-count { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+/* 두 사람 진행 단계 */
+.race-lanes { display: flex; flex-direction: column; gap: 6px; }
+.race-lane { display: flex; align-items: center; gap: 10px; background: rgba(255,250,240,0.92); border-radius: 12px; padding: 6px 10px; flex-wrap: wrap; }
+.race-lane.me { box-shadow: inset 0 0 0 2px var(--fee-orange); }
+.race-lane.is-out { opacity: 0.55; }
+.rl-name { font-weight: 900; min-width: 9em; }
+.rl-name em { font-style: normal; background: var(--fee-orange); color: #fff; border-radius: 999px; padding: 0 8px; font-size: 0.8rem; margin-left: 4px; }
+.rl-steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rl-step { padding: 3px 10px; border-radius: 999px; background: #e7e2d8; color: #8a7256; font-weight: 800; font-size: 0.85rem; }
+.rl-step.now { background: var(--fee-orange); color: #fff; animation: race-pulse 1s ease-in-out infinite; }
+.rl-step.done { background: #2F9E6E; color: #fff; }
+.rl-arrow { font-style: normal; color: #8a7256; font-weight: 900; }
+.rl-out { margin-left: auto; font-weight: 800; color: var(--danger); font-size: 0.85rem; }
+/* 내 우봉고 문제 */
+.race-puzzle { background: #fffcf4; border-radius: 14px; padding: 10px; text-align: center; margin-top: 12px; }
+.race-puzzle .rp-cap { font-weight: 800; color: #8a7256; margin-bottom: 6px; font-size: 0.9rem; }
+.race-puzzle img { max-width: 100%; max-height: 46vh; border-radius: 10px; display: block; margin: 0 auto; }
+.race-puzzle .puzzle-actions { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+.race-puzzle .puzzle-actions .btn { min-width: 140px; }
+.race-mine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.race-mine .rm-label { font-weight: 900; color: #2b1d12; margin-right: 4px; }
+.race-mine .my-chip { background: var(--fc); border: 2px solid var(--fb); border-radius: 999px; padding: 2px 10px; font-weight: 800; font-size: 0.8rem; color: #2b1d12; }
+/* 송장 붙이기 화면 위 상대 진행 띠 */
+.race-strip { margin: 0 auto 0.6rem; width: fit-content; padding: 4px 14px; border-radius: 999px; background: rgba(255,255,255,0.15); color: #fff; font-weight: 800; font-size: 0.9rem; }
+.race-strip.hot { background: var(--fee-orange); }
+/* 관전 화면에서는 크게 */
+.rv .race { zoom: 1.2; padding: 0 2vw; }
+.mv .race { zoom: 1.45; }
+.race-wrap.has-puzzle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 44%); gap: 14px; align-items: start; }
+.race-wrap.has-puzzle .race-puzzle { margin-top: 0; }
+.race-wrap.has-puzzle .race-parcel { min-height: clamp(110px, 16vh, 170px); }
+@media (max-width: 900px) { .race-wrap.has-puzzle { grid-template-columns: 1fr; } }
+/* 2026-10-14 수정: 택배 3개(종류만), 고르면 자기 자리 송장 */
+.race-rail { grid-template-columns: repeat(3, 1fr); }
+.rp-amt { font-size: clamp(14px, 1.5vw, 18px); }
+.rp-hint { font-size: 0.75rem; font-weight: 700; color: rgba(43,29,18,0.6); }
+.race-parcel.is-mine { box-shadow: 0 0 0 4px #fff, 0 0 0 8px #2F9E6E; }
+.race-wrap.has-slip { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 30%); gap: 14px; align-items: start; }
+.race-slip { background: #fff; border-radius: 10px; padding: 0 0 12px; text-align: center; box-shadow: 0 8px 20px rgba(30,35,60,0.25);
+  border-top: 10px solid var(--fb); transform-origin: top center; }
+.race-slip.is-new { animation: race-print .6s ease-out; }
+.race-slip .rs-bar { background: var(--fc); font-weight: 900; padding: 6px; letter-spacing: 0.2em; }
+.race-slip .rs-name { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 900; font-size: 1.05rem; margin-top: 8px; }
+.race-slip .rs-name .rp-ico { width: 22px; height: 22px; }
+.race-slip .rs-room { font-family: var(--font-display); font-size: 2.2rem; font-weight: 800; letter-spacing: 0.04em; }
+.race-slip .rs-floor { font-weight: 900; }
+.race-slip .rs-floor small { padding: 1px 6px; border-radius: 999px; background: var(--fc); }
+.race-slip .rs-amt { font-size: 1.4rem; font-weight: 900; color: #2F9E6E; margin-top: 4px; }
+.race-slip .rs-code { font-family: monospace; letter-spacing: -1px; color: #2b1d12; margin-top: 6px; }
+@keyframes race-print { 0% { transform: scaleY(0.1); opacity: 0.4; } 100% { transform: none; opacity: 1; } }
+@media (max-width: 900px) { .race-wrap.has-slip { grid-template-columns: 1fr; } .race-rail { grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 12px 8px 26px; } }

@@ -3,7 +3,9 @@
 # 필요: playwright (NODE_PATH에 전역 node_modules), /opt/pw-browsers/chromium. 끝나면 game-data.js(SECURE_PHASE_MS, mini)와 빌드를 원복한다.
 cd "$(dirname "$0")"
 export NODE_PATH="$(npm root -g):$PWD/node_modules"
-setsec(){ sed -i -E "s/const SECURE_PHASE_MS = .*;/const SECURE_PHASE_MS = $1;/" game-data.js; python3 build_client.py >/dev/null; pkill -x node; sleep 0.5; (nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5; }
+# 2026-10-14: 확보 단계 기본값이 레이스 라운드가 됐다. 예전 확보 방식을 전제로 한 브라우저 테스트는 RACE_MODE=0으로 띄운 서버에서 돈다.
+RACE_ENV=0
+setsec(){ sed -i -E "s/const SECURE_PHASE_MS = .*;/const SECURE_PHASE_MS = $1;/" game-data.js; python3 build_client.py >/dev/null; pkill -x node; sleep 0.5; (RACE_MODE=$RACE_ENV nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5; }
 restore(){ sed -i -E "s/const SECURE_PHASE_MS = .*;/const SECURE_PHASE_MS = 3 * 60 * 1000;/" game-data.js; python3 set_mini.py ubongo >/dev/null; python3 build_client.py >/dev/null; pkill -x node; }
 trap restore EXIT
 run(){ echo "== $1"; timeout 400 node $1 2>&1 | tail -3; echo "exit=${PIPESTATUS[0]}"; }
@@ -11,7 +13,7 @@ run(){ echo "== $1"; timeout 400 node $1 2>&1 | tail -3; echo "exit=${PIPESTATUS
 echo "######## 실물 우봉고 모드 (기본)"
 python3 set_mini.py ubongo >/dev/null
 setsec "3 * 60 * 1000"
-for t in test_p1p2.js test_priority_window.js test_thief_limit.js test_shared_board.js test_theft_scoring.js test_restart.js test_minigames.js; do run $t; done
+for t in test_race.js test_p1p2.js test_priority_window.js test_thief_limit.js test_shared_board.js test_theft_scoring.js test_restart.js test_minigames.js; do run $t; done
 setsec "10 * 1000"
 for t in test_hosted.js test_theft_e2e.js test_nudge.js; do run $t; done
 setsec "20 * 1000"; run test_mainview.js
@@ -21,3 +23,8 @@ echo "######## 디지털 미니게임 모드 (python3 set_mini.py digital)"
 python3 set_mini.py digital >/dev/null
 setsec "10 * 1000"; run test_half_difficulty_digital.js
 setsec "40 * 1000"; run test_minigames_live.js; run test_rail_site.js
+
+echo "######## 확보 단계 레이스 라운드 (기본 모드, 2026-10-14)"
+python3 set_mini.py ubongo >/dev/null
+RACE_ENV=1
+setsec "60 * 1000"; run test_race_e2e.js

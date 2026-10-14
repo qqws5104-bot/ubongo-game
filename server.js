@@ -27,7 +27,9 @@ const rooms = new Map(); // code -> { room: GameRoom, sockets: Set<{ws, clientId
 function getOrCreateRoom(code) {
   let entry = rooms.get(code);
   if (!entry) {
-    const room = new GameRoom(code, (state) => broadcast(code, state));
+    // 2026-10-14: RACE_MODE=0 환경변수로 띄우면 확보 단계가 예전 방식(레일에서 각자 골라 확보) -- 예전 회귀 테스트용(regress.sh).
+    const rules = process.env.RACE_MODE === "0" ? { raceMode: false } : undefined;
+    const room = new GameRoom(code, (state) => broadcast(code, state), rules);
     // busy: 레일 화면(/rail)이 열어 준 미니게임을 그 좌석 플레이어가 지금 하고 있는가 (레일 화면에 "플레이 중" 표시 + 중복 지시 방지).
     entry = { room, sockets: new Set(), busy: { "1": false, "2": false } };
     rooms.set(code, entry);
@@ -192,6 +194,15 @@ wss.on("connection", (ws, req) => {
         if (wasBusy) broadcast(code, entry.room.state); // 중복 메시지라 room이 방송을 안 했을 때를 위해
         break;
       }
+      // 2026-10-14 확보 단계 레이스 라운드: 진행 신호(sticker-done / ubongo-done / give-up)와 먼저 끝낸 사람의 고르기
+      case "race-step":
+        if (!conn.seat || typeof msg.step !== "string") return;
+        entry.room.raceStep(conn.seat, msg.step, typeof msg.round === "number" ? msg.round : null);
+        break;
+      case "race-pick":
+        if (!conn.seat || typeof msg.idx !== "number") return;
+        entry.room.racePick(conn.seat, msg.idx);
+        break;
       case "game-closed":
         // 플레이어가 레일이 열어 준 게임을 포기/닫았다 -> 다시 누를 수 있게.
         if (!conn.seat) return;

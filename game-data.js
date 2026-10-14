@@ -112,8 +112,30 @@ const MERGE_PRIORITY_THIEF = 1;
 //   (우선 지정한 것 > 배송비가 비싼 것 > 먼저 확보한 것). 1 = 자동, 0 = 예전처럼 선택 창. ※ 팀 확정 전 제안 사항.
 const SAME_FLOOR_AUTO_PICK = 1;
 
+// ---- 2026-10-14 확보 단계 "레이스 라운드" (사용자 결정: 속도전·순발력·같이 하는 느낌) ----
+// 한 라운드: 레일에 택배 RACE_PARCELS개(종류만 보임)가 올라온다 -> 두 사람이 동시에 송장 붙이기(화면) -> 끝나면 바로 우봉고(실물, 같은 문제)
+//   -> 우봉고까지 먼저 끝낸(투입한) 사람이 RACE_PICK_MS 안에 하나를 고른다(안 고르면 기본 금액이 비싼 종류) -> 자기 자리에 송장(층·금액) 출력
+//   -> 늦은 사람은 먼저 끝낸 시각부터 RACE_SECOND_MS 안에 끝내면 남은 것 중 하나를 고르고(역시 RACE_PICK_MS), 못 끝내면 못 가져간다
+//   -> RACE_REVEAL_MS 동안 결과를 보여 주고 다음 라운드. 확보 시간(SECURE_PHASE_MS)이 끝나거나 택배가 다 떨어지면 엘리베이터로.
+// RACE_MODE = 0이면 예전 방식(레일에서 각자 골라 우봉고/미니게임).
+// 2026-10-14 (사용자 수정): 택배는 3개, 종류만 보인다(가려진 상자 아님). 고르면 "자기 자리에서" 송장이 나온다 -- 층과 금액은
+//   고른 사람 화면에만(레일 화면/메인 모니터/상대 화면에는 종류만). 먼저 끝낸 사람이 3개 중 하나, 늦은 사람은 마감 안에 투입하면
+//   남은 것 중 하나를 고른다. 아무도 안 가져간 택배는 레일(보드)로 돌아가 다음 라운드에 다시 나올 수 있다(RACE_LEFTOVER_RETURN = 1).
+const RACE_MODE = 1;
+const RACE_PARCELS = 3;
+const RACE_LEFTOVER_RETURN = 1;
+const RACE_PICK_MS = 3000;
+const RACE_SECOND_MS = 5000;
+const RACE_REVEAL_MS = 2500;
+// 송장 붙이기 난이도 [전반, 후반] (minigames.js: 1 = 박스 4개/송장 2장, 2 = 박스 7개/송장 4장)
+const RACE_STICKER_LEVEL = [1, 1];
+// 라운드마다 띄울 우봉고 문제(퍼즐 이미지가 있는 칸 id). 내용물(택배 종류)과는 무관 -- 라운드가 갈수록 조각이 늘게(2 -> 3 -> 4조각) 배치.
+// 현장에서는 이 순서대로 두 스테이션에 같은 실물 퍼즐을 준비한다. 끝까지 가면 처음부터 다시.
+const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1", "fixed-floor-2", "fragile-2", "valuable-1", "fixed-floor-3", "valuable-2", "valuable-3"];
+
 module.exports = {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_STICKER_LEVEL, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN,
 };

@@ -12,6 +12,7 @@ const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -22,6 +23,13 @@ const DEFAULT_RULES = {
   resultAutoAdvanceMs: RESULT_AUTO_ADVANCE_MS,
   mergePriorityThief: !!MERGE_PRIORITY_THIEF,
   sameFloorAutoPick: !!SAME_FLOOR_AUTO_PICK,
+  // 2026-10-14 확보 단계 레이스 라운드 (game-data.js RACE_* 참고). false면 예전처럼 레일에서 각자 골라 확보.
+  raceMode: !!RACE_MODE,
+  racePickMs: RACE_PICK_MS,
+  raceSecondMs: RACE_SECOND_MS,
+  raceRevealMs: RACE_REVEAL_MS,
+  raceParcels: RACE_PARCELS,
+  raceLeftoverReturn: !!RACE_LEFTOVER_RETURN,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -30,6 +38,7 @@ const LEGACY_RULES = {
   resultAutoAdvanceMs: 0,
   mergePriorityThief: false,
   sameFloorAutoPick: false,
+  raceMode: false,
 };
 
 // 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
@@ -185,7 +194,29 @@ function initialState(rules) {
     // 때만 의미가 있고, 그 외엔 항상 비어 있는 상태({false,false})로 둔다 -- restartGame()이 매번
     // 리셋하므로 다음 재시작 때도 깨끗하게 시작한다.
     restartReady: { "1": false, "2": false },
+    race: null, // 2026-10-14 확보 단계 레이스 라운드 상태 (GameRoom._raceNewRound 참고)
   };
+}
+
+// ---------- 2026-10-14 확보 단계 레이스 라운드 ----------
+// state.race (확보 단계 동안만, 레이스 모드일 때만):
+//   round       : 이번 하프의 라운드 번호 (1부터)
+//   pair        : [{ cellId, catIdx, floorIdx, reward }] -- 이번 라운드에 걸린 택배 1~RACE_PARCELS개. 화면에는 종류만 그리고,
+//                 층·금액은 고른 사람의 화면(자기 자리 송장)에만 그린다(서버는 원래 전체 상태를 방송하는 구조라 "화면에서 숨김" 수준의
+//                 비공개다 -- 송장과 같은 원칙)
+//   puzzleId    : 이번 라운드 우봉고 문제(퍼즐 이미지가 있는 칸 id, RACE_PUZZLE_ORDER 순서). 두 사람이 같은 문제를 푼다.
+//   stage       : 좌석별 "sticker"(송장 붙이기 중) | "ubongo"(우봉고 중) | "done"(투입 완료) | "out"(포기/시간 초과)
+//   finishedAt  : 좌석별 우봉고 완료 시각 (서버 시각)
+//   first       : 먼저 끝낸 좌석 (없으면 null)
+//   status      : "playing" | "picking"(먼저 끝낸 사람/늦은 사람이 고르는 중, 늦은 사람 마감 대기) | "reveal"(결과 보여 주는 중)
+//   pickEndsAt  : 먼저 끝낸 사람의 고르기 마감 / secondEndsAt: 늦은 사람의 투입 마감 / secondPickEndsAt: 늦은 사람의 고르기 마감
+//   revealEndsAt: 결과 표시 마감
+//   picks       : 좌석별로 가져간 pair 인덱스 (못 가져갔으면 null) / invoiceIds: 좌석별로 이번 라운드에 출력된 송장 id
+//   discarded   : 아무도 안 가져간 pair 인덱스 (RACE_LEFTOVER_RETURN이면 레일로 돌아가고, 아니면 사라진다)
+function shuffled(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
 }
 
 class GameRoom {
@@ -200,6 +231,7 @@ class GameRoom {
 
   destroy() {
     if (this.timer) clearTimeout(this.timer);
+    if (this.raceTimer) clearTimeout(this.raceTimer);
   }
 
   touch() { this.lastActivityAt = Date.now(); }
@@ -257,7 +289,178 @@ class GameRoom {
     this.state.phase = "secure";
     this.state.secureEndsAt = Date.now() + SECURE_PHASE_MS;
     this._scheduleAt(this.state.secureEndsAt, () => this._endSecurePhase());
+    this.state.race = null;
+    if (this.rules.raceMode) this._raceNewRound(1);
     this.emit();
+  }
+
+  // ---- 확보 단계 레이스 라운드 (2026-10-14) ----
+  // 타이머는 확보 단계 종료 타이머(this.timer, _scheduleAt)와 따로 둔다 -- 슬롯이 하나라 덮어쓰면 확보 단계가 안 끝난다.
+  _raceAt(ts) {
+    if (this.raceTimer) clearTimeout(this.raceTimer);
+    this.raceTimer = null;
+    if (ts == null) return;
+    this.raceTimer = setTimeout(() => { this.raceTimer = null; this._raceAdvance(); }, Math.max(0, ts - Date.now()));
+  }
+
+  _raceNewRound(roundNo) {
+    const free = this.state.board.filter((c) => !c.taken);
+    if (!free.length) { this.state.race = null; this._raceAt(null); return; }
+    const pair = shuffled(free).slice(0, Math.max(1, this.rules.raceParcels || 3)).map((c) => {
+      const t = TYPES[c.catIdx];
+      const floorIdx = t.fixedFloor ? c.num : Math.floor(Math.random() * FLOORS.length);
+      return { cellId: c.id, catIdx: c.catIdx, floorIdx, reward: rewardFor(c.catIdx, floorIdx, this.rules.floorRewardMult) };
+    });
+    this.state.race = {
+      round: roundNo, pair,
+      puzzleId: RACE_PUZZLE_ORDER[(roundNo - 1) % RACE_PUZZLE_ORDER.length],
+      stage: { "1": "sticker", "2": "sticker" },
+      finishedAt: { "1": null, "2": null },
+      first: null, status: "playing",
+      pickEndsAt: null, secondEndsAt: null, secondPickEndsAt: null, revealEndsAt: null,
+      picks: { "1": null, "2": null }, invoiceIds: { "1": null, "2": null }, discarded: [],
+    };
+    this._raceAt(null);
+  }
+
+  // 클라이언트가 보내는 진행 신호: "sticker-done"(송장 붙이기 끝 -> 우봉고로) / "ubongo-done"(우봉고 완료 = 투입) / "give-up"(이번 라운드 포기)
+  raceStep(seat, step, round) {
+    if (this.state.phase !== "secure" || !this.rules.raceMode) return;
+    const r = this.state.race;
+    if (!r || (seat !== "1" && seat !== "2")) return;
+    if (round != null && round !== r.round) return; // 지난 라운드의 늦게 도착한 메시지
+    if (r.status === "reveal") return;
+    const st = r.stage[seat];
+    const now = Date.now();
+    this.touch();
+    if (step === "sticker-done") {
+      if (st !== "sticker") return;
+      r.stage[seat] = "ubongo";
+    } else if (step === "ubongo-done") {
+      if (st !== "ubongo") return;
+      if (r.first && r.first !== seat && now > r.secondEndsAt) { r.stage[seat] = "out"; this._raceAdvance(); return; }
+      r.stage[seat] = "done";
+      r.finishedAt[seat] = now;
+      if (!r.first) {
+        r.first = seat;
+        r.status = "picking";
+        r.pickEndsAt = now + this.rules.racePickMs;
+        r.secondEndsAt = now + this.rules.raceSecondMs;
+      }
+    } else if (step === "give-up") {
+      if (st === "done" || st === "out") return;
+      r.stage[seat] = "out";
+    } else return;
+    this._raceAdvance();
+  }
+
+  // 먼저 끝낸 사람이 공개된 택배 중 하나를 고른다 (pair 인덱스)
+  racePick(seat, idx) {
+    if (this.state.phase !== "secure" || !this.rules.raceMode) return;
+    const r = this.state.race;
+    if (!r || r.status !== "picking" || r.picks[seat] !== null) return;
+    if (typeof idx !== "number" || !r.pair[idx]) return;
+    if (r.picks["1"] === idx || r.picks["2"] === idx) return; // 이미 가져간 택배
+    // 고를 수 있는 사람: 먼저 끝낸 사람 / (먼저 끝낸 사람이 고른 뒤) 마감 안에 투입한 늦은 사람
+    const isFirst = r.first === seat;
+    const isSecond = !isFirst && r.picks[r.first] !== null && r.stage[seat] === "done";
+    if (!isFirst && !isSecond) return;
+    this.touch();
+    this._raceGrant(seat, idx);
+    this._raceAdvance();
+  }
+
+  _raceGrant(seat, idx) {
+    const r = this.state.race;
+    const item = r.pair[idx];
+    const cell = cellById(this.state, item.cellId);
+    if (!cell || cell.taken) return;
+    cell.taken = true;
+    cell.takenBy = seat;
+    this.state.acquireCounter[seat] += 1;
+    cell.acquiredSeq = this.state.acquireCounter[seat];
+    const room = drawRoom(this.state.players[seat]);
+    this.state.players[seat].invoices.push({
+      id: "inv-" + seat + "-" + cell.acquiredSeq,
+      catIdx: item.catIdx, floorIdx: item.floorIdx, room, acquiredSeq: cell.acquiredSeq,
+      reward: item.reward, deliveredRound: null, stolen: false, deliveredWasPriority: false,
+    });
+    r.picks[seat] = idx;
+    r.invoiceIds[seat] = this.state.players[seat].invoices[this.state.players[seat].invoices.length - 1].id;
+  }
+
+  // 안 고르고 마감이 지나면: 남은 것 중 "기본 금액"이 가장 비싼 종류 (층·금액은 고르기 전엔 모르는 정보라 그걸로 고르지 않는다)
+  _raceAutoPick(seat) {
+    const r = this.state.race;
+    let best = -1;
+    r.pair.forEach((it, i) => {
+      if (r.picks["1"] === i || r.picks["2"] === i) return;
+      if (best < 0 || TYPES[it.catIdx].reward > TYPES[r.pair[best].catIdx].reward) best = i;
+    });
+    if (best >= 0) this._raceGrant(seat, best);
+  }
+
+  // 상태를 한 단계씩 진행시키고 다음 마감 타이머를 건다. 모든 액션/타이머가 여기를 거친다.
+  _raceAdvance() {
+    if (this.state.phase !== "secure") return;
+    const r = this.state.race;
+    if (!r) return;
+    const now = Date.now();
+    const other = (s) => (s === "1" ? "2" : "1");
+    if (r.status === "playing") {
+      if (r.stage["1"] === "out" && r.stage["2"] === "out") this._raceReveal(); // 둘 다 포기 -- 아무도 못 가져감
+    }
+    if (r.status === "picking") {
+      const f = r.first, s2 = other(f);
+      if (r.picks[f] === null && now >= r.pickEndsAt) this._raceAutoPick(f);
+      if (r.picks[f] !== null) {
+        const rest = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
+        // 늦은 사람이 마감 안에 투입하지 못했으면 탈락
+        if (r.stage[s2] !== "done" && r.stage[s2] !== "out" && now >= r.secondEndsAt) r.stage[s2] = "out";
+        if (r.stage[s2] === "done" && r.picks[s2] === null && rest.length) {
+          // 늦은 사람의 고르기 창: 먼저 끝낸 사람이 고른 뒤(또는 늦은 사람이 그 뒤에 투입한 뒤)부터 RACE_PICK_MS
+          if (!r.secondPickEndsAt) r.secondPickEndsAt = now + this.rules.racePickMs;
+          if (rest.length === 1) this._raceGrant(s2, rest[0]); // 하나 남았으면 고를 것 없이 그것
+          else if (now >= r.secondPickEndsAt) this._raceAutoPick(s2);
+        }
+        const secondSettled = r.stage[s2] === "out" || r.picks[s2] !== null || !rest.length;
+        if (secondSettled) this._raceReveal();
+      }
+    }
+    if (r.status === "reveal" && now >= r.revealEndsAt) {
+      const next = r.round + 1;
+      this._raceNewRound(next);
+      if (!this.state.race) { this.emit(); return; } // 다 떨어짐 -- 조기 종료는 _raceReveal에서 이미 처리
+    }
+    // 다음 마감
+    const cur = this.state.race;
+    let nextTs = null;
+    if (cur.status === "picking") {
+      const cand = [];
+      const s2 = other(cur.first);
+      if (cur.picks[cur.first] === null) cand.push(cur.pickEndsAt);
+      if (cur.stage[s2] !== "done" && cur.stage[s2] !== "out") cand.push(cur.secondEndsAt);
+      if (cur.secondPickEndsAt && cur.picks[s2] === null) cand.push(cur.secondPickEndsAt);
+      if (cand.length) nextTs = Math.min.apply(null, cand);
+    } else if (cur.status === "reveal") nextTs = cur.revealEndsAt;
+    this._raceAt(nextTs);
+    this.emit();
+  }
+
+  _raceReveal() {
+    const r = this.state.race;
+    r.status = "reveal";
+    r.discarded = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
+    // 아무도 안 가져간 택배: 레일로 돌아가 다음 라운드에 다시 나올 수 있다(기본). raceLeftoverReturn이 false면 사라진다(주인 없이 보드에서 빠짐).
+    if (!this.rules.raceLeftoverReturn) {
+      r.discarded.forEach((i) => { const c = cellById(this.state, r.pair[i].cellId); if (c && !c.taken) { c.taken = true; c.takenBy = null; } });
+    }
+    r.revealEndsAt = Date.now() + this.rules.raceRevealMs;
+    // 보드가 다 비면 결과를 잠깐 보여 준 뒤 엘리베이터로 (예전 조기 종료와 같은 방식, 결과 표시 시간만큼 기다림)
+    if (this.state.board.every((c) => c.taken)) {
+      this.state.secureEndsAt = r.revealEndsAt;
+      this._scheduleAt(this.state.secureEndsAt, () => this._endSecurePhase());
+    }
   }
 
   // ---- secure phase ----
@@ -269,6 +472,7 @@ class GameRoom {
   // 포기(클라이언트가 이 메시지를 안 보내고 게임만 닫음)는 여기까지 오지 않으므로 보드는 그대로다.
   secureCell(seat, cellId) {
     if (this.state.phase !== "secure") return;
+    if (this.rules.raceMode) return; // 레이스 모드에서는 raceStep/racePick으로만 확보
     let cell = cellById(this.state, cellId);
     if (!cell) return; // 모르는 id
     if (cell.taken) {
@@ -301,6 +505,7 @@ class GameRoom {
   // 좌석 주인이 없거나 확보 단계가 아니면 null.
   railCellFor(seat, catIdx, cellId) {
     if (this.state.phase !== "secure") return null;
+    if (this.rules.raceMode) return null;
     if (seat !== "1" && seat !== "2") return null;
     if (!this.state.seatOwners[seat]) return null;
     const t = TYPES[catIdx];
@@ -315,6 +520,8 @@ class GameRoom {
 
   _endSecurePhase() {
     if (this.state.phase !== "secure") return;
+    this._raceAt(null);
+    this.state.race = null;
     this.state.phase = "elevator";
     this.state.elevator = freshElevator(this.rules);
     this.emit();

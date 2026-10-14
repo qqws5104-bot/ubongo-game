@@ -11,7 +11,7 @@ const { GameRoom } = require("./game-room.js");
 
 function log(...args) { console.log("[test-restart]", ...args); }
 
-const room = new GameRoom("TEST", () => {});
+const room = new GameRoom("TEST", () => {}, { raceMode: false }); // 2026-10-14: 예전 확보 방식으로 칸 지정
 
 // ---- 좌석/택배사 선택 ----
 room.pickCourier("cookbang", "clientA"); // seat 1

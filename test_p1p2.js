@@ -17,7 +17,7 @@ const el = (room) => room.state.elevator;
 const catIdx = (key) => TYPES.findIndex((t) => t.key === key);
 
 function newRoom() {
-  const room = new GameRoom("TEST", () => {});
+  const room = new GameRoom("TEST", () => {}, { raceMode: false }); // 확보는 예전 방식으로 칸을 직접 지정 (레이스는 test_race.js)
   room.pickCourier("cookbang", "clientA");
   room.pickCourier("cheonil", "clientB");
   room.setReady("1"); room.setReady("2");

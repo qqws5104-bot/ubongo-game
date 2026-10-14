@@ -61,6 +61,13 @@ def load_shared_constants():
     floor_reward_mult = json.loads(grab("FLOOR_REWARD_MULT"))
     result_auto_advance_ms = eval(grab("RESULT_AUTO_ADVANCE_MS"))
     merge_priority_thief = eval(grab("MERGE_PRIORITY_THIEF"))
+    # 2026-10-14 확보 단계 레이스 라운드
+    race = {
+        "RACE_MODE": eval(grab("RACE_MODE")),
+        "RACE_PICK_MS": eval(grab("RACE_PICK_MS")),
+        "RACE_SECOND_MS": eval(grab("RACE_SECOND_MS")),
+        "RACE_STICKER_LEVEL": json.loads(grab("RACE_STICKER_LEVEL")),
+    }
 
     # TYPES uses plain (unquoted) JS object keys -- not valid JSON as-is. Quote bare
     # identifier keys before parsing (FLOORS/ROOMS are already flat string arrays, so this
@@ -77,12 +84,12 @@ def load_shared_constants():
     rooms = json.loads(js_object_to_json(rooms_js))
     return (types, couriers, floors, rooms, elevator_rounds, secure_phase_ms, vote_ms,
             priority_multiplier, same_floor_choice_ms, halves, thief_place_ms, priority_pick_ms,
-            floor_reward_mult, result_auto_advance_ms, merge_priority_thief)
+            floor_reward_mult, result_auto_advance_ms, merge_priority_thief, race)
 
 
 (TYPES, COURIERS, FLOORS, ROOMS, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
  PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, PRIORITY_PICK_MS,
- FLOOR_REWARD_MULT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF) = load_shared_constants()
+ FLOOR_REWARD_MULT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, RACE_CONST) = load_shared_constants()
 
 # 2026-08-27 개편: 보드가 20칸(4종류x5개 고정)에서 21칸(종류별 count가 다름, 확정 층수 택배만 6개)으로
 # 바뀌면서, 예전의 스와치 개수(2/3/4조각) 기준 이미지 그룹핑은 더 이상 종류별 칸 수와 맞물리지 않는다
@@ -679,6 +686,11 @@ APP_JS_TEMPLATE = r"""
   var FLOOR_REWARD_MULT = @@FLOOR_REWARD_MULT@@;
   var RESULT_AUTO_ADVANCE_MS = @@RESULT_AUTO_ADVANCE_MS@@;
   var MERGE_PRIORITY_THIEF = @@MERGE_PRIORITY_THIEF@@;
+  // 2026-10-14 확보 단계 레이스 라운드 (game-data.js RACE_*). 레이스 모드인지는 서버 상태(state.race)로 판단한다.
+  var RACE_MODE = @@RACE_MODE@@; // 안내 문구용 (실제 모드는 서버 상태 state.race로 판단 -- 서버를 RACE_MODE=0으로 띄우면 예전 방식)
+  var RACE_PICK_MS = @@RACE_PICK_MS@@;
+  var RACE_SECOND_MS = @@RACE_SECOND_MS@@;
+  var RACE_STICKER_LEVEL = @@RACE_STICKER_LEVEL@@;
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -689,6 +701,58 @@ APP_JS_TEMPLATE = r"""
     FLOOR_REWARD_MULT.forEach(function (m) { var v = Math.round(t.reward * m); if (v < lo) lo = v; if (v > hi) hi = v; });
     if (lo === hi) return fmtWon(lo);
     return fmtWon(lo) + "~" + Math.abs(hi).toLocaleString("ko-KR") + "원";
+  }
+
+  // ---------- 2026-10-14 UI 리스킨: 빨간 택배 카트 틀 + 택배 요금표 (스타일은 ui_theme.css) ----------
+  // 카트 틀: cartOpen(cls) + 내용 + cartClose(). 회색 화면(.cart-screen) 안에 기존 카드/레이아웃이 그대로 들어간다.
+  function cartOpen(cls) {
+    return '<div class="cart' + (cls ? ' ' + cls : '') + '"><span class="cart-door l"><i></i></span><span class="cart-door r"><i></i></span>'
+      + '<div class="cart-body"><div class="cart-screen">';
+  }
+  function cartClose() {
+    return '</div><div class="cart-base"><b></b><b></b></div></div><span class="cart-wheel l"></span><span class="cart-wheel r"></span></div>';
+  }
+  function cartWrap(inner, cls) { return cartOpen(cls) + inner + cartClose(); }
+
+  // 택배 요금표 -- 사용자 제공 포스터(ui_art/ref/fee_poster_ref.png)를 HTML로 다시 그린 것. 숫자는 TYPES / FLOOR_REWARD_MULT에서.
+  var FEE_UP_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13V3M2.5 5.5 5 3l2.5 2.5M11 13V3M8.5 5.5 11 3l2.5 2.5"></path></svg>';
+  var FEE_TRUCK_SVG = '<svg class="fee-truck" viewBox="0 0 74 40" aria-hidden="true"><rect x="24" y="2" width="48" height="27" rx="2" fill="#E2A65B" stroke="#7a4a1f" stroke-width="2"></rect>'
+    + '<path d="M3 30V17l7-11h15v24z" fill="#6B3A12"></path><path d="M9 16l4-7h8v7z" fill="#cfe8ff"></path>'
+    + '<rect x="1" y="28" width="72" height="4" rx="2" fill="#3b2a1e"></rect><circle cx="14" cy="33" r="5" fill="#222" stroke="#fff" stroke-width="2"></circle>'
+    + '<circle cx="58" cy="33" r="5" fill="#222" stroke="#fff" stroke-width="2"></circle></svg>';
+  function multsVary() { return FLOOR_REWARD_MULT.some(function (m) { return m !== 1; }); }
+  function rewardRangePlain(t) {
+    var vals = FLOOR_REWARD_MULT.map(function (m) { return Math.round(t.reward * m); });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    return lo.toLocaleString("ko-KR") + "~" + hi.toLocaleString("ko-KR") + "원";
+  }
+  // withRange: 성공 칸 아래에 층별 금액 범위를 작게 (확보 보드의 작은 카드용 -- 포스터는 아래 안내에 배율을 따로 적는다)
+  function feeTable(t, withRange) {
+    return '<table class="fee-table"><thead><tr><th>구분</th><th>요금</th></tr></thead><tbody>'
+      + '<tr><td>성공</td><td>' + fmtWon(t.reward) + (withRange && multsVary() ? '<small>층별 ' + rewardRangePlain(t) + '</small>' : '') + '</td></tr>'
+      + '<tr><td>실패</td><td>' + fmtWon(-t.penalty) + '</td></tr></tbody></table>';
+  }
+  function feeName(catIdx, withUp) {
+    return '<div class="fee-name"><span class="ico">' + CAT_ICONS[catIdx] + '</span>' + esc(TYPES[catIdx].name)
+      + (withUp ? '<span class="up">' + FEE_UP_SVG + '</span>' : '') + '</div>';
+  }
+  function renderFeeMini(catIdx) {
+    return '<div class="fee-mini fee-t' + catIdx + '">' + feeName(catIdx, false) + feeTable(TYPES[catIdx], true) + '</div>';
+  }
+  function renderFeePoster() {
+    var html = '<div class="fee-poster"><div class="fee-head"><span class="fee-title">택배 요금표</span>' + FEE_TRUCK_SVG + '</div><div class="fee-road"></div>';
+    html += '<div class="fee-cards">' + TYPES.map(function (t, i) {
+      return '<div class="fee-card fee-t' + i + '">' + feeName(i, true) + feeTable(t) + '</div>';
+    }).join('') + '</div>';
+    html += '<div class="fee-foot"><span class="i">i</span><div><ul>';
+    if (multsVary()) {
+      html += '<li>성공 요금은 <b>표의 요금 x 층 배율</b>이에요.<div class="fee-mults">'
+        + FLOORS.map(function (f, i) { var m = floorMult(i); return '<span class="' + (m > 1 ? 'hi' : (m < 1 ? 'lo' : '')) + '">' + esc(f) + ' ' + multLabel(i) + '</span>'; }).join('')
+        + '</div></li>';
+    }
+    html += '<li>전반에 획득한 송장은 전반에, 후반에 획득한 송장은 후반에 보내야 합니다.</li>'
+      + '<li>모든 택배는 지정된 조건을 충족해야 정상적으로 처리됩니다.</li></ul></div></div></div>';
+    return html;
   }
   // 확정 층수 택배를 제외한 나머지 종류는 칸 번호 대신 A/B/C/D/E로 표기한다 (사용자 요청, 2026-08-27: 대문자로 변경).
   var CELL_LETTERS = ["A", "B", "C", "D", "E", "F"];
@@ -902,14 +966,14 @@ APP_JS_TEMPLATE = r"""
         + (taken ? '<span class="taken-note">이미 선택됨</span>' : (mine ? '<span class="taken-note">내 선택</span>' : ''))
         + '</button>';
     }
-    return '<div class="center-screen"><div class="picker-scene">'
+    return '<div class="center-screen">' + cartOpen('cart--pick') + '<div class="picker-scene">'
       + renderLobbyBoxes()
       + '<div class="seat-pick card">'
       + '<h2>어느 택배사 직원인가요?</h2>'
       + '<p>이 기기에서 플레이할 가상 택배사를 하나 골라주세요. 상대방이 먼저 고른 곳은 고를 수 없어요.</p>'
       + '<div class="courier-options">' + COURIERS.map(courierBtn).join('') + '</div>'
       + '<div class="room-share">이 방 코드: <strong>' + esc(ROOM) + '</strong><br>상대방에게는 지금 이 페이지의 링크를 그대로 보내주면 같은 방으로 들어와요.</div>'
-      + '</div></div></div>';
+      + '</div></div>' + cartClose() + '</div>';
   }
 
   function renderTopbar(st, seat) {
@@ -926,16 +990,18 @@ APP_JS_TEMPLATE = r"""
     var otherSeat = seat === "1" ? "2" : (seat === "2" ? "1" : null);
     var mine = seat ? !!st.ready[seat] : false;
     var other = otherSeat ? !!st.ready[otherSeat] : false;
-    return '<main class="stage"><div class="center-screen"><div class="lobby-box card">'
+    return '<main class="stage"><div class="center-screen"><div class="cart-lobby">' + cartOpen('cart--lobby') + '<div class="lobby-box card">'
       + '<h2>택배 배송 게임</h2>'
       + '<p>두 사람 모두 이 페이지를 열고 좌석을 선택한 뒤, 각자 자기 키보드의 <strong>스페이스바</strong>를 누르면 준비 완료예요.<br>'
-      + '둘 다 준비되면 자동으로 시작하고, 최대 3분 동안(택배가 다 떨어지면 일찍 끝나요) 택배 확보 미니게임을 진행한 뒤 자동으로 엘리베이터 라운드(총 ' + ELEVATOR_ROUNDS + '라운드)로 넘어가요.</p>'
+      + (RACE_MODE
+        ? '둘 다 준비되면 3분 동안 <b>택배 확보 레이스</b>: 레일에 택배 3개가 올라오면 <b>송장 붙이기 → 택배 쌓기 → 투입</b>! 먼저 끝낸 사람이 먼저 고르고, 늦은 사람은 남은 것 중에서 골라요. 고르면 내 자리에 송장(층·금액)이 나와요. 그다음 엘리베이터 라운드(총 ' + ELEVATOR_ROUNDS + '라운드)로 배송해요.</p>'
+        : '둘 다 준비되면 자동으로 시작하고, 최대 3분 동안(택배가 다 떨어지면 일찍 끝나요) 택배 확보 미니게임을 진행한 뒤 자동으로 엘리베이터 라운드(총 ' + ELEVATOR_ROUNDS + '라운드)로 넘어가요.</p>')
       + '<div class="ready-row">'
       + '<span class="ready-chip' + (mine ? ' is-ready' : '') + '">나 · ' + (seat ? seatName(seat, st) : "-") + (mine ? ' · 준비 완료' : ' · 스페이스바 대기') + '</span>'
       + '<span class="ready-chip' + (other ? ' is-ready' : '') + '">' + (otherSeat ? seatName(otherSeat, st) : "-") + (other ? ' · 준비 완료' : ' · 대기 중') + '</span>'
       + '</div>'
       + '<div class="space-hint">Space</div>'
-      + '</div></div></main>';
+      + '</div>' + cartClose() + renderFeePoster() + '</div></div></main>';
   }
 
   // ---------- 공유 보드 헬퍼 (2026-10-06) ----------
@@ -960,6 +1026,175 @@ APP_JS_TEMPLATE = r"""
     return boardLeft(st, c.catIdx) > 0 ? null : "이 종류 택배가 모두 소진됐어요";
   }
 
+  // ---------- 2026-10-14 확보 단계 레이스 라운드 화면 ----------
+  // 흐름: 가려진 택배 2개 -> 둘이 동시에 송장 붙이기(#mg-layer의 디지털 미니게임) -> 실물 우봉고(같은 문제, 이 화면에 그림 + 투입 버튼)
+  //   -> 먼저 투입한 사람이 공개된 2개 중 하나를 고름(← / → 또는 클릭, RACE_PICK_MS) -> 늦은 사람은 RACE_SECOND_MS 안에 투입하면 남은 것.
+  // 상대의 진행 단계(송장/우봉고/투입)는 보인다 -- "같이 겨룬다"는 느낌. 상대 송장 내용은 여전히 안 보인다.
+  function raceOther(seat) { return seat === "1" ? "2" : "1"; }
+  function raceCount(endsAt, prefix, suffix) {
+    return '<b class="race-count" data-ends="' + endsAt + '" data-prefix="' + esc(prefix || '') + '" data-suffix="' + esc(suffix || '') + '">'
+      + (prefix || '') + Math.max(0, Math.ceil((endsAt - nowMs()) / 1000)) + (suffix || '') + '</b>';
+  }
+  var RACE_KEYS = ["←", "↑", "→"]; // 택배 3개 고르기 키 (현장 물리 버튼과 같은 배치)
+  function raceCanPick(r, seat) {
+    if (!seat || r.status !== "picking" || r.picks[seat] !== null) return false;
+    if (r.first === seat) return true;
+    return r.picks[r.first] !== null && r.stage[seat] === "done";
+  }
+  // 택배는 종류만 보인다. 층·금액은 고른 사람 자기 자리 송장(raceSlip)에만.
+  function raceParcel(st, r, it, i, seat) {
+    var owner = r.picks["1"] === i ? "1" : (r.picks["2"] === i ? "2" : null);
+    var left = r.status === "reveal" && !owner;
+    var canPick = !owner && raceCanPick(r, seat);
+    var t = TYPES[it.catIdx];
+    var cls = 'race-parcel is-open fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + (canPick ? ' can-pick' : '') + (owner && owner === seat ? ' is-mine' : '');
+    var inner = '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span>'
+      + '<span class="rp-amt">기본 ' + fmtWon(t.reward) + '</span><span class="rp-hint">층은 송장에서</span>';
+    if (owner) inner += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + ' 획득</span>';
+    else if (left) inner += '<span class="rp-owner gone">레일로 돌아감</span>';
+    else if (canPick) inner += '<span class="rp-owner pick">' + (RACE_KEYS[i] || '') + ' 고르기</span>';
+    return canPick ? '<button class="' + cls + '" data-action="race-pick" data-idx="' + i + '">' + inner + '</button>'
+      : '<div class="' + cls + '">' + inner + '</div>';
+  }
+  // 자기 자리에서 나오는 송장 (고른 사람 화면에만)
+  function raceSlip(st, r, seat) {
+    var id = r.invoiceIds && r.invoiceIds[seat];
+    if (!id) return '';
+    var inv = null;
+    st.players[seat].invoices.forEach(function (v) { if (v.id === id) inv = v; });
+    if (!inv) return '';
+    var t = TYPES[inv.catIdx];
+    // 출력 애니메이션은 처음 한 번만 (상태가 올 때마다 다시 그리므로, 매번 붙이면 계속 처음부터 다시 나온다)
+    var isNew = local.raceSlipSeen !== id;
+    local.raceSlipSeen = id;
+    return '<div class="race-slip fee-t' + inv.catIdx + (isNew ? ' is-new' : '') + '"><div class="rs-bar">송장 출력</div>'
+      + '<div class="rs-name"><span class="rp-ico">' + CAT_ICONS[inv.catIdx] + '</span>' + esc(t.name) + '</div>'
+      + '<div class="rs-room">' + esc(roomCode(inv.floorIdx, inv.room)) + '</div>'
+      + '<div class="rs-floor">' + esc(FLOORS[inv.floorIdx]) + ' <small>' + multLabel(inv.floorIdx) + '</small></div>'
+      + '<div class="rs-amt">' + fmtWon(invReward(inv)) + '</div>'
+      + '<div class="rs-code">||| ||||| || |||| ||| |||||</div></div>';
+  }
+  function raceLane(st, r, s, isMe) {
+    var stg = r.stage[s];
+    var steps = [["sticker", "송장 붙이기"], ["ubongo", "택배 쌓기"], ["done", "투입"]];
+    var idx = stg === "sticker" ? 0 : (stg === "ubongo" ? 1 : (stg === "done" ? 2 : -1));
+    var html = '<div class="race-lane' + (isMe ? ' me' : '') + (stg === "out" ? ' is-out' : '') + '"><span class="rl-name">' + (isMe ? '나 · ' : '') + esc(seatName(s, st))
+      + (r.first === s ? ' <em>1등</em>' : '') + '</span><span class="rl-steps">';
+    steps.forEach(function (sp, k) {
+      html += '<span class="rl-step' + (k < idx || (k === 2 && idx === 2) ? ' done' : '') + (k === idx && idx < 2 ? ' now' : '') + '">' + sp[1] + '</span>';
+      if (k < 2) html += '<i class="rl-arrow">›</i>';
+    });
+    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '') + '</div>';
+    return html;
+  }
+  function raceMessage(st, r, seat) {
+    if (r.status === "reveal") {
+      var parts = ["1", "2"].map(function (s) {
+        var i = r.picks[s];
+        return esc(seatName(s, st)) + ' · ' + (i === null ? '못 가져감' : esc(TYPES[r.pair[i].catIdx].name));
+      });
+      return '<div class="race-msg reveal">' + parts.join('<span class="sep">|</span>') + '</div>';
+    }
+    var f = r.first;
+    if (!seat) { // 관전(레일 화면/메인 모니터)
+      if (r.status === "picking") {
+        if (r.picks[f] === null) return '<div class="race-msg hot">' + esc(seatName(f, st)) + ' 먼저 투입! 고르는 중 ' + raceCount(r.pickEndsAt, '', '초') + '</div>';
+        var o = raceOther(f);
+        if (r.stage[o] === "done") return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배 고르는 중</div>';
+        return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배를 노린다! ' + raceCount(r.secondEndsAt, '', '초') + '</div>';
+      }
+      return '<div class="race-msg">송장 붙이기 → 택배 쌓기 → 투입! 먼저 끝낸 사람이 먼저 골라요</div>';
+    }
+    var me = r.stage[seat];
+    if (r.status === "picking") {
+      if (raceCanPick(r, seat)) {
+        var ends = f === seat ? r.pickEndsAt : (r.secondPickEndsAt || (nowMs() + RACE_PICK_MS));
+        return '<div class="race-msg hot">' + (f === seat ? '먼저 끝냈어요! ' : '남은 택배 중 ') + '<b>← ↑ →</b> 로 고르세요 ' + raceCount(ends, '', '초') + '</div>';
+      }
+      if (f === seat) {
+        if (r.stage[raceOther(seat)] === "done") return '<div class="race-msg">상대가 남은 택배를 고르는 중</div>';
+        return '<div class="race-msg">상대가 남은 택배를 노리는 중 ' + raceCount(r.secondEndsAt, '', '초') + '</div>';
+      }
+      if (me === "done") return '<div class="race-msg">상대가 고르는 중이에요. 다음은 내 차례!</div>';
+      if (me === "out") return '<div class="race-msg">이번 라운드는 탈락이에요</div>';
+      return '<div class="race-msg hot">상대가 먼저 끝냈어요! ' + raceCount(r.secondEndsAt, '', '초') + ' 안에 투입하면 남은 택배 중 골라요</div>';
+    }
+    if (me === "sticker") return '<div class="race-msg">송장을 붙이세요! 다 붙이면 바로 택배 쌓기예요</div>';
+    if (me === "ubongo") return '<div class="race-msg hot">실물 조각으로 <b>택배 쌓기</b>를 끝내고 <b>투입</b>하세요 (Space)</div>';
+    if (me === "out") return '<div class="race-msg">이번 라운드는 포기했어요. 다음 라운드를 기다려요</div>';
+    return '<div class="race-msg">투입 완료!</div>';
+  }
+  // seat가 null이면 관전용(레일 화면/메인 모니터): 고르기 버튼·내 우봉고 영역 없음
+  function raceStage(st, seat) {
+    var r = st.race;
+    var html = '<div class="race' + (seat ? '' : ' race--watch') + '" data-race-round="' + r.round + '">';
+    html += '<div class="race-head"><span class="round-pill">레이스 ' + r.round + '</span>'
+      + '<span class="race-clock">확보 남은 시간 <b id="race-secure-clock">' + fmtClock((st.secureEndsAt || nowMs()) - nowMs()) + '</b></span></div>';
+    html += '<div class="race-rail"><span class="race-belt"></span>' + r.pair.map(function (it, i) { return raceParcel(st, r, it, i, seat); }).join('') + '</div>';
+    html += raceMessage(st, r, seat);
+    var order = seat ? [seat, raceOther(seat)] : ["1", "2"];
+    html += '<div class="race-lanes">' + order.map(function (s, k) { return raceLane(st, r, s, !!seat && k === 0); }).join('') + '</div>';
+    return html + '</div>';
+  }
+  function racePuzzle(st, r) {
+    var meta = cellMeta(r.puzzleId, st.half);
+    var pt = meta ? TYPES[meta.catIdx] : null;
+    return '<div class="race-puzzle"><div class="rp-cap">택배 쌓기 · 조각 ' + (pt ? perHalf(pt.pieces) : '?') + '개 · 두 사람 같은 문제</div>'
+      + (meta && meta.src ? '<img src="' + meta.src + '" alt="택배 쌓기 문제">' : '')
+      + '<div class="puzzle-actions"><button class="btn danger" data-action="race-giveup">포기</button>'
+      + '<button class="btn ok" data-action="race-done">투입 (Space)</button></div></div>';
+  }
+  function renderRace(st, seat) {
+    var r = st.race;
+    // 우봉고 중에는 퍼즐을 오른쪽에 크게 (넓은 화면) -- 레일/진행 단계와 한눈에 같이 보이게
+    var withPuzzle = r.stage[seat] === "ubongo" && r.status !== "reveal";
+    var slip = withPuzzle ? '' : raceSlip(st, r, seat); // 고른 뒤: 자기 자리에서 송장이 나온다
+    var html = '<main class="stage stage--race">' + cartOpen('cart--race') + '<div class="race-wrap' + (withPuzzle ? ' has-puzzle' : (slip ? ' has-slip' : '')) + '">'
+      + raceStage(st, seat) + (withPuzzle ? racePuzzle(st, r) : slip) + '</div>';
+    html += '<div class="race-mine"><span class="rm-label">내 택배</span>' + (st.players[seat].invoices.length
+      ? st.players[seat].invoices.map(function (inv) { return '<span class="my-chip fee-t' + inv.catIdx + '">' + esc(TYPES[inv.catIdx].name) + ' ' + esc(roomCode(inv.floorIdx, inv.room)) + ' ' + fmtWon(invReward(inv)) + '</span>'; }).join('')
+      : '<small>아직 없음</small>') + '</div>';
+    return html + cartClose() + '</main>';
+  }
+  // 송장 붙이기 미니게임(#mg-layer)을 레이스 단계에 맞춰 열고 닫는다. 상태가 바뀔 때마다 호출된다.
+  function raceSync() {
+    var r = state && state.phase === "secure" ? state.race : null;
+    var seat = mySeat();
+    var want = r && seat && r.stage[seat] === "sticker" && r.status !== "reveal";
+    if (want) {
+      if (!mg || !mg.race || mg.round !== r.round) openRaceSticker(r);
+      updateRaceStrip();
+    } else if (mg && mg.race) closeMiniGame();
+  }
+  function openRaceSticker(r) {
+    closeMiniGame();
+    var layer = document.getElementById("mg-layer");
+    layer.innerHTML = '<div class="mg-wrap"><div class="mg-clock">레이스 ' + r.round + ' · 확보 시간<b id="mg-clock">--:--</b></div>'
+      + '<div class="race-strip" id="race-strip"></div><div id="mg-host"></div></div>';
+    layer.classList.remove("hidden");
+    var round = r.round;
+    var done = function () { closeMiniGame(); send({ type: "race-step", seat: mySeat(), step: "sticker-done", round: round }); };
+    mg = {
+      race: true, round: round,
+      ctl: MiniGames.start(document.getElementById("mg-host"), {
+        kind: "sticker", level: perHalf(RACE_STICKER_LEVEL), testHooks: TEST_HOOKS,
+        onDone: done,
+        onCancel: function () { closeMiniGame(); send({ type: "race-step", seat: mySeat(), step: "give-up", round: round }); },
+      }),
+    };
+    if (TEST_HOOKS) window.__mgFinish = function () { if (!mg || !mg.race) return false; done(); return true; };
+    updateMiniClock();
+  }
+  // 송장 붙이기 화면 위쪽 띠: 상대 진행 단계 (게임 화면이 가려도 상대가 어디까지 왔는지 보이게)
+  function updateRaceStrip() {
+    var el = document.getElementById("race-strip");
+    if (!el || !state || !state.race) return;
+    var o = raceOther(mySeat());
+    var stg = state.race.stage[o];
+    el.textContent = seatName(o, state) + ' · ' + (stg === "sticker" ? '송장 붙이는 중' : stg === "ubongo" ? '택배 쌓기 중!' : stg === "done" ? '투입 완료!' : '탈락');
+    el.className = 'race-strip' + (stg === "ubongo" || stg === "done" ? ' hot' : '');
+  }
+
   function renderBoard(st, seat) {
     var msLeft = st.secureEndsAt ? (st.secureEndsAt - nowMs()) : SECURE_PHASE_MS;
     var pct = Math.max(0, Math.min(100, (msLeft / SECURE_PHASE_MS) * 100));
@@ -969,7 +1204,7 @@ APP_JS_TEMPLATE = r"""
       + '<span class="timer-num">' + fmtClock(msLeft) + '</span>'
       + '<div class="timer-bar"><i style="width:' + pct + '%"></i></div></div>';
 
-    html += '<div class="card"><div class="board-grid">';
+    html += cartOpen('cart--board') + '<div class="card"><div class="board-grid">';
     // 2026-10-06 레일 화면: 종류마다 한 줄 -- 가운데 레일 위에 택배 상자(남은 개수), 내 자리 쪽에 내 버튼.
     // 1번 자리는 왼쪽, 2번 자리는 오른쪽. 보드는 두 플레이어가 공유한다(종류별 6개 합계) -- 남은 개수만 같이 보이고
     // 상대 쪽 칸은 비워 둔다. 버튼은 "그 종류의 아직 안 가져간 칸"을 열어 준다(칸끼리 구별이 없어서 서버가 어차피 대체함).
@@ -1009,7 +1244,7 @@ APP_JS_TEMPLATE = r"""
         mine += '<div class="mine-count">내 택배 ' + myCells.length + '개 · 층 버튼을 눌러 송장 붙이기</div>';
       } else {
         mine += '<button class="rail-btn" data-action="open-type" data-cat="' + catIdx + '"' + (left === 0 ? ' disabled' : '') + '>'
-          + '<span class="rbt">' + (left === 0 ? '소진' : esc(MINI_NAME[t.mini] || '우봉고') + ' 시작') + '</span>'
+          + '<span class="rbt">' + (left === 0 ? '소진' : esc(MINI_NAME[t.mini] || '택배 쌓기') + ' 시작') + '</span>'
           + '<span class="rbp">성공 ' + rewardRange(t) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
         mine += '<div class="my-chips">' + myCells.map(function (c) {
           var inv = invFor(c);
@@ -1023,16 +1258,17 @@ APP_JS_TEMPLATE = r"""
       var mid = '<div class="rail-mid"><div class="rail-box" style="background:' + t.color + ';--c:' + t.color + '">'
         + '<span class="cell-art" style="background-image:url(\'' + BOX_ART[catIdx] + '\')"></span>'
         + '<span class="rb-name"><span class="cat-icon">' + CAT_ICONS[catIdx] + '</span>' + esc(t.name) + '</span>'
-        + '<span class="rb-game">' + esc(MINI_NAME[t.mini] || '우봉고') + '</span>'
+        + '<span class="rb-game">' + esc(MINI_NAME[t.mini] || '택배 쌓기') + '</span>'
         + '<span class="pips">' + pips + '</span>'
         + '<span class="cat-left">남은 <b>' + left + '</b> / ' + t.count + '</span>'
         + (left === 0 ? '<span class="stamp">소진</span>' : '')
         + '</div></div>';
-      var theirs = '<div class="rail-side theirs"></div>';
+      // 2026-10-14: 비어 있던 상대 자리 칸에 그 줄 종류의 요금 카드(요금표 디자인)를 둔다. 상대 정보는 여전히 안 보인다.
+      var theirs = '<div class="rail-side theirs has-fee">' + renderFeeMini(catIdx) + '</div>';
       html += '<div class="board-row' + (left === 0 ? ' is-empty' : '') + '" data-cat="' + catIdx + '">'
         + (meLeft ? mine + mid + theirs : theirs + mid + mine) + '</div>';
     });
-    html += '</div></div>';
+    html += '</div></div>' + cartClose();
     html += '</main>';
     return html;
   }
@@ -1109,6 +1345,7 @@ APP_JS_TEMPLATE = r"""
   }
   // 상태가 바뀔 때마다 호출: 확보 시간이 끝났거나 그 칸이 이미 확보됐으면(재접속 등) 열려 있던 게임을 닫는다.
   function syncMiniGame() {
+    if ((state && state.phase === "secure" && state.race) || (mg && mg.race)) { raceSync(); return; }
     if (!mg) return;
     var why = cellBlockedReason(state, mg.cellId);
     if (why) { closeMiniGame(); showToast(why); }
@@ -1122,7 +1359,7 @@ APP_JS_TEMPLATE = r"""
     return '<div class="overlay" id="puzzle-overlay">'
       + '<div class="puzzle-frame">'
       + '<div style="margin-bottom:0.6rem;color:var(--muted);font-family:var(--font-display);font-size:0.85rem;">' + esc(t.name) + ' · 조각 ' + perHalf(t.pieces) + '개</div>'
-      + '<img src="' + meta.src + '" alt="우봉고 문제">'
+      + '<img src="' + meta.src + '" alt="택배 쌓기 문제">'
       + '<div class="puzzle-actions">'
       + '<button class="btn danger" data-action="give-up">포기</button>'
       + '<button class="btn ok" data-action="complete-cell" data-cell="' + cellId + '">완료</button>'
@@ -1260,7 +1497,7 @@ APP_JS_TEMPLATE = r"""
   }
 
   function renderElevator(st, seat) {
-    var html = '<main class="stage"><div class="elev-layout">';
+    var html = '<main class="stage">' + cartOpen('cart--elev') + '<div class="elev-layout">';
     // left column: gauge, then my own package list directly beneath it -- opponent's list is
     // never rendered here (or anywhere in the elevator phase), only mine.
     html += '<div class="elev-left">' + renderShaft(st.elevator.floorIdx)
@@ -1287,14 +1524,14 @@ APP_JS_TEMPLATE = r"""
         + '<div class="space-hint">Space · 엘리베이터 이동 시작</div>';
       html += '</div>';
 
-      html += '</div></div></main>';
+      html += '</div></div>' + cartClose() + '</main>';
       return html;
     }
 
     // 우선 택배 지정 전용 시간 (매 라운드 맨 처음, PRIORITY_PICK_MS) -- 독립된 상태 화면.
     if (st.elevator.state === "priority") {
       html += renderPriorityWindow(st, seat);
-      html += '</div></div></main>';
+      html += '</div></div>' + cartClose() + '</main>';
       return html;
     }
 
@@ -1329,7 +1566,7 @@ APP_JS_TEMPLATE = r"""
       }
       html += '<div class="time-left-big" id="thief-clock">' + (doneMine ? '' : '남은 시간 계산 중...') + '</div>';
       html += '</div>';
-      html += '</div></div></main>';
+      html += '</div></div>' + cartClose() + '</main>';
       return html;
     }
 
@@ -1362,7 +1599,7 @@ APP_JS_TEMPLATE = r"""
         html += '<h4>잠시만요</h4><div style="color:var(--muted);font-size:0.85rem;">상대방이 같은 층 택배 중 먼저 보낼 걸 고르고 있어요...</div>';
       }
       html += '</div>';
-      html += '</div></div></main>';
+      html += '</div></div>' + cartClose() + '</main>';
       return html;
     }
 
@@ -1407,7 +1644,7 @@ APP_JS_TEMPLATE = r"""
     }
     html += '</div>';
 
-    html += '</div></div></main>';
+    html += '</div></div>' + cartClose() + '</main>';
     return html;
   }
 
@@ -1418,7 +1655,7 @@ APP_JS_TEMPLATE = r"""
     var myReady = !!st.halftimeReady[seat];
     var otherReady = !!st.halftimeReady[otherSeat];
     var h1 = st.halfHistory[0];
-    var html = '<main class="stage"><div class="center-screen"><div class="halftime-box card">';
+    var html = '<main class="stage"><div class="center-screen">' + cartOpen('cart--half') + '<div class="halftime-box card">';
     html += '<h2>전반 종료</h2>';
     if (h1) {
       html += '<div class="halftime-scores">'
@@ -1432,7 +1669,7 @@ APP_JS_TEMPLATE = r"""
       + '<span class="ready-chip' + (otherReady ? ' is-ready' : '') + '">' + seatName(otherSeat, st) + (otherReady ? ' · 준비 완료' : ' · 대기 중') + '</span>'
       + '</div>'
       + '<div class="space-hint">Space · 후반 시작</div>';
-    html += '</div></div></main>';
+    html += '</div>' + cartClose() + '</div></main>';
     return html;
   }
 
@@ -1480,7 +1717,7 @@ APP_JS_TEMPLATE = r"""
   function renderEnd(st, seat) {
     var s1 = st.scores ? st.scores["1"] : 0, s2 = st.scores ? st.scores["2"] : 0;
     var winner = s1 === s2 ? "무승부" : (s1 > s2 ? (seatName("1", st) + " 승리") : (seatName("2", st) + " 승리"));
-    var html = '<main class="stage">';
+    var html = '<main class="stage">' + cartOpen('cart--end');
     html += '<div class="winner-banner">' + winner + '</div>';
     html += renderRestartGate(st, seat);
     // Game's over -- unlike the elevator phase (where per-round delivery info stays private so
@@ -1501,18 +1738,18 @@ APP_JS_TEMPLATE = r"""
       + '<div class="chip">' + esc(seatName("1", st)) + ' 총점<span class="n">' + fmtWon(s1) + '</span></div>'
       + '<div class="chip">' + esc(seatName("2", st)) + ' 총점<span class="n">' + fmtWon(s2) + '</span></div>'
       + '</div>';
-    html += '</main>';
+    html += cartClose() + '</main>';
     return html;
   }
 
   function renderLoading() {
-    return '<main class="stage"><div class="center-screen"><div class="lobby-box card"><h2>연결 중...</h2>'
-      + '<p>서버에 접속하고 있어요. 잠시만 기다려 주세요.</p></div></div></main>';
+    return '<main class="stage"><div class="center-screen">' + cartWrap('<div class="lobby-box card"><h2>연결 중...</h2>'
+      + '<p>서버에 접속하고 있어요. 잠시만 기다려 주세요.</p></div>', 'cart--lobby') + '</div></main>';
   }
 
   function renderBody() {
     if (RAIL && !ROOM) return renderRailJoin();
-    if (!ROOM) return '<main class="stage"><div class="center-screen"><div class="lobby-box card"><h2>잘못된 링크예요</h2><p>방 코드가 없어요. 처음 받은 링크로 다시 들어와 주세요.</p></div></div></main>';
+    if (!ROOM) return '<main class="stage"><div class="center-screen">' + cartWrap('<div class="lobby-box card"><h2>잘못된 링크예요</h2><p>방 코드가 없어요. 처음 받은 링크로 다시 들어와 주세요.</p></div>', 'cart--lobby') + '</div></main>';
     if (MAIN) return renderMain();
     if (RAIL) return renderRail();
     if (!state) return renderTopbarShell() + renderLoading();
@@ -1534,7 +1771,8 @@ APP_JS_TEMPLATE = r"""
         if (blocked) { local.openCellId = null; notifyGameClosed(); setTimeout(function () { showToast(blocked); }, 0); }
       }
       // 레일 화면이 접속해 있으면 버튼은 그쪽에 있다 -- 내 화면은 "기다리는 화면"이고, 게임은 레일에서 눌렀을 때 뜬다.
-      body += (railInfo.count > 0 ? renderRailWaiting(state, seat) : renderBoard(state, seat)) + renderPuzzleOverlay(state);
+      if (state.race) body += renderRace(state, seat); // 2026-10-14 레이스 라운드 (레일 화면 접속 여부와 무관)
+      else body += (railInfo.count > 0 ? renderRailWaiting(state, seat) : renderBoard(state, seat)) + renderPuzzleOverlay(state);
     }
     else if (state.phase === "elevator") body += renderElevator(state, seat);
     else if (state.phase === "halftime") body += renderHalftime(state, seat);
@@ -1584,7 +1822,7 @@ APP_JS_TEMPLATE = r"""
     } else {
       var off2 = !here || busy || left === 0;
       html += '<button class="rail-btn' + (busy ? ' is-busy' : '') + '" data-action="rail-press" data-side="' + side + '" data-cat="' + catIdx + '"' + (off2 ? ' disabled' : '') + '>'
-        + '<span class="rbt">' + (left === 0 ? '소진' : (busy ? '게임 중...' : esc(MINI_NAME[t.mini] || '우봉고') + ' 시작')) + '</span>'
+        + '<span class="rbt">' + (left === 0 ? '소진' : (busy ? '게임 중...' : esc(MINI_NAME[t.mini] || '택배 쌓기') + ' 시작')) + '</span>'
         + '<span class="rbp">성공 ' + rewardRange(t) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
     }
     return html + '</div>';
@@ -1605,6 +1843,7 @@ APP_JS_TEMPLATE = r"""
       return '<div class="rv">' + head(st.phase === "lobby" ? '대기 중' : halfName) + '<div class="rv-center"><h2>' + msg[0] + '</h2><p>' + msg[1] + '</p>'
         + '<div class="rv-sides">' + railSideHead(st, "1") + railSideHead(st, "2") + '</div></div></div>';
     }
+    if (st.race) return '<div class="rv">' + head('택배 확보 · ' + halfName) + raceStage(st, null) + '</div>';
     var endsAt = st.secureEndsAt || nowMs();
     var html = '<div class="rv">' + head('택배 확보 · ' + halfName);
     html += '<div class="rv-clockrow"><span class="rv-clock-label">남은 시간</span><b id="rv-clock" data-ends="' + endsAt + '">' + fmtClock(endsAt - nowMs()) + '</b>'
@@ -1617,7 +1856,7 @@ APP_JS_TEMPLATE = r"""
       var mid = '<div class="rail-mid"><div class="rail-box" style="background:' + t.color + ';--c:' + t.color + '">'
         + '<span class="cell-art" style="background-image:url(\'' + BOX_ART[catIdx] + '\')"></span>'
         + '<span class="rb-name"><span class="cat-icon">' + CAT_ICONS[catIdx] + '</span>' + esc(t.name) + '</span>'
-        + '<span class="rb-game">' + esc(MINI_NAME[t.mini] || '우봉고') + '</span>'
+        + '<span class="rb-game">' + esc(MINI_NAME[t.mini] || '택배 쌓기') + '</span>'
         + '<span class="pips">' + pips + '</span>'
         + '<span class="cat-left">남은 <b>' + left + '</b> / ' + t.count + '</span>'
         + (left === 0 ? '<span class="stamp">소진</span>' : '')
@@ -1644,17 +1883,17 @@ APP_JS_TEMPLATE = r"""
       + '<div class="timer-bar"><i style="width:' + pct + '%"></i></div></div>';
     var mine = st.players[seat].invoices;
     var busy = !!(railInfo.busy && railInfo.busy[seat]);
-    html += '<div class="card rw" data-rail-wait="1"><h2>' + (busy ? '게임을 푸는 중이에요' : '레일 화면에서 버튼을 눌러 주세요') + '</h2>'
+    html += cartOpen('cart--board') + '<div class="card rw" data-rail-wait="1"><h2>' + (busy ? '게임을 푸는 중이에요' : '레일 화면에서 버튼을 눌러 주세요') + '</h2>'
       + '<p class="rw-sub">내 버튼은 레일 화면의 <b>' + (seat === "1" ? '왼쪽' : '오른쪽') + '</b>에 있어요. 누르면 이 화면에 게임이 떠요.</p><div class="rw-list">';
     TYPES.forEach(function (t, catIdx) {
       var left = boardLeft(st, catIdx);
       var chips = mine.filter(function (inv) { return inv.catIdx === catIdx; })
         .map(function (inv) { return '<span class="my-chip">' + esc(roomCode(inv.floorIdx, inv.room)) + '</span>'; }).join('');
       html += '<div class="rw-row' + (left === 0 ? ' is-empty' : '') + '" data-cat="' + catIdx + '" style="--c:' + t.color + '">'
-        + '<span class="rw-ico">' + CAT_ICONS[catIdx] + '</span><span class="rw-name">' + esc(t.name) + '<small>' + esc(MINI_NAME[t.mini] || '우봉고') + '</small></span>'
+        + '<span class="rw-ico">' + CAT_ICONS[catIdx] + '</span><span class="rw-name">' + esc(t.name) + '<small>' + esc(MINI_NAME[t.mini] || '택배 쌓기') + '</small></span>'
         + '<span class="rw-left">남은 <b>' + left + '</b>/' + t.count + '</span><span class="rw-mine">' + (chips || '<small>아직 없음</small>') + '</span></div>';
     });
-    return html + '</div></div></main>';
+    return html + '</div></div>' + cartClose() + '</main>';
   }
 
   // ---------- 메인 모니터 (2026-10-06, ?view=main) ----------
@@ -1713,10 +1952,14 @@ APP_JS_TEMPLATE = r"""
         for (var i = 0; i < t.count; i++) pips += '<span class="mv-pip' + (i < left ? '' : ' is-gone') + '"></span>';
         return '<div class="mv-cat' + (left === 0 ? ' is-empty' : (left <= 2 ? ' is-few' : '')) + '" style="--c:' + t.color + '">'
           + '<div class="mv-cat-head"><span class="mv-cat-icon">' + CAT_ICONS[catIdx] + '</span><span class="mv-cat-name">' + esc(t.name) + '</span></div>'
-          + '<div class="mv-cat-game">' + esc(MINI_NAME[t.mini] || "우봉고") + '</div>'
+          + '<div class="mv-cat-game">' + esc(MINI_NAME[t.mini] || "택배 쌓기") + '</div>'
           + '<div class="mv-left">' + left + '<small>/ ' + t.count + '</small></div>'
           + '<div class="mv-pips">' + pips + '</div></div>';
       }).join('');
+      if (st.race) {
+        html = head("택배 확보 · " + halfName) + '<div class="mv-body">' + raceStage(st, null) + '</div>';
+        return '<div class="mv">' + html + '</div>';
+      }
       html = head("택배 확보 · " + halfName) + '<div class="mv-body">'
         + '<div class="mv-secure-top"><div class="mv-label">확보 남은 시간</div>'
         + mvTime(endsAt, SECURE_PHASE_MS, { lowMs: 30000 })
@@ -1858,6 +2101,18 @@ APP_JS_TEMPLATE = r"""
       render();
       return;
     }
+    if (action === "race-done") {
+      if (state && state.race) send({ type: "race-step", seat: mySeat(), step: "ubongo-done", round: state.race.round });
+      return;
+    }
+    if (action === "race-giveup") {
+      if (state && state.race) send({ type: "race-step", seat: mySeat(), step: "give-up", round: state.race.round });
+      return;
+    }
+    if (action === "race-pick") {
+      send({ type: "race-pick", seat: mySeat(), idx: parseInt(t.getAttribute("data-idx"), 10) });
+      return;
+    }
     if (action === "vote-up" || action === "vote-down") {
       send({ type: "vote", seat: mySeat(), dir: action === "vote-up" ? "up" : "down" });
       return;
@@ -1905,11 +2160,26 @@ APP_JS_TEMPLATE = r"""
       } else if (seat && state && state.phase === "elevator" && state.elevator.state === "priority" && !e.repeat && !state.elevator.priorityConfirmed[seat]) {
         e.preventDefault();
         send({ type: "confirm-priority", seat: seat });
+      } else if (seat && state && state.phase === "secure" && state.race && state.race.stage[seat] === "ubongo" && state.race.status !== "reveal" && !e.repeat) {
+        // 레이스: 우봉고 투입 (현장에서는 레일 앞 물리 버튼이 스페이스)
+        e.preventDefault();
+        send({ type: "race-step", seat: seat, step: "ubongo-done", round: state.race.round });
       } else if (seat && state && state.phase === "halftime" && !e.repeat && !state.halftimeReady[seat]) {
         e.preventDefault();
         send({ type: "halftime-ready", seat: seat });
       }
       return;
+    }
+    if (!e.repeat && /^(ArrowLeft|ArrowUp|ArrowDown|ArrowRight|Digit1|Digit2|Digit3)$/.test(e.code)) {
+      // 레이스: 택배 고르기 (← = 왼쪽, ↑/↓ = 가운데, → = 오른쪽, 숫자 1/2/3도 가능)
+      var seat3 = mySeat(), rr = state && state.phase === "secure" ? state.race : null;
+      if (seat3 && rr && raceCanPick(rr, seat3)) {
+        e.preventDefault();
+        var want = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 1, ArrowRight: 2, Digit1: 0, Digit2: 1, Digit3: 2 }[e.code];
+        if (rr.pair.length === 2 && e.code === "ArrowRight") want = 1;
+        if (rr.pair[want]) send({ type: "race-pick", seat: seat3, idx: want });
+        return;
+      }
     }
     if (e.code === "ArrowUp" || e.code === "ArrowDown") {
       var seat2 = mySeat();
@@ -1924,6 +2194,13 @@ APP_JS_TEMPLATE = r"""
   // via its own timers, so there is nothing for the client to "submit" or auto-advance here ----------
   setInterval(function () {
     if (!state) return;
+    // 레이스 카운트다운 (플레이어/레일/메인 공통)
+    Array.prototype.forEach.call(document.querySelectorAll(".race-count[data-ends]"), function (el) {
+      var left = Math.max(0, Math.ceil((parseInt(el.getAttribute("data-ends"), 10) - nowMs()) / 1000));
+      el.textContent = (el.getAttribute("data-prefix") || "") + left + (el.getAttribute("data-suffix") || "");
+    });
+    var rsc = document.getElementById("race-secure-clock");
+    if (rsc && state.secureEndsAt) rsc.textContent = fmtClock(state.secureEndsAt - nowMs());
     if (MAIN) { mainTick(); return; }
     if (RAIL) { railTick(); return; }
     updateMiniClock();
@@ -1989,6 +2266,10 @@ APP_JS = (APP_JS_TEMPLATE
           .replace("@@FLOOR_REWARD_MULT@@", json.dumps(FLOOR_REWARD_MULT))
           .replace("@@RESULT_AUTO_ADVANCE_MS@@", str(RESULT_AUTO_ADVANCE_MS))
           .replace("@@MERGE_PRIORITY_THIEF@@", "true" if MERGE_PRIORITY_THIEF else "false")
+          .replace("@@RACE_MODE@@", "true" if RACE_CONST["RACE_MODE"] else "false")
+          .replace("@@RACE_PICK_MS@@", str(RACE_CONST["RACE_PICK_MS"]))
+          .replace("@@RACE_SECOND_MS@@", str(RACE_CONST["RACE_SECOND_MS"]))
+          .replace("@@RACE_STICKER_LEVEL@@", json.dumps(RACE_CONST["RACE_STICKER_LEVEL"]))
           .replace("@@SAME_FLOOR_CHOICE_MS@@", str(SAME_FLOOR_CHOICE_MS))
           .replace("@@HALVES@@", str(HALVES))
           .replace("@@THIEF_PLACE_MS@@", str(THIEF_PLACE_MS))
@@ -2000,11 +2281,16 @@ _here = os.path.dirname(os.path.abspath(__file__))
 MINIGAMES_CSS = open(os.path.join(_here, "minigames.css"), encoding="utf-8").read()
 MINIGAMES_JS = open(os.path.join(_here, "minigames.js"), encoding="utf-8").read()
 MAINVIEW_CSS = open(os.path.join(_here, "mainview.css"), encoding="utf-8").read()   # 메인 모니터(?view=main) 전용 스타일
+# 2026-10-14 UI 리스킨: 창고 배경 + 빨간 카트 틀 + 요금표 (ui_theme.css). 배경 그림은 ui_art/warehouse.jpg를 data URI로 박는다.
+UI_THEME_CSS = open(os.path.join(_here, "ui_theme.css"), encoding="utf-8").read()
+with open(os.path.join(_here, "ui_art", "warehouse.jpg"), "rb") as _f:
+    UI_THEME_CSS = UI_THEME_CSS.replace("@@WAREHOUSE_BG@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
+assert "@@" not in UI_THEME_CSS and "</style" not in UI_THEME_CSS
 assert "</style" not in MAINVIEW_CSS
 assert "</script" not in MINIGAMES_JS and "</style" not in MINIGAMES_CSS
 
 full_html = (
-    HEAD_HTML.replace("</style>\n</head>", MINIGAMES_CSS + "\n" + MAINVIEW_CSS + "\n</style>\n</head>", 1)
+    HEAD_HTML.replace("</style>\n</head>", MINIGAMES_CSS + "\n" + MAINVIEW_CSS + "\n" + UI_THEME_CSS + "\n</style>\n</head>", 1)
     + '<script>' + MINIGAMES_JS + "</script>\n"
     + '<script>' + APP_JS + "</script>\n"
     + "</body></html>\n"
