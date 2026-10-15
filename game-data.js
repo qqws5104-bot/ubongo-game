@@ -137,7 +137,8 @@ const RACE_LEFTOVER_RETURN = 1;
 const RACE_PICK_MS = 20000;
 const RACE_AUTO_PICK = 1;
 const RACE_AUTO_PICK_MODE = "random";
-const RACE_SECOND_MS = 5000;
+// 2026-10-14 (사용자 결정): 늦은 사람의 투입 마감 5초 -> 30초. 상대가 먼저 투입해도 30초 안에 택배 쌓기를 끝내면 남은 택배 중 하나를 받는다.
+const RACE_SECOND_MS = 30000;
 const RACE_REVEAL_MS = 2500;
 // 송장 붙이기 난이도 [전반, 후반] (minigames.js: 1 = 박스 4개/송장 2장, 2 = 박스 7개/송장 4장)
 const RACE_STICKER_LEVEL = [1, 1];
@@ -147,11 +148,16 @@ const RACE_STICKER_LEVEL = [1, 1];
 const RACE_GAME_POOL = ["sticker", "inspect", "match", "weigh", "tape"];
 // 라운드마다 띄울 우봉고 문제(퍼즐 이미지가 있는 칸 id). 내용물(택배 종류)과는 무관 -- 라운드가 갈수록 조각이 늘게(2 -> 3 -> 4조각) 배치.
 // 현장에서는 이 순서대로 두 스테이션에 같은 실물 퍼즐을 준비한다. 끝까지 가면 처음부터 다시.
+// 2026-10-14 (사용자 결정): 위 고정 순서 대신 라운드별 조각(색) 수로 고른다. [전반, 후반] 각각 라운드 순서대로, 목록이 끝나면 마지막 값 반복.
+//   전반: 1~3라운드 2색, 이후 3색 / 후반: 1~4라운드 3색, 이후 4색. 같은 조각 수의 문제(칸 그림) 중에서 섞어서 겹치지 않게 돌린다.
+//   (조각 수 = TYPES[].pieces -- 2색: 일반 4문제 / 3색: 깨지기 4 + 확정 층수 6 / 4색: 귀중품 3문제. 문제가 다 돌면 다시 섞음)
+//   null로 두면 RACE_PUZZLE_ORDER 순서를 쓴다.
+const RACE_PIECES_BY_ROUND = [[2, 2, 2, 3], [3, 3, 3, 3, 4]];
 const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1", "fixed-floor-2", "fragile-2", "valuable-1", "fixed-floor-3", "valuable-2", "valuable-3"];
 
 module.exports = {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
-  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_STICKER_LEVEL, RACE_GAME_POOL, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_AUTO_PICK_MODE,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_STICKER_LEVEL, RACE_GAME_POOL, RACE_PUZZLE_ORDER, RACE_PIECES_BY_ROUND, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_AUTO_PICK_MODE,
 };

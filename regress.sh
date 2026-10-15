@@ -27,4 +27,4 @@ setsec "40 * 1000"; run test_minigames_live.js; run test_rail_site.js
 echo "######## 확보 단계 레이스 라운드 (기본 모드, 2026-10-14)"
 python3 set_mini.py ubongo >/dev/null
 RACE_ENV=1
-setsec "60 * 1000"; run test_race_e2e.js; run test_race_games.js
+setsec "100 * 1000"; run test_race_e2e.js; run test_race_games.js

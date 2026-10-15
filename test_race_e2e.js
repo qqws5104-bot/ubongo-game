@@ -5,7 +5,7 @@
 //   - 택배 3개는 종류만 보인다. 먼저 투입한 사람이 ← ↑ → 로 고르면 자기 화면에만 송장(층·금액)이 나온다
 //   - 늦은 사람은 마감 안에 투입하면 남은 것 중 고른다, 마감을 넘기면 못 가져감, 남은 건 레일로 돌아감
 //   - 레일 화면/메인 모니터는 관전 화면(같은 레이스 상태)
-// 필요: SECURE_PHASE_MS 60초 이상 (regress.sh가 맞춘다). SHOT_DIR=/경로 면 단계별 스크린샷 저장.
+// 필요: SECURE_PHASE_MS 100초 이상 (늦은 사람 투입 마감 30초를 한 번 기다리므로, regress.sh가 맞춘다). SHOT_DIR=/경로 면 단계별 스크린샷 저장.
 "use strict";
 const { chromium } = require("playwright");
 const BASE = "http://localhost:3000";
@@ -112,8 +112,9 @@ async function main() {
   await click(p2, '[data-action="race-done"]');
   await waitFor(() => count(p2, "button.race-parcel.can-pick").then((n) => n >= 1), { label: "p2 can pick r2" });
   await key(p2, "ArrowLeft", "ArrowLeft");
-  // p1은 투입하지 않고 마감(5초)을 넘긴다
-  await waitFor(async () => (await count(p1, ".race-msg.reveal")) === 1, { label: "r2 reveal after deadline", timeout: 9000 });
+  // p1은 투입하지 않고 마감(RACE_SECOND_MS, 기본 30초)을 넘긴다
+  const { RACE_SECOND_MS } = require("./game-data.js");
+  await waitFor(async () => (await count(p1, ".race-msg.reveal")) === 1, { label: "r2 reveal after deadline", timeout: RACE_SECOND_MS + 6000 });
   assert((await text(p1)).includes("못 가져감"), "마감 넘긴 사람은 못 가져감");
   assert((await count(p1, ".race-mine .my-chip")) === 1 && (await count(p2, ".race-mine .my-chip")) === 2, "p1 그대로 1개, p2 2개");
   log("라운드 2: 늦은 사람이 마감을 넘기면 못 가져감");

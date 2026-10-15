@@ -360,3 +360,12 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
 .rv-puzzle-only .race-puzzle img { flex: 1 1 auto; min-height: 0; width: 100%; max-height: none; object-fit: contain; }
 .rv-race-wait .rv-center { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2vh; }
 .rv-race-wait h2 { font-size: clamp(2rem, 6vh, 3.6rem); margin: 0; }
+
+/* ===== 11. 시계 분리 (2026-10-14): 확보 남은 시간은 맨 위 줄 가운데, 카트 안 오른쪽 위는 택배 고르기 초 ===== */
+.topbar { position: relative; }
+.tb-secure { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 800; color: #2b1d12; background: #fffaf0;
+  border: 2px solid rgba(226, 105, 26, 0.45); border-radius: 999px; padding: 6px 20px; white-space: nowrap; box-shadow: 0 4px 12px rgba(43, 29, 18, 0.12); }
+.tb-secure b { color: var(--gold); font-family: var(--font-display); font-size: 1.6rem; margin-left: 6px; font-variant-numeric: tabular-nums; }
+.race-clock.is-pick { background: #e2691a; color: #fff8ef; }
+.race-clock.is-pick .race-count { color: #fff; font-family: var(--font-display); font-size: 1.35rem; margin-left: 4px; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .tb-secure { position: static; transform: none; order: 3; } .topbar { flex-wrap: wrap; } }

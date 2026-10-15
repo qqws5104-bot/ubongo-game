@@ -984,7 +984,11 @@ APP_JS_TEMPLATE = r"""
     if (st.half && (st.phase === "secure" || st.phase === "elevator")) {
       phaseLabel += " · " + (st.half === 1 ? "전반" : "후반");
     }
+    // 2026-10-14 (사용자 요청): 레이스 중 확보 남은 시간은 맨 위 줄 가운데에 (카트 안 오른쪽 위는 택배 고르기 남은 초 자리)
+    var secureClock = (st.phase === "secure" && st.race && st.secureEndsAt)
+      ? '<div class="tb-secure">확보 남은 시간 <b id="race-secure-clock">' + fmtClock(st.secureEndsAt - nowMs()) + '</b></div>' : '';
     return '<div class="topbar"><div class="brand"><span class="eyebrow">BeatPhobia · Live · ' + BUILD_TAG + '</span><h1>택배 배송 게임 — ' + phaseLabel + '</h1></div>'
+      + secureClock
       + '<div class="right"><span class="room-chip">방 ' + esc(ROOM) + '</span>'
       + '<span class="seat-badge">' + (seat ? ("내 좌석 · " + seatName(seat, st)) : "택배사 미선택") + '</span></div></div>';
   }
@@ -1120,7 +1124,7 @@ APP_JS_TEMPLATE = r"""
     if (r.status === "picking") {
       if (raceCanPick(r, seat)) {
         var ends = f === seat ? r.pickEndsAt : r.secondPickEndsAt; // 자동 선택이 꺼져 있으면(기본) 마감 없음 -- 고를 때까지 기다린다
-        return '<div class="race-msg hot">' + (f === seat ? '먼저 끝냈어요! ' : '남은 택배 중 ') + '<b>← ↑ →</b> 로 고르세요' + (ends ? ' ' + raceCount(ends, '', '초') + ' <small>안 고르면 무작위</small>' : '') + '</div>';
+        return '<div class="race-msg hot">' + (f === seat ? '먼저 끝냈어요! ' : '남은 택배 중 ') + '<b>← ↑ →</b> 로 고르세요' + (ends ? ' <small>· 시간 안에 안 고르면 무작위</small>' : '') + '</div>';
       }
       if (f === seat) {
         if (r.stage[raceOther(seat)] === "done") return '<div class="race-msg">상대가 남은 택배를 고르는 중</div>';
@@ -1136,11 +1140,23 @@ APP_JS_TEMPLATE = r"""
     return '<div class="race-msg">투입 완료!</div>';
   }
   // seat가 null이면 관전용(레일 화면/메인 모니터): 고르기 버튼·내 우봉고 영역 없음
+  // 카트 안 오른쪽 위: 택배 고르기 남은 초 (내가 고를 차례일 때) / 늦은 사람은 투입 마감 초. 해당 없으면 비워 둔다.
+  function racePickClock(r, seat) {
+    if (r.status !== "picking") return '<span></span>';
+    if (raceCanPick(r, seat)) {
+      var ends = r.first === seat ? r.pickEndsAt : r.secondPickEndsAt;
+      return ends ? '<span class="race-clock is-pick">택배 고르기 ' + raceCount(ends, '', '초') + '</span>' : '<span class="race-clock is-pick">택배 고르기</span>';
+    }
+    if (r.first !== seat && r.stage[seat] !== "done" && r.stage[seat] !== "out" && r.secondEndsAt)
+      return '<span class="race-clock is-pick">투입 마감 ' + raceCount(r.secondEndsAt, '', '초') + '</span>';
+    return '<span></span>';
+  }
   function raceStage(st, seat) {
     var r = st.race;
     var html = '<div class="race' + (seat ? '' : ' race--watch') + '" data-race-round="' + r.round + '">';
     html += '<div class="race-head"><span class="round-pill">레이스 ' + r.round + '</span>'
-      + '<span class="race-clock">확보 남은 시간 <b id="race-secure-clock">' + fmtClock((st.secureEndsAt || nowMs()) - nowMs()) + '</b></span></div>';
+      + (seat ? racePickClock(r, seat)
+        : '<span class="race-clock">확보 남은 시간 <b id="race-secure-clock">' + fmtClock((st.secureEndsAt || nowMs()) - nowMs()) + '</b></span>') + '</div>';
     html += '<div class="race-rail"><span class="race-belt"></span>' + r.pair.map(function (it, i) { return raceParcel(st, r, it, i, seat); }).join('') + '</div>';
     html += raceMessage(st, r, seat);
     var order = seat ? [seat, raceOther(seat)] : ["1", "2"];
@@ -1177,7 +1193,7 @@ APP_JS_TEMPLATE = r"""
     if (r.status !== "reveal" && (me === "sticker" || me === "ubongo")) {
       return '<main class="stage stage--race">' + cartOpen('cart--race') + '<div class="race-blank">'
         + '<div class="race-head"><span class="round-pill">레이스 ' + r.round + '</span>'
-        + '<span class="race-clock">확보 남은 시간 <b id="race-secure-clock">' + fmtClock((st.secureEndsAt || nowMs()) - nowMs()) + '</b></span></div>'
+        + racePickClock(r, seat) + '</div>'
         + '<div class="rb-center">' + raceMessage(st, r, seat)
         + (me === "ubongo" ? '<div class="rb-actions"><button class="btn danger" data-action="race-giveup">포기</button><button class="btn ok" data-action="race-done">투입 (Space)</button></div>' : '')
         + '</div></div>' + cartClose() + '</main>';

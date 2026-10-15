@@ -5,7 +5,7 @@
 //   - 늦은 사람: 마감 안에 투입하면 남은 것 중 하나를 고름, 마감 지나면 못 가져감. 아무도 안 가져간 건 레일로 돌아감
 //   - 안 고르면 RACE_PICK_MS 뒤 기본 금액이 비싼 종류 자동 선택
 //   - 둘 다 포기 -> 아무도 못 가져감, 다음 라운드
-//   - 결과(reveal) 뒤 자동으로 다음 라운드, 퍼즐은 RACE_PUZZLE_ORDER 순서
+//   - 결과(reveal) 뒤 자동으로 다음 라운드, 퍼즐은 RACE_PIECES_BY_ROUND(라운드별 조각 수)에 맞춰
 //   - 레이스 모드에선 예전 secureCell이 무시된다 / 확보 단계 종료 타이머가 레이스 타이머에 덮이지 않는다
 "use strict";
 const assert = require("assert");
@@ -31,7 +31,7 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
   let r = race(room);
   assert.ok(r && r.round === 1 && r.pair.length === 3, "라운드 1, 택배 3개");
   assert.deepStrictEqual(r.stage, { "1": "sticker", "2": "sticker" });
-  assert.strictEqual(r.puzzleId, RACE_PUZZLE_ORDER[0]);
+  assert.ok(/^normal-\d$/.test(r.puzzleId), "전반 1라운드는 2색(일반) 문제: " + r.puzzleId);
   r.pair.forEach((it) => { assert.ok(typeof it.reward === "number" && it.floorIdx >= 0 && it.floorIdx < 6); });
   log("확보 시작 -> 라운드 1, 택배 3개, 둘 다 송장 붙이기부터");
 
@@ -70,7 +70,7 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
   await sleep(450);
   r = race(room);
   assert.strictEqual(r.round, 2); assert.strictEqual(r.status, "playing");
-  assert.strictEqual(r.puzzleId, RACE_PUZZLE_ORDER[1]);
+  assert.ok(/^normal-\d$/.test(r.puzzleId), "전반 2라운드도 2색 문제: " + r.puzzleId);
   log("결과 뒤 자동으로 라운드 2, 퍼즐 순서대로");
 
   // 라운드 2: 1등 안 고르면 기본 금액 비싼 종류 자동, 2등 마감 초과 -> 못 가져감
@@ -177,6 +177,23 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
     }
     assert.ok(seenPick.size >= 2, "자동 선택은 무작위 (여러 칸이 나와야 함): " + [...seenPick]);
     log("기본: 투입 후 20초 안에 고르기, 안 고르면 무작위 (24번 중 " + seenPick.size + "가지 칸)");
+  }
+
+  // 2026-10-14 라운드별 우봉고 조각 수: 전반 1~3 = 2색, 이후 3색 / 후반 1~4 = 3색, 이후 4색. 하프 안에서 같은 문제 연속 없음
+  {
+    const { RACE_PIECES_BY_ROUND } = require("./game-data.js");
+    assert.deepStrictEqual(RACE_PIECES_BY_ROUND, [[2, 2, 2, 3], [3, 3, 3, 3, 4]]);
+    const piecesOf = (id) => TYPES.find((t) => id.slice(0, id.lastIndexOf("-")) === t.key).pieces;
+    for (const half of [1, 2]) {
+      const rm = new GameRoom("PZ" + half, () => {});
+      rm.state.half = half;
+      const ids = []; for (let k = 1; k <= 8; k++) ids.push(rm._racePuzzleFor(k));
+      const want = half === 1 ? [2, 2, 2, 3, 3, 3, 3, 3] : [3, 3, 3, 3, 4, 4, 4, 4];
+      assert.deepStrictEqual(ids.map(piecesOf), want, "하프 " + half + " 조각 수: " + ids.join(","));
+      assert.strictEqual(new Set(ids.slice(0, 3)).size, 3, "전반 2색 3문제는 서로 다름");
+      rm.destroy();
+    }
+    log("우봉고 조각 수: 전반 2,2,2,3,3… / 후반 3,3,3,3,4,4…");
   }
 
   // 예전 방식 플래그

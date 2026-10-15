@@ -2586,10 +2586,10 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
   // 2026-10-14 확보 단계 레이스 라운드 (game-data.js RACE_*). 레이스 모드인지는 서버 상태(state.race)로 판단한다.
   var RACE_MODE = true; // 안내 문구용 (실제 모드는 서버 상태 state.race로 판단 -- 서버를 RACE_MODE=0으로 띄우면 예전 방식)
   var RACE_PICK_MS = 20000;
-  var RACE_SECOND_MS = 5000;
+  var RACE_SECOND_MS = 30000;
   var RACE_STICKER_LEVEL = [1, 1];
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1014-1605"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1014-1659"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }

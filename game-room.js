@@ -12,7 +12,7 @@ const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
-  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -33,6 +33,7 @@ const DEFAULT_RULES = {
   raceAutoPick: !!RACE_AUTO_PICK,
   raceGamePool: RACE_GAME_POOL,
   raceAutoPickMode: RACE_AUTO_PICK_MODE,
+  racePiecesByRound: RACE_PIECES_BY_ROUND,
   elevatorJolt: !!ELEVATOR_JOLT,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
@@ -319,7 +320,7 @@ class GameRoom {
     });
     this.state.race = {
       round: roundNo, pair, game: this._raceNextGame(),
-      puzzleId: RACE_PUZZLE_ORDER[(roundNo - 1) % RACE_PUZZLE_ORDER.length],
+      puzzleId: this._racePuzzleFor(roundNo),
       stage: { "1": "sticker", "2": "sticker" },
       finishedAt: { "1": null, "2": null },
       first: null, status: "playing",
@@ -327,6 +328,28 @@ class GameRoom {
       picks: { "1": null, "2": null }, invoiceIds: { "1": null, "2": null }, discarded: [],
     };
     this._raceAt(null);
+  }
+
+  // 2026-10-14: 이번 라운드 우봉고 문제. racePiecesByRound[하프-1][라운드-1](끝나면 마지막 값)의 조각 수 문제 중에서,
+  //   하프마다 새로 섞은 순서대로 겹치지 않게 꺼낸다(다 쓰면 다시 섞음). 설정이 없으면 예전 RACE_PUZZLE_ORDER 순서.
+  _racePuzzleFor(roundNo) {
+    const plan = this.rules.racePiecesByRound;
+    const half = this.state.half || 1;
+    const list = plan && plan[half - 1];
+    if (!list || !list.length) return RACE_PUZZLE_ORDER[(roundNo - 1) % RACE_PUZZLE_ORDER.length];
+    const want = list[Math.min(roundNo, list.length) - 1];
+    if (roundNo === 1 || !this.racePuzzleBags || this.racePuzzleBags.half !== half) this.racePuzzleBags = { half };
+    const bags = this.racePuzzleBags;
+    if (!bags[want] || !bags[want].length) {
+      const ids = [];
+      TYPES.forEach((t) => {
+        const p = Array.isArray(t.pieces) ? t.pieces[half - 1] : t.pieces;
+        if (p === want) for (let n = 1; n <= t.count; n++) ids.push(t.key + "-" + n);
+      });
+      if (!ids.length) return RACE_PUZZLE_ORDER[(roundNo - 1) % RACE_PUZZLE_ORDER.length];
+      bags[want] = shuffled(ids);
+    }
+    return bags[want].shift();
   }
 
   // 섞은 순서대로 꺼내고, 다 쓰면 다시 섞는다(새로 섞은 첫 게임이 직전 게임과 같으면 한 칸 미룬다)
