@@ -15,7 +15,7 @@ const { TYPES, RACE_PUZZLE_ORDER } = require("./game-data.js");
 function log(...a) { console.log("[test-race]", ...a); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 자동 선택은 기본이 꺼짐(RACE_AUTO_PICK = 0). 자동 선택 규칙도 함께 검증하려고 여기선 켠다 -- 꺼진 경우는 맨 아래에서 따로 확인.
-const FAST = { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: true, raceAutoPickMode: "best" };
+const FAST = { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: true, raceAutoPickMode: "best", raceConsolationMs: 0 }; // 위로(20초 뒤 무작위)는 아래에서 따로 검사
 function newRoom(rules) {
   const room = new GameRoom("RACE", () => {}, Object.assign({}, FAST, rules || {}));
   room.pickCourier("cookbang", "a"); room.pickCourier("cheonil", "b");
@@ -143,7 +143,7 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
 
   // 자동 선택 꺼짐(raceAutoPick:false): 고를 때까지 기다린다
   room.destroy();
-  room = new GameRoom("NOAUTO", () => {}, { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: false });
+  room = new GameRoom("NOAUTO", () => {}, { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: false, raceConsolationMs: 0 });
   room.pickCourier("cookbang", "a"); room.pickCourier("cheonil", "b"); room.setReady("1"); room.setReady("2");
   r = race(room);
   finishBoth(room, "1"); finishBoth(room, "2");
@@ -194,6 +194,42 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
       rm.destroy();
     }
     log("우봉고 조각 수: 전반 2,2,2,3,3… / 후반 3,3,3,3,4,4…");
+  }
+
+  // 2026-10-14 위로(RACE_CONSOLATION_MS): 한 사람만 끝내 고르면, 고른 순간부터 그 시간 뒤 다른 사람도 남은 것 중 무작위로 하나
+  {
+    const { RACE_CONSOLATION_MS } = require("./game-data.js");
+    assert.strictEqual(RACE_CONSOLATION_MS, 20000);
+    const mkC = (code) => { const rm = new GameRoom(code, () => {}, { racePickMs: 5000, raceRevealMs: 5000, raceConsolationMs: 300 });
+      rm.pickCourier("cookbang", "a"); rm.pickCourier("cheonil", "b"); rm.setReady("1"); rm.setReady("2"); return rm; };
+    // (a) 늦은 사람이 끝내지 못함 -> 1등이 고르고 0.3초 뒤 무작위로 하나
+    let rm = mkC("C1"); let rr = race(rm);
+    finishBoth(rm, "1");
+    assert.strictEqual(rr.secondEndsAt, null, "1등이 고르기 전엔 마감 없음");
+    rm.racePick("1", 0);
+    assert.ok(rr.secondEndsAt > Date.now(), "1등이 고른 순간부터 마감");
+    assert.strictEqual(rr.status, "picking");
+    await sleep(450);
+    assert.notStrictEqual(rr.picks["2"], null, "시간이 지나면 늦은 사람도 하나 받음");
+    assert.ok(rr.randomPick["2"] && rr.status === "reveal", "무작위 표시 + 결과 공개");
+    assert.strictEqual(rm.state.players["2"].invoices.length, 1);
+    rm.destroy();
+    // (b) 마감 안에 투입하면 직접 고름
+    rm = mkC("C2"); rr = race(rm);
+    finishBoth(rm, "1"); rm.racePick("1", 1);
+    finishBoth(rm, "2");
+    assert.strictEqual(rr.status, "picking"); rm.racePick("2", 2);
+    assert.ok(rr.picks["2"] === 2 && !rr.randomPick["2"] && rr.status === "reveal", "직접 고름");
+    rm.destroy();
+    // (c) 포기한 사람도 받음
+    rm = mkC("C3"); rr = race(rm);
+    rm.raceStep("2", "give-up", rr.round);
+    finishBoth(rm, "1"); rm.racePick("1", 0);
+    assert.strictEqual(rr.status, "picking", "포기했어도 위로 시간까지 기다림");
+    await sleep(450);
+    assert.ok(rr.picks["2"] !== null && rr.randomPick["2"], "포기한 사람도 무작위로 받음");
+    rm.destroy();
+    log("위로: 1등이 고르고 N초 뒤 다른 사람도 무작위로 하나 (그 전 투입이면 직접, 포기해도 받음)");
   }
 
   // 예전 방식 플래그

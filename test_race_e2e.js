@@ -77,7 +77,7 @@ async function main() {
   await key(p1, "Space", " ");
   await waitFor(() => count(p1, "button.race-parcel.can-pick").then((n) => n === 3), { label: "p1 can pick 3 (투입 뒤에야 택배가 보임)" });
   assert((await count(p2, "button.race-parcel.can-pick")) === 0, "p2는 아직 못 고름");
-  assert((await text(p2)).includes("안에 투입하면 남은 택배"), "p2에게 남은 시간 안내");
+  assert((await text(p2)).includes("투입하면 직접 고르고"), "p2에게 안내 (투입하면 직접, 늦으면 무작위)");
   assert((await count(p2, ".race-parcel")) === 0, "늦은 사람은 투입 전까지 택배가 안 보임");
   await shot(p1, "race_3_pick_first"); await shot(p2, "race_3_pick_second"); await shot(rail, "race_r_rail_picking");
   log("먼저 투입 -> 1등만 고르기(3개), 늦은 사람에게 마감 안내");
@@ -112,12 +112,13 @@ async function main() {
   await click(p2, '[data-action="race-done"]');
   await waitFor(() => count(p2, "button.race-parcel.can-pick").then((n) => n >= 1), { label: "p2 can pick r2" });
   await key(p2, "ArrowLeft", "ArrowLeft");
-  // p1은 투입하지 않고 마감(RACE_SECOND_MS, 기본 30초)을 넘긴다
-  const { RACE_SECOND_MS } = require("./game-data.js");
-  await waitFor(async () => (await count(p1, ".race-msg.reveal")) === 1, { label: "r2 reveal after deadline", timeout: RACE_SECOND_MS + 6000 });
-  assert((await text(p1)).includes("못 가져감"), "마감 넘긴 사람은 못 가져감");
-  assert((await count(p1, ".race-mine .my-chip")) === 1 && (await count(p2, ".race-mine .my-chip")) === 2, "p1 그대로 1개, p2 2개");
-  log("라운드 2: 늦은 사람이 마감을 넘기면 못 가져감");
+  // p1은 투입하지 않는다 -> p2가 고른 순간부터 RACE_CONSOLATION_MS(20초) 뒤 p1도 남은 것 중 무작위로 하나 (2026-10-14)
+  const { RACE_CONSOLATION_MS } = require("./game-data.js");
+  await waitFor(async () => (await text(p1)).includes("무작위로 받아요"), { label: "p1 told about random consolation" });
+  await waitFor(async () => (await count(p1, ".race-msg.reveal")) === 1, { label: "r2 reveal after consolation", timeout: RACE_CONSOLATION_MS + 6000 });
+  assert((await text(p1)).includes("(무작위)"), "늦은 사람은 무작위로 받음 표시");
+  assert((await count(p1, ".race-mine .my-chip")) === 2 && (await count(p2, ".race-mine .my-chip")) === 2, "둘 다 2개씩");
+  log("라운드 2: 한 사람만 끝내면, 고른 뒤 20초 뒤 다른 사람도 무작위로 하나 받음");
 
   // ---- 라운드 3: 송장 단계에서 포기 ----
   await waitFor(() => count(p1, "#mg-layer .mg-root").then((n) => n === 1), { label: "round 3 first game", timeout: 8000 });

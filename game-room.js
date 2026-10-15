@@ -12,7 +12,7 @@ const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
-  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -34,6 +34,7 @@ const DEFAULT_RULES = {
   raceGamePool: RACE_GAME_POOL,
   raceAutoPickMode: RACE_AUTO_PICK_MODE,
   racePiecesByRound: RACE_PIECES_BY_ROUND,
+  raceConsolationMs: RACE_CONSOLATION_MS,
   elevatorJolt: !!ELEVATOR_JOLT,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
@@ -326,6 +327,7 @@ class GameRoom {
       first: null, status: "playing",
       pickEndsAt: null, secondEndsAt: null, secondPickEndsAt: null, revealEndsAt: null,
       picks: { "1": null, "2": null }, invoiceIds: { "1": null, "2": null }, discarded: [],
+      randomPick: { "1": false, "2": false }, // 시간이 지나 무작위로 받은 좌석 (화면 표시용)
     };
     this._raceAt(null);
   }
@@ -378,14 +380,16 @@ class GameRoom {
       r.stage[seat] = "ubongo";
     } else if (step === "ubongo-done") {
       if (st !== "ubongo") return;
-      if (r.first && r.first !== seat && now > r.secondEndsAt) { r.stage[seat] = "out"; this._raceAdvance(); return; }
+      const consol = this.rules.raceConsolationMs > 0;
+      if (!consol && r.first && r.first !== seat && now > r.secondEndsAt) { r.stage[seat] = "out"; this._raceAdvance(); return; }
       r.stage[seat] = "done";
       r.finishedAt[seat] = now;
       if (!r.first) {
         r.first = seat;
         r.status = "picking";
         r.pickEndsAt = this.rules.raceAutoPick ? now + this.rules.racePickMs : null;
-        r.secondEndsAt = now + this.rules.raceSecondMs;
+        // 위로(consolation) 모드: 늦은 사람의 마감은 1등이 고른 순간부터 잰다(_raceAdvance에서 설정)
+        r.secondEndsAt = consol ? null : now + this.rules.raceSecondMs;
       }
     } else if (step === "give-up") {
       if (st === "done" || st === "out") return;
@@ -456,15 +460,25 @@ class GameRoom {
       if (this.rules.raceAutoPick && r.picks[f] === null && now >= r.pickEndsAt) this._raceAutoPick(f);
       if (r.picks[f] !== null) {
         const rest = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
-        // 늦은 사람이 마감 안에 투입하지 못했으면 탈락
-        if (r.stage[s2] !== "done" && r.stage[s2] !== "out" && now >= r.secondEndsAt) r.stage[s2] = "out";
-        if (r.stage[s2] === "done" && r.picks[s2] === null && rest.length) {
+        const consol = this.rules.raceConsolationMs > 0;
+        if (consol) {
+          // 1등이 고른 순간부터 raceConsolationMs: 그 안에 투입하면 직접 고르고, 지나면(포기했어도) 남은 것 중 무작위로 하나
+          if (!r.secondEndsAt) r.secondEndsAt = now + this.rules.raceConsolationMs;
+          if (r.stage[s2] !== "done" && r.picks[s2] === null && rest.length && now >= r.secondEndsAt) {
+            this._raceGrant(s2, rest[Math.floor(Math.random() * rest.length)]);
+            r.randomPick[s2] = true;
+            r.stage[s2] = "done";
+          }
+        } else if (r.stage[s2] !== "done" && r.stage[s2] !== "out" && now >= r.secondEndsAt) r.stage[s2] = "out"; // 늦은 사람이 마감 안에 투입하지 못했으면 탈락
+        const restNow = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
+        if (r.stage[s2] === "done" && r.picks[s2] === null && restNow.length) {
           // 늦은 사람의 고르기 창: 먼저 끝낸 사람이 고른 뒤(또는 늦은 사람이 그 뒤에 투입한 뒤)부터 RACE_PICK_MS
           if (!r.secondPickEndsAt && this.rules.raceAutoPick) r.secondPickEndsAt = now + this.rules.racePickMs;
-          if (rest.length === 1) this._raceGrant(s2, rest[0]); // 하나 남았으면 고를 것 없이 그것
+          if (restNow.length === 1) this._raceGrant(s2, restNow[0]); // 하나 남았으면 고를 것 없이 그것
           else if (this.rules.raceAutoPick && now >= r.secondPickEndsAt) this._raceAutoPick(s2);
         }
-        const secondSettled = r.stage[s2] === "out" || r.picks[s2] !== null || !rest.length;
+        const secondSettled = r.picks[s2] !== null || !r.pair.some((_, i) => r.picks["1"] !== i && r.picks["2"] !== i)
+          || (r.stage[s2] === "out" && !consol);
         if (secondSettled) this._raceReveal();
       }
     }
@@ -480,7 +494,8 @@ class GameRoom {
       const cand = [];
       const s2 = other(cur.first);
       if (this.rules.raceAutoPick && cur.picks[cur.first] === null) cand.push(cur.pickEndsAt);
-      if (cur.stage[s2] !== "done" && cur.stage[s2] !== "out") cand.push(cur.secondEndsAt);
+      if (this.rules.raceConsolationMs > 0) { if (cur.secondEndsAt && cur.picks[s2] === null && cur.stage[s2] !== "done") cand.push(cur.secondEndsAt); }
+      else if (cur.stage[s2] !== "done" && cur.stage[s2] !== "out") cand.push(cur.secondEndsAt);
       if (this.rules.raceAutoPick && cur.secondPickEndsAt && cur.picks[s2] === null) cand.push(cur.secondPickEndsAt);
       if (cand.length) nextTs = Math.min.apply(null, cand);
     } else if (cur.status === "reveal") nextTs = cur.revealEndsAt;

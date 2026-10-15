@@ -66,6 +66,7 @@ def load_shared_constants():
         "RACE_MODE": eval(grab("RACE_MODE")),
         "RACE_PICK_MS": eval(grab("RACE_PICK_MS")),
         "RACE_SECOND_MS": eval(grab("RACE_SECOND_MS")),
+        "RACE_CONSOLATION_MS": eval(grab("RACE_CONSOLATION_MS")),
         "RACE_STICKER_LEVEL": json.loads(grab("RACE_STICKER_LEVEL")),
         "ELEVATOR_JOLT": eval(grab("ELEVATOR_JOLT")),
     }
@@ -691,6 +692,7 @@ APP_JS_TEMPLATE = r"""
   var RACE_MODE = @@RACE_MODE@@; // 안내 문구용 (실제 모드는 서버 상태 state.race로 판단 -- 서버를 RACE_MODE=0으로 띄우면 예전 방식)
   var RACE_PICK_MS = @@RACE_PICK_MS@@;
   var RACE_SECOND_MS = @@RACE_SECOND_MS@@;
+  var RACE_CONSOLATION_MS = @@RACE_CONSOLATION_MS@@; // 2026-10-14 한 사람만 끝내면 1등이 고르고 이 시간 뒤 다른 사람도 무작위로 하나
   var RACE_STICKER_LEVEL = @@RACE_STICKER_LEVEL@@;
   var ELEVATOR_JOLT = @@ELEVATOR_JOLT@@; // 2026-10-14 덜컹 (game-data.js)
   var BUILD_TAG = "@@BUILD_TAG@@"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
@@ -1106,7 +1108,7 @@ APP_JS_TEMPLATE = r"""
     if (r.status === "reveal") {
       var parts = ["1", "2"].map(function (s) {
         var i = r.picks[s];
-        return esc(seatName(s, st)) + ' · ' + (i === null ? '못 가져감' : esc(TYPES[r.pair[i].catIdx].name));
+        return esc(seatName(s, st)) + ' · ' + (i === null ? '못 가져감' : esc(TYPES[r.pair[i].catIdx].name) + (r.randomPick && r.randomPick[s] ? ' (무작위)' : ''));
       });
       return '<div class="race-msg reveal">' + parts.join('<span class="sep">|</span>') + '</div>';
     }
@@ -1116,7 +1118,7 @@ APP_JS_TEMPLATE = r"""
         if (r.picks[f] === null) return '<div class="race-msg hot">' + esc(seatName(f, st)) + ' 먼저 투입! 고르는 중' + (r.pickEndsAt ? ' ' + raceCount(r.pickEndsAt, '', '초') : '') + '</div>';
         var o = raceOther(f);
         if (r.stage[o] === "done") return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배 고르는 중</div>';
-        return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배를 노린다! ' + raceCount(r.secondEndsAt, '', '초') + '</div>';
+        return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배를 노린다!' + (r.secondEndsAt ? ' ' + raceCount(r.secondEndsAt, '', '초') : '') + '</div>';
       }
       return '<div class="race-msg">' + esc(raceGameName(r)) + ' → 택배 쌓기 → 투입! 먼저 끝낸 사람이 먼저 골라요</div>';
     }
@@ -1128,15 +1130,20 @@ APP_JS_TEMPLATE = r"""
       }
       if (f === seat) {
         if (r.stage[raceOther(seat)] === "done") return '<div class="race-msg">상대가 남은 택배를 고르는 중</div>';
-        return '<div class="race-msg">상대가 남은 택배를 노리는 중 ' + raceCount(r.secondEndsAt, '', '초') + '</div>';
+        return '<div class="race-msg">상대가 남은 택배를 노리는 중' + (r.secondEndsAt ? ' ' + raceCount(r.secondEndsAt, '', '초') : '') + '</div>';
       }
       if (me === "done") return '<div class="race-msg">상대가 고르는 중이에요. 다음은 내 차례!</div>';
+      if (RACE_CONSOLATION_MS > 0) {
+        var wait = r.secondEndsAt ? raceCount(r.secondEndsAt, '', '초') + ' 뒤' : '상대가 고르고 ' + Math.round(RACE_CONSOLATION_MS / 1000) + '초 뒤';
+        if (me === "out") return '<div class="race-msg">이번 라운드는 포기했어요 · ' + wait + ' 남은 택배 중 하나를 무작위로 받아요</div>';
+        return '<div class="race-msg hot">상대가 먼저 끝냈어요! 그 전에 투입하면 직접 고르고, ' + wait + '엔 남은 택배 중 무작위로 받아요</div>';
+      }
       if (me === "out") return '<div class="race-msg">이번 라운드는 탈락이에요</div>';
       return '<div class="race-msg hot">상대가 먼저 끝냈어요! ' + raceCount(r.secondEndsAt, '', '초') + ' 안에 투입하면 남은 택배 중 골라요</div>';
     }
     if (me === "sticker") return '<div class="race-msg">' + esc(raceGameName(r)) + '! 끝나면 바로 택배 쌓기예요</div>';
     if (me === "ubongo") return '<div class="race-msg hot"><b>레일 화면</b>의 문제를 실물 조각으로 <b>택배 쌓기</b> → <b>투입</b> (Space)</div>';
-    if (me === "out") return '<div class="race-msg">이번 라운드는 포기했어요. 다음 라운드를 기다려요</div>';
+    if (me === "out") return '<div class="race-msg">이번 라운드는 포기했어요. ' + (RACE_CONSOLATION_MS > 0 ? '상대가 끝내고 고르면 ' + Math.round(RACE_CONSOLATION_MS / 1000) + '초 뒤 남은 택배 중 하나를 받아요' : '다음 라운드를 기다려요') + '</div>';
     return '<div class="race-msg">투입 완료!</div>';
   }
   // seat가 null이면 관전용(레일 화면/메인 모니터): 고르기 버튼·내 우봉고 영역 없음
@@ -1147,8 +1154,8 @@ APP_JS_TEMPLATE = r"""
       var ends = r.first === seat ? r.pickEndsAt : r.secondPickEndsAt;
       return ends ? '<span class="race-clock is-pick">택배 고르기 ' + raceCount(ends, '', '초') + '</span>' : '<span class="race-clock is-pick">택배 고르기</span>';
     }
-    if (r.first !== seat && r.stage[seat] !== "done" && r.stage[seat] !== "out" && r.secondEndsAt)
-      return '<span class="race-clock is-pick">투입 마감 ' + raceCount(r.secondEndsAt, '', '초') + '</span>';
+    if (r.first !== seat && r.stage[seat] !== "done" && (r.stage[seat] !== "out" || RACE_CONSOLATION_MS > 0) && r.secondEndsAt)
+      return '<span class="race-clock is-pick">' + (RACE_CONSOLATION_MS > 0 ? '무작위까지 ' : '투입 마감 ') + raceCount(r.secondEndsAt, '', '초') + '</span>';
     return '<span></span>';
   }
   function raceStage(st, seat) {
@@ -2425,6 +2432,7 @@ APP_JS = (APP_JS_TEMPLATE
           .replace("@@RACE_MODE@@", "true" if RACE_CONST["RACE_MODE"] else "false")
           .replace("@@RACE_PICK_MS@@", str(RACE_CONST["RACE_PICK_MS"]))
           .replace("@@RACE_SECOND_MS@@", str(RACE_CONST["RACE_SECOND_MS"]))
+          .replace("@@RACE_CONSOLATION_MS@@", str(RACE_CONST["RACE_CONSOLATION_MS"]))
           .replace("@@RACE_STICKER_LEVEL@@", json.dumps(RACE_CONST["RACE_STICKER_LEVEL"]))
           .replace("@@ELEVATOR_JOLT@@", str(RACE_CONST["ELEVATOR_JOLT"]))
           .replace("@@BUILD_TAG@@", "v" + __import__("datetime").datetime.now(__import__("datetime").timezone(__import__("datetime").timedelta(hours=9))).strftime("%m%d-%H%M"))
