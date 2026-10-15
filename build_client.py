@@ -69,6 +69,8 @@ def load_shared_constants():
         "RACE_CONSOLATION_MS": eval(grab("RACE_CONSOLATION_MS")),
         "RACE_STICKER_LEVEL": json.loads(grab("RACE_STICKER_LEVEL")),
         "ELEVATOR_JOLT": eval(grab("ELEVATOR_JOLT")),
+        "VOTE_MS": eval(grab("VOTE_MS")),
+        "THIEF_PER_HALF": eval(grab("THIEF_PER_HALF")),
     }
 
     # TYPES uses plain (unquoted) JS object keys -- not valid JSON as-is. Quote bare
@@ -694,6 +696,7 @@ APP_JS_TEMPLATE = r"""
   var RACE_SECOND_MS = @@RACE_SECOND_MS@@;
   var RACE_CONSOLATION_MS = @@RACE_CONSOLATION_MS@@; // 2026-10-14 한 사람만 끝내면 1등이 고르고 이 시간 뒤 다른 사람도 무작위로 하나
   var RACE_STICKER_LEVEL = @@RACE_STICKER_LEVEL@@;
+  var VOTING_MS = @@VOTE_MS@@, THIEF_PER_HALF = @@THIEF_PER_HALF@@; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = @@ELEVATOR_JOLT@@; // 2026-10-14 덜컹 (game-data.js)
   var BUILD_TAG = "@@BUILD_TAG@@"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
@@ -992,7 +995,7 @@ APP_JS_TEMPLATE = r"""
   }
 
   function renderTopbar(st, seat) {
-    var phaseLabel = { lobby: "대기 중", secure: "택배 확보", elevator: "엘리베이터", halftime: "하프타임", end: "결과" }[st.phase] || "";
+    var phaseLabel = { lobby: "대기 중", tutorial: "진행 방법", secure: "택배 확보", elevator: "엘리베이터", halftime: "하프타임", end: "결과" }[st.phase] || "";
     if (st.half && (st.phase === "secure" || st.phase === "elevator")) {
       phaseLabel += " · " + (st.half === 1 ? "전반" : "후반");
     }
@@ -1003,6 +1006,75 @@ APP_JS_TEMPLATE = r"""
       + secureClock
       + '<div class="right"><span class="room-chip">방 ' + esc(ROOM) + '</span>'
       + '<span class="seat-badge">' + (seat ? ("내 좌석 · " + seatName(seat, st)) : "택배사 미선택") + '</span></div></div>';
+  }
+
+  // ---------- 2026-10-15 시작 전 튜토리얼 (진행 방법) ----------
+  // 서버 state.tutorial = { pages, page{좌석}, skip{좌석} }. 각자 Space/→ 다음, ← 이전, ↑ 건너뛰기(둘 다 눌러야). 둘 다 끝까지 보면 시작.
+  var TUT_DEMO_EL = { floorIdx: 3, state: "voting", roundStartFloorIdx: 2, log: [], round: 1 };
+  function tutParcel(ci, extra) {
+    var t = TYPES[ci];
+    return '<div class="race-parcel is-open tut-parcel fee-t' + ci + '"><span class="rp-ico">' + CAT_ICONS[ci] + '</span><span class="rp-name">' + esc(t.name) + '</span>'
+      + '<span class="rp-amt">' + fmtWon(t.reward) + '</span>' + (extra || '<span class="rp-hint">층은 송장에서</span>') + '</div>';
+  }
+  var TUT_PAGES = [
+    { t: "이렇게 진행돼요", v: function () {
+        return '<div class="tut-flow"><span class="tut-step">① 택배 확보<small>' + Math.round(SECURE_PHASE_MS / 60000) + '분 · 먼저 끝내기 경주</small></span><i>→</i>'
+          + '<span class="tut-step">② 엘리베이터<small>' + ELEVATOR_ROUNDS + '라운드 · 배송 줄다리기</small></span></div>'
+          + '<div class="tut-flow sub"><span>전반</span><i>+</i><span>후반</span><i>=</i><span><b>총점 높은 사람 승리</b></span></div>'; },
+      l: function () { return ["택배를 모아서, 하나뿐인 엘리베이터로 각자 송장의 층까지 배달해요.", "전반과 후반 두 번 반복해요."]; } },
+    { t: "① 택배 확보 — 먼저 끝내기 경주", v: function () {
+        return '<div class="tut-flow"><span class="tut-step">화면 미니게임<small>5종 중 하나 · 둘이 같은 게임</small></span><i>→</i>'
+          + '<span class="tut-step">택배 쌓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>투입!</small></span></div>'; },
+      l: function () { return ["라운드마다 둘이 동시에 시작해요. 먼저 투입한 사람이 택배를 먼저 골라요.", "택배 쌓기 문제는 <b>레일 화면</b>에만 떠요."]; } },
+    { t: "② 택배 고르기", v: function () {
+        return '<div class="tut-parcels">' + tutParcel(0) + tutParcel(3, '<span class="rp-hint rp-floor">2F 확정</span>') + tutParcel(2) + '</div>'
+          + '<div class="tut-keys"><b>←</b><b>↑</b><b>→</b> 로 고르기 · ' + Math.round(RACE_PICK_MS / 1000) + '초 안에</div>'; },
+      l: function () { return ["레일에 택배 3개가 종류만 보여요. 고르면 <b>내 화면에만</b> 송장(층·호실)이 나와요. 확정 층수 택배만 층이 미리 보여요.",
+          RACE_CONSOLATION_MS > 0 ? "늦은 사람도 상대가 고른 뒤 " + Math.round(RACE_CONSOLATION_MS / 1000) + "초 안에 투입하면 남은 것 중 고르고, 못 하면 무작위로 하나 받아요." : "늦은 사람은 마감 안에 투입하면 남은 것 중 골라요."]; } },
+    { t: "③ 요금과 세트 보너스", v: function () {
+        return '<div class="tut-fees">' + TYPES.map(function (_, ci) { return renderFeeMini(ci); }).join('') + '</div>'; },
+      l: function () { return ["배송에 성공하면 요금을 받고, 끝까지 못 보내면 감점이에요.",
+          setRuleOf(state).amount > 0 ? "<b>서로 다른 종류 " + setRuleOf(state).kinds + "가지</b>를 배송하면 세트 보너스 <b>" + fmtWon(setRuleOf(state).amount) + "</b> · 상대가 뭘 모으는지도 보여요." : "비싼 택배일수록 실패 감점도 커요."]; } },
+    { t: "④ 엘리베이터 줄다리기", v: function () {
+        return '<div class="tut-elev"><div class="tut-bld">' + renderBuilding(TUT_DEMO_EL) + '</div><div class="tut-keys big"><b>▲</b> / <b>▼</b> 연타</div></div>'; },
+      l: function () { return ["라운드마다 " + Math.round(VOTING_MS / 1000) + "초 동안 둘이 같이 엘리베이터를 위아래로 끌어요. 멈춘 층에 내 송장이 있으면 배송!",
+          "상대 송장은 안 보여요 · 우선 택배로 지정하면 2배" + (ELEVATOR_JOLT ? " · 둘 다 눌렀는데 제자리면 <b>덜컹!</b>" : "")]; } },
+    { t: "⑤ 후반엔 택배도둑", v: function () {
+        return '<div class="tut-flow"><span class="tut-step">층에 도둑 숨기기<small>후반 · ' + THIEF_PER_HALF + '번까지</small></span><i>→</i>'
+          + '<span class="tut-step">다음 라운드<small>상대가 그 층에서 배송하면</small></span><i>→</i><span class="tut-step bad">도난!<small>상대 감점</small></span></div>'; },
+      l: function () { return ["상대가 어느 층으로 갈지 읽어서 숨겨 두세요.", "준비됐으면 Space! 두 사람이 다 보면 바로 시작해요."]; } },
+  ];
+  function tutPageHtml(st, pg) {
+    var p = TUT_PAGES[pg];
+    return '<div class="tut-page"><div class="tut-num">' + (pg + 1) + ' / ' + TUT_PAGES.length + '</div><h2>' + p.t + '</h2>'
+      + '<div class="tut-visual">' + p.v() + '</div>'
+      + '<ul class="tut-lines">' + p.l().map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></div>';
+  }
+  function tutProgText(tt, sn) {
+    if (tt.page[sn] >= tt.pages) return '다 봤어요';
+    return (tt.skip[sn] ? '건너뛰기 · ' : '') + (tt.page[sn] + 1) + '/' + tt.pages + ' 보는 중';
+  }
+  function renderTutorial(st, seat) {
+    var tt = st.tutorial;
+    if (!tt) return '';
+    var other = seat === "1" ? "2" : "1";
+    var mine = tt.page[seat];
+    var html = '<main class="stage">' + cartOpen('cart--tut') + '<div class="tut">';
+    if (mine >= tt.pages) {
+      html += '<div class="tut-page tut-wait"><h2>다 봤어요!</h2><p>' + esc(seatName(other, st)) + ' · ' + tutProgText(tt, other) + '</p>'
+        + '<p class="tut-hint">두 사람이 다 보면 바로 택배 확보가 시작돼요</p></div>';
+    } else {
+      html += tutPageHtml(st, Math.min(mine, TUT_PAGES.length - 1));
+    }
+    html += '<div class="tut-dots">' + TUT_PAGES.map(function (_, i) { return '<i class="' + (i < mine ? 'seen' : '') + (i === mine ? ' now' : '') + '"></i>'; }).join('') + '</div>';
+    html += '<div class="tut-actions">'
+      + '<button class="btn" data-action="tutorial-prev"' + (mine <= 0 ? ' disabled' : '') + '>← 이전</button>'
+      + (mine < tt.pages ? '<button class="btn primary" data-action="tutorial-next">' + (mine === tt.pages - 1 ? '다 봤어요 (Space)' : '다음 (Space)') + '</button>' : '')
+      + '<button class="btn' + (tt.skip[seat] ? ' ok' : '') + '" data-action="tutorial-skip">' + (tt.skip[seat] ? '건너뛰기 누름 ✓' : '↑ 건너뛰기') + '</button>'
+      + '</div>'
+      + '<div class="tut-other">' + esc(seatName(other, st)) + ' · ' + tutProgText(tt, other) + ' · 건너뛰기는 둘 다 눌러야 돼요</div>';
+    html += '</div>' + cartClose() + '</main>';
+    return html;
   }
 
   function renderLobby(st, seat) {
@@ -1959,6 +2031,7 @@ APP_JS_TEMPLATE = r"""
       if (state.race) body += renderRace(state, seat); // 2026-10-14 레이스 라운드 (레일 화면 접속 여부와 무관)
       else body += (railInfo.count > 0 ? renderRailWaiting(state, seat) : renderBoard(state, seat)) + renderPuzzleOverlay(state);
     }
+    else if (state.phase === "tutorial") body += renderTutorial(state, seat);
     else if (state.phase === "elevator") body += renderElevator(state, seat);
     else if (state.phase === "halftime") body += renderHalftime(state, seat);
     else if (state.phase === "end") body += renderEnd(state, seat);
@@ -2061,6 +2134,7 @@ APP_JS_TEMPLATE = r"""
     if (st.phase === "elevator" && st.elevator) return renderRailElevator(st, head, halfName);
     if (st.phase !== "secure") {
       var msg = st.phase === "lobby" ? ['참가자를 기다리고 있어요', '두 플레이어가 준비하면 이 화면에 레일이 열려요']
+        : st.phase === "tutorial" ? ['진행 방법을 보는 중이에요', '두 사람이 다 보면 곧 시작해요 · 택배 쌓기 문제가 여기에 떠요']
         : st.phase === "elevator" ? ['배송 중이에요', '다음 택배 확보 단계에서 레일이 다시 열려요']
         : st.phase === "halftime" ? ['하프타임', '후반이 시작되면 레일이 새 택배로 채워져요']
         : ['게임이 끝났어요', '다시 시작하면 레일이 열려요'];
@@ -2167,6 +2241,13 @@ APP_JS_TEMPLATE = r"""
         + '<div class="mv-seats">' + mvSeatCard(st, "1", st.ready, "준비") + mvSeatCard(st, "2", st.ready, "준비") + '</div>'
         + '<div class="mv-join">각자 기기에서 이 주소로 들어오세요<b>' + esc(joinUrl) + '</b></div>'
         + '<div class="mv-join mv-join-rail">레일 화면(공용)은 이 주소로<b>' + esc(location.origin + "/rail?room=" + ROOM) + '</b></div>'
+        + '</div></div>';
+    }
+    else if (st.phase === "tutorial" && st.tutorial) {
+      // 메인 모니터: 늦게 보고 있는 사람의 장을 크게 (구경꾼도 규칙을 같이 보게) + 두 사람 진행
+      var tt = st.tutorial, pg = Math.min(tt.page["1"], tt.page["2"], TUT_PAGES.length - 1);
+      html = head("진행 방법") + '<div class="mv-body"><div class="tut tut--main">' + tutPageHtml(st, pg)
+        + '<div class="tut-prog">' + ["1", "2"].map(function (sn) { return '<span class="tut-who">' + esc(seatName(sn, st)) + ' · ' + tutProgText(tt, sn) + '</span>'; }).join('') + '</div>'
         + '</div></div>';
     }
     else if (st.phase === "secure") {
@@ -2317,6 +2398,10 @@ APP_JS_TEMPLATE = r"""
       render();
       return;
     }
+    if (action === "tutorial-next" || action === "tutorial-prev" || action === "tutorial-skip") {
+      send({ type: action, seat: mySeat() });
+      return;
+    }
     if (action === "race-done") {
       if (state && state.race) send({ type: "race-step", seat: mySeat(), step: "ubongo-done", round: state.race.round });
       return;
@@ -2367,7 +2452,10 @@ APP_JS_TEMPLATE = r"""
     if (MAIN) return; // 메인 모니터는 입력을 받지 않는다 (스페이스/방향키가 게임에 영향 주면 안 됨)
     if (e.code === "Space" || e.key === " " || e.key === "Spacebar") {
       var seat = mySeat();
-      if (seat && state && state.phase === "lobby" && !e.repeat && !state.ready[seat]) {
+      if (seat && state && state.phase === "tutorial" && state.tutorial && !e.repeat) {
+        e.preventDefault();
+        if (state.tutorial.page[seat] < state.tutorial.pages) send({ type: "tutorial-next", seat: seat });
+      } else if (seat && state && state.phase === "lobby" && !e.repeat && !state.ready[seat]) {
         e.preventDefault();
         send({ type: "set-ready", seat: seat });
       } else if (seat && state && state.phase === "elevator" && (state.elevator.state === "result" || state.elevator.state === "idle") && !e.repeat && !state.elevator.readyNext[seat]) {
@@ -2384,6 +2472,11 @@ APP_JS_TEMPLATE = r"""
         e.preventDefault();
         send({ type: "halftime-ready", seat: seat });
       }
+      return;
+    }
+    if (!e.repeat && state && state.phase === "tutorial" && mySeat() && /^(ArrowLeft|ArrowUp|ArrowRight)$/.test(e.code)) {
+      e.preventDefault();
+      send({ type: e.code === "ArrowLeft" ? "tutorial-prev" : (e.code === "ArrowUp" ? "tutorial-skip" : "tutorial-next"), seat: mySeat() });
       return;
     }
     if (!e.repeat && /^(ArrowLeft|ArrowUp|ArrowDown|ArrowRight|Digit1|Digit2|Digit3)$/.test(e.code)) {
@@ -2488,6 +2581,8 @@ APP_JS = (APP_JS_TEMPLATE
           .replace("@@RACE_CONSOLATION_MS@@", str(RACE_CONST["RACE_CONSOLATION_MS"]))
           .replace("@@RACE_STICKER_LEVEL@@", json.dumps(RACE_CONST["RACE_STICKER_LEVEL"]))
           .replace("@@ELEVATOR_JOLT@@", str(RACE_CONST["ELEVATOR_JOLT"]))
+          .replace("@@VOTE_MS@@", str(RACE_CONST["VOTE_MS"]))
+          .replace("@@THIEF_PER_HALF@@", str(RACE_CONST["THIEF_PER_HALF"]))
           .replace("@@BUILD_TAG@@", "v" + __import__("datetime").datetime.now(__import__("datetime").timezone(__import__("datetime").timedelta(hours=9))).strftime("%m%d-%H%M"))
           .replace("@@SAME_FLOOR_CHOICE_MS@@", str(SAME_FLOOR_CHOICE_MS))
           .replace("@@HALVES@@", str(HALVES))

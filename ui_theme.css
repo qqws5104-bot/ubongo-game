@@ -387,3 +387,42 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
 .set-done { margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: #dff3e6; color: #1f6e4b; font-weight: 900; }
 .score-table .set-row td { color: #8a7256; font-size: 0.85rem; }
 .score-table .set-row.on td { color: #1f6e4b; font-weight: 800; }
+
+/* ===== 13. 시작 전 튜토리얼 (2026-10-15) ===== */
+.tut { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 10px 6px 4px; min-height: clamp(380px, 60vh, 560px); }
+.tut-page { width: 100%; max-width: 860px; background: #fffaf0; border-radius: 18px; padding: 18px 22px; box-shadow: 0 8px 22px rgba(43, 29, 18, 0.15); text-align: center; }
+.tut-num { font-weight: 800; color: #8a7256; font-size: 0.85rem; letter-spacing: 0.1em; }
+.tut-page h2 { margin: 4px 0 12px; font-family: var(--font-display); font-size: clamp(1.4rem, 3.4vh, 2rem); color: #2b1d12; }
+.tut-visual { display: flex; justify-content: center; margin: 4px 0 10px; }
+.tut-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 1.02rem; color: #3a2a1a; }
+.tut-lines b { color: #e2691a; }
+.tut-flow { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.tut-flow.sub { margin-top: 10px; font-weight: 800; color: #8a7256; }
+.tut-flow i { font-style: normal; font-weight: 900; color: #e2691a; font-size: 1.4rem; }
+.tut-step { display: inline-flex; flex-direction: column; align-items: center; padding: 10px 16px; border-radius: 14px; background: #fff; border: 2px solid #e8d6b4; font-weight: 900; font-size: 1.1rem; color: #2b1d12; }
+.tut-step small { font-weight: 700; font-size: 0.78rem; color: #8a7256; margin-top: 2px; }
+.tut-step.key { background: #2b1d12; color: #fff8ef; border-color: #2b1d12; }
+.tut-step.key small { color: #f3d9b4; }
+.tut-step.bad { background: #fde3df; border-color: #c7402d; color: #c7402d; }
+.tut-parcels { display: grid; grid-template-columns: repeat(3, minmax(0, 150px)); gap: 10px; justify-content: center; }
+.tut-parcel { min-height: 140px; padding: 10px 6px; font-size: 0.9rem; }
+.tut-keys { margin-top: 10px; font-weight: 800; color: #3a2a1a; }
+.tut-keys b { display: inline-block; min-width: 28px; padding: 2px 6px; margin: 0 2px; border-radius: 6px; background: #2b1d12; color: #fff8ef; }
+.tut-keys.big { font-size: 1.3rem; }
+.tut-visual > .tut-keys { margin: 0; }
+.tut-visual { flex-direction: column; align-items: center; }
+.tut-fees { display: grid; grid-template-columns: repeat(4, minmax(0, 170px)); gap: 8px; justify-content: center; }
+.tut-elev { display: flex; align-items: center; gap: 20px; justify-content: center; }
+.tut-bld { width: 150px; }
+.tut-dots { display: flex; gap: 8px; }
+.tut-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(43, 29, 18, 0.2); }
+.tut-dots i.seen { background: #e8b483; }
+.tut-dots i.now { background: #e2691a; transform: scale(1.3); }
+.tut-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.tut-actions .btn { min-width: 120px; }
+.tut-other, .tut-hint { color: #8a7256; font-weight: 700; font-size: 0.88rem; }
+.tut-wait { padding: 40px 22px; }
+.tut--main { min-height: 0; zoom: 1.35; }
+.tut-prog { display: flex; gap: 14px; }
+.tut-who { background: #fffaf0; border-radius: 999px; padding: 4px 14px; font-weight: 800; color: #3a2a1a; }
+@media (max-width: 760px) { .tut-fees { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tut-parcels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

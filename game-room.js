@@ -10,7 +10,7 @@ const SECURE_EARLY_END_MS = 1500;
 
 const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
-  PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
+  PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS,
 } = require("./game-data");
@@ -38,6 +38,8 @@ const DEFAULT_RULES = {
   elevatorJolt: !!ELEVATOR_JOLT,
   setBonus: SET_BONUS,
   setBonusKinds: SET_BONUS_KINDS,
+  // 2026-10-15 시작 전 튜토리얼. 기본은 끔(GameRoom을 직접 쓰는 테스트가 곧장 확보로 가도록) -- 실제 서버(server.js)가 켠다.
+  tutorial: false,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -196,7 +198,8 @@ function freshElevator(rules) {
 function initialState(rules) {
   return {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
-    phase: "lobby", // lobby -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
+    tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
+    phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
     seatOwners: { "1": null, "2": null },
     // courierPick: 좌석당 고른 가상 택배사 key(COURIERS 참고, null이면 아직 미선택). 좌석 배정과
@@ -304,8 +307,41 @@ class GameRoom {
     if (this.state.phase !== "lobby") return;
     this.touch();
     this.state.ready[seat] = true;
-    if (this.state.ready["1"] && this.state.ready["2"]) this._startGame();
+    if (this.state.ready["1"] && this.state.ready["2"]) { if (this.rules.tutorial) this._startTutorial(); else this._startGame(); }
     else this.emit();
+  }
+
+  // ---- 2026-10-15 시작 전 튜토리얼 ----
+  // state.tutorial = { pages, page: {좌석: 보고 있는 장(0부터, pages면 다 봄)}, skip: {좌석: 건너뛰기 누름} }
+  // 각자 넘기고, 둘 다 끝까지 보거나(page >= pages) 둘 다 건너뛰기를 누르면 확보 단계 시작.
+  _startTutorial() {
+    this.state.phase = "tutorial";
+    this.state.tutorial = { pages: TUTORIAL_PAGES, page: { "1": 0, "2": 0 }, skip: { "1": false, "2": false } };
+    this.emit();
+  }
+  tutorialStep(seat, dir) {
+    const t = this.state.tutorial;
+    if (this.state.phase !== "tutorial" || !t || (seat !== "1" && seat !== "2")) return;
+    this.touch();
+    if (dir === "prev") t.page[seat] = Math.max(0, t.page[seat] - 1);
+    else if (dir === "next") t.page[seat] = Math.min(t.pages, t.page[seat] + 1);
+    else return;
+    this._maybeEndTutorial();
+  }
+  tutorialSkip(seat) {
+    const t = this.state.tutorial;
+    if (this.state.phase !== "tutorial" || !t || (seat !== "1" && seat !== "2")) return;
+    this.touch();
+    t.skip[seat] = !t.skip[seat];
+    this._maybeEndTutorial();
+  }
+  _maybeEndTutorial() {
+    const t = this.state.tutorial;
+    const done = (s) => t.page[s] >= t.pages || t.skip[s];
+    const allSkip = t.skip["1"] && t.skip["2"];
+    const allSeen = t.page["1"] >= t.pages && t.page["2"] >= t.pages;
+    if (allSkip || allSeen || (done("1") && done("2"))) { this.state.tutorial = null; this._startGame(); return; }
+    this.emit();
   }
 
   _startGame() {

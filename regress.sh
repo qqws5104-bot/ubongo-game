@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 export NODE_PATH="$(npm root -g):$PWD/node_modules"
 # 2026-10-14: 확보 단계 기본값이 레이스 라운드가 됐다. 예전 확보 방식을 전제로 한 브라우저 테스트는 RACE_MODE=0으로 띄운 서버에서 돈다.
 RACE_ENV=0
-setsec(){ sed -i -E "s/const SECURE_PHASE_MS = .*;/const SECURE_PHASE_MS = $1;/" game-data.js; python3 build_client.py >/dev/null; pkill -x node; sleep 0.5; (RACE_MODE=$RACE_ENV nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5; }
+setsec(){ sed -i -E "s/const SECURE_PHASE_MS = .*;/const SECURE_PHASE_MS = $1;/" game-data.js; python3 build_client.py >/dev/null; pkill -x node; sleep 0.5; (TUTORIAL=0 RACE_MODE=$RACE_ENV nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5; }
 restore(){ sed -i -E "s/const SECURE_PHASE_MS = .*;/const SECURE_PHASE_MS = 3 * 60 * 1000;/" game-data.js; python3 set_mini.py ubongo >/dev/null; python3 build_client.py >/dev/null; pkill -x node; }
 trap restore EXIT
 run(){ echo "== $1"; timeout 400 node $1 2>&1 | tail -3; echo "exit=${PIPESTATUS[0]}"; }
@@ -28,3 +28,7 @@ echo "######## 확보 단계 레이스 라운드 (기본 모드, 2026-10-14)"
 python3 set_mini.py ubongo >/dev/null
 RACE_ENV=1
 setsec "100 * 1000"; run test_race_e2e.js; run test_race_games.js
+
+echo "######## 시작 전 튜토리얼 (실제 서버 기본값 = 켬, 2026-10-15)"
+setsec "3 * 60 * 1000"; pkill -x node; sleep 0.5; (RACE_MODE=1 nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5
+run test_tutorial_e2e.js

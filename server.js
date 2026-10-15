@@ -30,6 +30,8 @@ function getOrCreateRoom(code) {
   if (!entry) {
     // 2026-10-14: RACE_MODE=0 환경변수로 띄우면 확보 단계가 예전 방식(레일에서 각자 골라 확보) -- 예전 회귀 테스트용(regress.sh).
     let rules = process.env.RACE_MODE === "0" ? { raceMode: false } : undefined;
+    // 2026-10-15 시작 전 튜토리얼: 실제 서버에선 켠다. TUTORIAL=0 이면 끔(예전 브라우저 테스트용 -- regress.sh)
+    if (process.env.TUTORIAL !== "0") rules = Object.assign({}, rules || {}, { tutorial: true });
     // RACE_GAMES=sticker,tape 처럼 주면 레이스 첫 게임 후보를 그걸로 (테스트/현장 고정용)
     if (process.env.RACE_GAMES) rules = Object.assign({}, rules || {}, { raceGamePool: process.env.RACE_GAMES.split(",").map((x) => x.trim()).filter(Boolean) });
     const room = new GameRoom(code, (state) => broadcast(code, state), rules);
@@ -184,6 +186,15 @@ wss.on("connection", (ws, req) => {
       case "set-ready":
         if (!conn.seat) return;
         entry.room.setReady(conn.seat);
+        break;
+      case "tutorial-next":
+      case "tutorial-prev":
+        if (!conn.seat) return;
+        entry.room.tutorialStep(conn.seat, msg.type === "tutorial-next" ? "next" : "prev");
+        break;
+      case "tutorial-skip":
+        if (!conn.seat) return;
+        entry.room.tutorialSkip(conn.seat);
         break;
       case "elevator-ready":
         if (!conn.seat) return;
