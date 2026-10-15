@@ -755,6 +755,7 @@ APP_JS_TEMPLATE = r"""
         + FLOORS.map(function (f, i) { var m = floorMult(i); return '<span class="' + (m > 1 ? 'hi' : (m < 1 ? 'lo' : '')) + '">' + esc(f) + ' ' + multLabel(i) + '</span>'; }).join('')
         + '</div></li>';
     }
+    if (setRuleOf(state).amount > 0) html += '<li><b>서로 다른 종류 ' + setRuleOf(state).kinds + '가지</b>를 배송하면 세트 보너스 <b>' + fmtWon(setRuleOf(state).amount) + '</b> (하프마다)</li>';
     html += '<li>전반에 획득한 송장은 전반에, 후반에 획득한 송장은 후반에 보내야 합니다.</li>'
       + '<li>모든 택배는 지정된 조건을 충족해야 정상적으로 처리됩니다.</li></ul></div></div></div>';
     return html;
@@ -822,8 +823,17 @@ APP_JS_TEMPLATE = r"""
     if (inv.stolen) return "미배송";
     return inv.deliveredRound === null ? "미배송" : "성공";
   }
+  // 2026-10-15 종류 모으기 보너스 (game-room.js setBonusFor/deliveredKinds와 동일). st.setRule = { amount, kinds }
+  function deliveredKinds(invs) {
+    var k = {}; invs.forEach(function (inv) { if (!inv.stolen && inv.deliveredRound !== null) k[inv.catIdx] = true; });
+    return Object.keys(k).length;
+  }
+  function setRuleOf(st) { return (st && st.setRule) || { amount: 0, kinds: 3 }; }
+  function setBonusFor(invs, rule) { return rule && rule.amount > 0 && deliveredKinds(invs) >= rule.kinds ? rule.amount : 0; }
+  function heldKinds(invs) { var k = {}; invs.forEach(function (inv) { k[inv.catIdx] = true; }); return k; }
   function totalScore(seat, st) {
-    return st.players[seat].invoices.reduce(function (sum, inv) { return sum + scoreInvoice(inv); }, 0);
+    var invs = st.players[seat].invoices;
+    return invs.reduce(function (sum, inv) { return sum + scoreInvoice(inv); }, 0) + setBonusFor(invs, setRuleOf(st));
   }
   function fmtWon(n) {
     var sign = n > 0 ? "+" : (n < 0 ? "-" : "");
@@ -1066,7 +1076,23 @@ APP_JS_TEMPLATE = r"""
     var t = TYPES[it.catIdx];
     var cls = 'race-parcel is-open fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + (canPick ? ' can-pick' : '') + (owner && owner === seat ? ' is-mine' : '');
     var inner = '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span>'
-      + '<span class="rp-amt">' + (multsVary() ? '기본 ' : '') + fmtWon(t.reward) + '</span><span class="rp-hint">층은 송장에서</span>';
+      + '<span class="rp-amt">' + (multsVary() ? '기본 ' : '') + fmtWon(t.reward) + '</span>'
+      // 2026-10-15: 확정 층수 택배만 층을 미리 보여 준다 (이름 그대로 층이 정해진 택배). 나머지는 송장이 나와야 안다.
+      + (t.fixedFloor ? '<span class="rp-hint rp-floor">' + esc(FLOORS[it.floorIdx]) + ' 확정</span>' : '<span class="rp-hint">층은 송장에서</span>');
+    // 종류 모으기: 이걸 가져가면 내 세트가 완성되는지 / 상대 세트를 막는지 (가진 종류 기준 -- 보너스는 배송해야 받는다)
+    var rule = setRuleOf(st);
+    if (!owner && !left && rule.amount > 0) {
+      var viewer = seat || null;
+      var tags = [];
+      ["1", "2"].forEach(function (s) {
+        var hk = heldKinds(st.players[s].invoices), n = Object.keys(hk).length;
+        if (!hk[it.catIdx] && n + 1 >= rule.kinds && n < rule.kinds) {
+          if (viewer) tags.push(s === viewer ? '<span class="rp-set mine">세트 완성!</span>' : '<span class="rp-set block">상대 세트 막기</span>');
+          else tags.push('<span class="rp-set">' + esc(seatName(s, st)) + ' 세트 완성</span>');
+        }
+      });
+      inner += tags.join('');
+    }
     if (owner) inner += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + ' 획득</span>';
     else if (left) inner += '<span class="rp-owner gone">레일로 돌아감</span>';
     else if (canPick) inner += '<span class="rp-owner pick">' + (RACE_KEYS[i] || '') + ' 고르기</span>';
@@ -1101,7 +1127,16 @@ APP_JS_TEMPLATE = r"""
       html += '<span class="rl-step' + (k < idx || (k === 2 && idx === 2) ? ' done' : '') + (k === idx && idx < 2 ? ' now' : '') + '">' + sp[1] + '</span>';
       if (k < 2) html += '<i class="rl-arrow">›</i>';
     });
-    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '') + '</div>';
+    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '');
+    // 2026-10-15 종류 모으기: 이번 하프에 가진 종류 (공개 정보 -- 상대가 뭘 노리는지 보이게)
+    var rule = setRuleOf(st);
+    if (rule.amount > 0) {
+      var hk = heldKinds(st.players[s].invoices), n = Object.keys(hk).length;
+      html += '<span class="rl-set' + (n >= rule.kinds ? ' full' : '') + '" title="모은 종류">' + TYPES.map(function (t, ci) {
+        return '<i class="rl-kind fee-t' + ci + (hk[ci] ? ' on' : '') + '">' + CAT_ICONS[ci] + '</i>';
+      }).join('') + '<b>' + Math.min(n, rule.kinds) + '/' + rule.kinds + '</b></span>';
+    }
+    html += '</div>';
     return html;
   }
   function raceMessage(st, r, seat) {
@@ -1464,6 +1499,22 @@ APP_JS_TEMPLATE = r"""
 
   // Only ever passed MY OWN delivered items (see renderElevator) -- who received what is private
   // per player, so there is no seat tag here; it's always understood to be "mine".
+  // 엘리베이터 단계: 배송한 종류 n/3 (세트 보너스 진행)
+  function setProgressLine(st, seat) {
+    var rule = setRuleOf(st);
+    if (!(rule.amount > 0)) return '';
+    var n = deliveredKinds(st.players[seat].invoices), done = n >= rule.kinds;
+    return ' <span class="set-prog' + (done ? ' on' : '') + '">배송한 종류 ' + Math.min(n, rule.kinds) + '/' + rule.kinds + (done ? ' · 세트 ' + fmtWon(rule.amount) : ' · 세트 ' + fmtWon(rule.amount)) + '</span>';
+  }
+  // 이번 라운드 배송으로 세트가 막 완성됐으면 한 줄
+  function setJustDone(st, seat, round) {
+    var rule = setRuleOf(st);
+    if (!(rule.amount > 0)) return '';
+    var invs = st.players[seat].invoices;
+    var before = invs.filter(function (inv) { return inv.deliveredRound !== round; });
+    return deliveredKinds(invs) >= rule.kinds && deliveredKinds(before) < rule.kinds
+      ? '<div class="set-done">세트 완성! 서로 다른 종류 ' + rule.kinds + '가지 배송 · ' + fmtWon(rule.amount) + '</div>' : '';
+  }
   function renderDeliveredCallout(delivered) {
     if (!delivered || !delivered.length) return '<div class="delivered-callout empty">이번 라운드에 배송된 택배가 없어요</div>';
     return '<div class="delivered-callout">' + delivered.map(function (d) {
@@ -1632,7 +1683,7 @@ APP_JS_TEMPLATE = r"""
     // never rendered here (or anywhere in the elevator phase), only mine.
     html += '<div class="elev-left">' + renderBuilding(st.elevator) + '</div>'
       + '<div class="elev-mid">' + renderElevArt(st.elevator)
-      + '<div class="player-col me"><h3>내 택배</h3>' + renderInvoiceList(st, seat) + '</div>'
+      + '<div class="player-col me"><h3>내 택배' + setProgressLine(st, seat) + '</h3>' + renderInvoiceList(st, seat) + '</div>'
       + '</div>';
 
     html += '<div>';
@@ -1758,7 +1809,7 @@ APP_JS_TEMPLATE = r"""
         + (last.jolt ? '팽팽! <b class="jolt-word">덜컹!</b> ' + FLOORS[last.jolt.from] + '에서 ' + (last.jolt.dir === "up" ? "튀어 올랐어요" : "떨어졌어요")
           : (last.dir === "tie" ? "동률, 유지" : (last.dir === "up" ? "상승" : "하강")))
         + ' (현재 ' + FLOORS[last.floorIdx] + ')</div>'
-        + renderDeliveredCallout(myDelivered)
+        + renderDeliveredCallout(myDelivered) + setJustDone(st, seat, last.round)
         + '</div>';
       var otherSeat = seat === "1" ? "2" : "1";
       var myReady = !!st.elevator.readyNext[seat];
@@ -1818,6 +1869,8 @@ APP_JS_TEMPLATE = r"""
       html += '<tr><td>' + esc(t.name) + '</td><td>' + roomCode(inv.floorIdx, inv.room) + '</td><td>' + label + '</td><td>' + fmtWon(pts) + '</td></tr>';
     });
     if (!invs.length) html += '<tr><td colspan="4" style="color:var(--muted)">확보한 택배 없음</td></tr>';
+    var sb = setBonusFor(invs, setRuleOf(state));
+    if (setRuleOf(state).amount > 0) html += '<tr class="set-row' + (sb ? ' on' : '') + '"><td colspan="3">종류 모으기 보너스 · 배송한 종류 ' + deliveredKinds(invs) + ' / ' + setRuleOf(state).kinds + '</td><td>' + (sb ? fmtWon(sb) : '-') + '</td></tr>';
     html += '</tbody></table>';
     return html;
   }

@@ -76,6 +76,10 @@ const VOTE_MS = 5000; // 엘리베이터 이동 라운드 길이 (기존과 동�
 // 그 라운드 안에 배송 성공해야만 적용, 게임 시작 전 1회가 아님 -- game-room.js의 el.priorityPick
 // 참고). 배송 성공하면 점수 2배.
 const PRIORITY_MULTIPLIER = 2;
+// 2026-10-15 (사용자 결정): 종류 모으기 보너스. 한 하프에서 서로 다른 종류 SET_BONUS_KINDS가지 이상을 "배송 성공"하면 그 하프 점수에 +SET_BONUS.
+//   (도난/미배송은 안 셈) 고르기에서 "비싼 것" 말고도 "세트 완성"·"상대 세트 막기"라는 이유가 생기게. SET_BONUS = 0이면 끔.
+const SET_BONUS = 5000;
+const SET_BONUS_KINDS = 3;
 // 같은 층에 배송 대기 중인 내 택배가 2개 이상일 때, 어느 걸 먼저 보낼지 고르는 시간(안 고르면 무작위).
 // 2026-08-27: 5초 -> 10초로 늘림(사용자 요청).
 const SAME_FLOOR_CHOICE_MS = 10000;
@@ -160,7 +164,7 @@ const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1",
 
 module.exports = {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
-  PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
+  PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_STICKER_LEVEL, RACE_GAME_POOL, RACE_PUZZLE_ORDER, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_AUTO_PICK_MODE,
 };

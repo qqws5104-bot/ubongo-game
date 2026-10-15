@@ -545,8 +545,8 @@ async function main() {
   // ---- client/server scoring drift check for each half snapshot, using the authoritative
   // totalScore() from game-room.js itself (imported directly, not reimplemented here) ----
   halfHistory.forEach((h, i) => {
-    const r1 = serverTotalScore("1", { players: h.players });
-    const r2 = serverTotalScore("2", { players: h.players });
+    const r1 = serverTotalScore("1", { players: h.players, setRule: lastState.p1.setRule }); // 2026-10-15 종류 모으기 보너스 포함
+    const r2 = serverTotalScore("2", { players: h.players, setRule: lastState.p1.setRule });
     if (r1 !== h.scores["1"] || r2 !== h.scores["2"]) {
       throw new Error(`half ${i + 1} snapshot score mismatch -- stored: ${JSON.stringify(h.scores)}, recomputed: {"1":${r1},"2":${r2}}`);
     }

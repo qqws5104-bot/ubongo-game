@@ -369,3 +369,21 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
 .race-clock.is-pick { background: #e2691a; color: #fff8ef; }
 .race-clock.is-pick .race-count { color: #fff; font-family: var(--font-display); font-size: 1.35rem; margin-left: 4px; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) { .tb-secure { position: static; transform: none; order: 3; } .topbar { flex-wrap: wrap; } }
+
+/* ===== 12. 종류 모으기 보너스 + 확정 층수 층 공개 (2026-10-15) ===== */
+.rp-floor { color: #0f3b78 !important; font-weight: 900 !important; background: rgba(255,255,255,0.75); border-radius: 999px; padding: 1px 10px; }
+.rp-set { display: inline-block; margin-top: 4px; padding: 2px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 900; background: #2b1d12; color: #fff8ef; }
+.rp-set.mine { background: #2f8f52; }
+.rp-set.block { background: #c7402d; }
+.rl-set { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; background: rgba(43,29,18,0.06); }
+.rl-set .rl-kind { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; opacity: 0.25; filter: grayscale(1); font-style: normal; }
+.rl-set .rl-kind svg { width: 16px; height: 16px; }
+.rl-set .rl-kind.on { opacity: 1; filter: none; background: var(--fc); color: var(--fb); box-shadow: 0 0 0 1.5px var(--fb); }
+.rl-set b { font-size: 0.82rem; margin-left: 2px; color: #8a7256; }
+.rl-set.full { background: #dff3e6; }
+.rl-set.full b { color: #2f8f52; }
+.set-prog { font-size: 0.75rem; font-weight: 800; color: #8a7256; background: rgba(43,29,18,0.06); border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
+.set-prog.on { color: #1f6e4b; background: #dff3e6; }
+.set-done { margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: #dff3e6; color: #1f6e4b; font-weight: 900; }
+.score-table .set-row td { color: #8a7256; font-size: 0.85rem; }
+.score-table .set-row.on td { color: #1f6e4b; font-weight: 800; }

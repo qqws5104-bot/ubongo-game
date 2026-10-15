@@ -10,7 +10,7 @@ const SECURE_EARLY_END_MS = 1500;
 
 const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
-  PRIORITY_MULTIPLIER, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
+  PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS,
 } = require("./game-data");
@@ -36,6 +36,8 @@ const DEFAULT_RULES = {
   racePiecesByRound: RACE_PIECES_BY_ROUND,
   raceConsolationMs: RACE_CONSOLATION_MS,
   elevatorJolt: !!ELEVATOR_JOLT,
+  setBonus: SET_BONUS,
+  setBonusKinds: SET_BONUS_KINDS,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -46,6 +48,7 @@ const LEGACY_RULES = {
   sameFloorAutoPick: false,
   raceMode: false,
   elevatorJolt: false,
+  setBonus: 0,
 };
 
 // 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
@@ -117,8 +120,19 @@ function resultLabel(inv) {
   if (inv.stolen) return "미배송"; // deliveredRound는 채워져 있지만(재배송 방지용) 라벨은 미배송 취급
   return inv.deliveredRound === null ? "미배송" : "성공";
 }
+// 2026-10-15 종류 모으기 보너스: 이 송장 목록(한 하프)에서 배송 성공한 서로 다른 종류 수가 kinds 이상이면 amount. state.setRule = { amount, kinds }.
+function deliveredKinds(invoices) {
+  const kinds = {};
+  invoices.forEach((inv) => { if (!inv.stolen && inv.deliveredRound !== null) kinds[inv.catIdx] = true; });
+  return Object.keys(kinds).length;
+}
+function setBonusFor(invoices, setRule) {
+  if (!setRule || !(setRule.amount > 0)) return 0;
+  return deliveredKinds(invoices) >= setRule.kinds ? setRule.amount : 0;
+}
 function totalScore(seat, state) {
-  return state.players[seat].invoices.reduce((sum, inv) => sum + scoreInvoice(inv), 0);
+  const invs = state.players[seat].invoices;
+  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule);
 }
 
 function freshBoard() {
@@ -181,6 +195,7 @@ function freshElevator(rules) {
 
 function initialState(rules) {
   return {
+    setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     phase: "lobby", // lobby -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
     seatOwners: { "1": null, "2": null },
@@ -1035,4 +1050,4 @@ class GameRoom {
   }
 }
 
-module.exports = { GameRoom, initialState, scoreInvoice, resultLabel, totalScore, rewardFor, DEFAULT_RULES, LEGACY_RULES };
+module.exports = { GameRoom, initialState, scoreInvoice, resultLabel, totalScore, rewardFor, setBonusFor, deliveredKinds, DEFAULT_RULES, LEGACY_RULES };
