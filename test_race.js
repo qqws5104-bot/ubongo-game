@@ -136,10 +136,16 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
     rounds++;
     await sleep(380);
   }
-  assert.strictEqual(room.state.phase, "elevator", "17칸이 다 떨어지면 엘리베이터로");
+  assert.strictEqual(room.state.phase, "elevator", "레일 택배가 다 떨어지면 엘리베이터로");
   const total = room.state.players["1"].invoices.length + room.state.players["2"].invoices.length;
-  assert.strictEqual(total, 17, "두 사람이 매 라운드 다 끝내면 17개가 전부 나뉜다");
-  log("택배 17개가 다 떨어지면 엘리베이터로 (라운드 " + rounds + "번)");
+  // 2026-10-15: 확정 층수 택배(6칸)는 레이스에서 빠진다 -> 17 - 6 = 11개
+  const { RACE_EXCLUDE_KINDS, FLOOR_LIMITS } = require("./game-data.js");
+  const expectN = TYPES.filter((t) => !RACE_EXCLUDE_KINDS.includes(t.key)).reduce((n, t) => n + t.count, 0);
+  assert.strictEqual(total, expectN, "두 사람이 매 라운드 다 끝내면 레이스 택배 " + expectN + "개가 전부 나뉜다");
+  const all = room.state.players["1"].invoices.concat(room.state.players["2"].invoices);
+  assert.ok(all.every((v) => TYPES[v.catIdx].key !== "fixed-floor"), "확정 층수 택배는 레이스에 안 나옴");
+  assert.ok(all.filter((v) => TYPES[v.catIdx].key === "valuable").every((v) => FLOOR_LIMITS.valuable.includes(v.floorIdx)), "귀중품은 B1·5F 없음");
+  log("레이스 택배 " + expectN + "개(확정 층수 제외)가 다 떨어지면 엘리베이터로 (라운드 " + rounds + "번), 귀중품 층 제한 OK");
 
   // 자동 선택 꺼짐(raceAutoPick:false): 고를 때까지 기다린다
   room.destroy();

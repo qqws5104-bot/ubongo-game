@@ -75,8 +75,13 @@ async function main() {
 
   // p1 Space로 투입 -> 고르기
   await key(p1, "Space", " ");
-  await waitFor(() => count(p1, "button.race-parcel.can-pick").then((n) => n === 3), { label: "p1 can pick 3 (투입 뒤에야 택배가 보임)" });
-  assert((await count(p2, "button.race-parcel.can-pick")) === 0, "p2는 아직 못 고름");
+  // 2026-10-15: 고르기는 레일 화면에서 (1번 A S D / 2번 J K L), 택배 카드엔 층이 보인다
+  await waitFor(() => count(rail, ".rail-pk-btn.seat-1.on").then((n) => n === 3), { label: "rail: seat 1 can pick 3" });
+  assert((await count(rail, ".rail-pk-btn.seat-2.on")) === 0, "p2는 아직 못 고름");
+  assert((await count(rail, ".rail-pk .rp-floorbig")) === 3, "레일 카드 3장 모두 층 표시");
+  assert((await count(rail, ".race-puzzle img")) === 1, "늦은 사람이 아직 쌓는 중이면 레일에 문제도 같이");
+  assert((await text(p1)).includes("레일 화면에서 층을 보고 고르세요"), "p1 화면엔 레일에서 고르라는 안내");
+  assert((await count(p1, "button.race-parcel")) === 0, "플레이어 화면에선 못 고름");
   assert((await text(p2)).includes("투입하면 직접 고르고"), "p2에게 안내 (투입하면 직접, 늦으면 무작위)");
   assert((await count(p2, ".race-parcel")) === 0, "늦은 사람은 투입 전까지 택배가 안 보임");
   await shot(p1, "race_3_pick_first"); await shot(p2, "race_3_pick_second"); await shot(rail, "race_r_rail_picking");
@@ -85,20 +90,20 @@ async function main() {
   // p2가 투입(대기) -> p1이 →로 고름 -> p1 화면에만 송장 -> p2가 남은 2개 중 클릭
   await click(p2, '[data-action="race-done"]');
   await waitFor(async () => (await text(p2)).includes("다음은 내 차례"), { label: "p2 done, waiting" });
-  await key(p1, "ArrowRight", "ArrowRight");
+  await key(rail, "KeyD", "d"); // 1번 자리 세 번째(→) 택배
   await waitFor(() => count(p1, ".race-slip").then((n) => n === 1), { label: "p1 invoice slip prints" });
   assert((await count(p2, ".race-slip")) === 0, "상대 화면엔 내 송장 없음");
   assert(!(await text(rail)).includes("송장 출력"), "레일 화면엔 송장 없음");
-  await waitFor(() => count(p2, "button.race-parcel.can-pick").then((n) => n === 2), { label: "p2 picks from remaining 2" });
-  await shot(p1, "race_4_slip"); await shot(p2, "race_4_second_pick");
-  await click(p2, "button.race-parcel.can-pick");
+  await waitFor(() => count(rail, ".rail-pk-btn.seat-2.on").then((n) => n === 2), { label: "p2 picks from remaining 2 at rail" });
+  await shot(p1, "race_4_slip"); await shot(rail, "race_r_rail_second_pick");
+  await click(rail, ".rail-pk-btn.seat-2.on");
   await waitFor(async () => (await count(p1, ".race-msg.reveal")) === 1, { label: "reveal message" });
   await waitFor(() => count(p2, ".race-slip").then((n) => n === 1), { label: "p2 slip" });
   const chips1 = await count(p1, ".race-mine .my-chip"), chips2 = await count(p2, ".race-mine .my-chip");
   assert(chips1 === 1 && chips2 === 1, "둘 다 1개씩 확보: " + chips1 + "/" + chips2);
   assert((await text(p1)).includes("레일로 돌아감"), "남은 1개는 레일로");
   await shot(p1, "race_5_reveal"); await shot(mainv, "race_m_main_reveal");
-  log("1등이 →로 고르면 자기 화면에만 송장 출력, 2등이 남은 2개 중 고름, 남은 1개는 레일로");
+  log("레일에서 1등이 D로 고르면 자기 화면에만 송장, 2등이 레일에서 남은 2개 중 고름, 남은 1개는 레일로");
 
   // ---- 라운드 2: 늦은 사람이 마감을 넘김 ----
   await waitFor(() => count(p1, "#mg-layer .mg-root").then((n) => n === 1), { label: "round 2 first game", timeout: 8000 });
@@ -110,8 +115,8 @@ async function main() {
   await p1.evaluate(() => window.__mgFinish()); await p2.evaluate(() => window.__mgFinish());
   await waitFor(() => count(p2, ".race-blank [data-action=\"race-done\"]").then((n) => n === 1), { label: "p2 ubongo r2" });
   await click(p2, '[data-action="race-done"]');
-  await waitFor(() => count(p2, "button.race-parcel.can-pick").then((n) => n >= 1), { label: "p2 can pick r2" });
-  await key(p2, "ArrowLeft", "ArrowLeft");
+  await waitFor(() => count(rail, ".rail-pk-btn.seat-2.on").then((n) => n >= 1), { label: "p2 can pick r2 at rail" });
+  await key(rail, "KeyJ", "j");
   // p1은 투입하지 않는다 -> p2가 고른 순간부터 RACE_CONSOLATION_MS(20초) 뒤 p1도 남은 것 중 무작위로 하나 (2026-10-14)
   const { RACE_CONSOLATION_MS } = require("./game-data.js");
   await waitFor(async () => (await text(p1)).includes("무작위로 받아요"), { label: "p1 told about random consolation" });

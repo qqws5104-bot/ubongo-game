@@ -156,6 +156,8 @@ wss.on("connection", (ws, req) => {
     if (conn.role === "rail") {
       // 레일 화면은 좌석이 없고 오직 rail-press만 보낼 수 있다 (플레이어 메시지를 흉내내 게임을 건드리지 못하게).
       if (type === "rail-press") handleRailPress(entry, code, msg);
+      // 2026-10-15: 레이스 택배 고르기는 레일 화면에서 (자리 = 왼쪽 1번 / 오른쪽 2번). 서버의 racePick이 고를 자격(먼저 투입 등)을 확인한다.
+      if (type === "rail-pick" && (msg.side === "1" || msg.side === "2") && Number.isInteger(msg.idx)) entry.room.racePick(msg.side, msg.idx);
       return;
     }
     if (seat === "1" || seat === "2") conn.seat = seat;

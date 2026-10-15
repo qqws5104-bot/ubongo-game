@@ -70,6 +70,7 @@ def load_shared_constants():
         "RACE_STICKER_LEVEL": json.loads(grab("RACE_STICKER_LEVEL")),
         "ELEVATOR_JOLT": eval(grab("ELEVATOR_JOLT")),
         "VOTE_MS": eval(grab("VOTE_MS")),
+        "RACE_EXCLUDE_KINDS": json.loads(grab("RACE_EXCLUDE_KINDS")),
         "THIEF_PER_HALF": eval(grab("THIEF_PER_HALF")),
     }
 
@@ -696,6 +697,11 @@ APP_JS_TEMPLATE = r"""
   var RACE_SECOND_MS = @@RACE_SECOND_MS@@;
   var RACE_CONSOLATION_MS = @@RACE_CONSOLATION_MS@@; // 2026-10-14 한 사람만 끝내면 1등이 고르고 이 시간 뒤 다른 사람도 무작위로 하나
   var RACE_STICKER_LEVEL = @@RACE_STICKER_LEVEL@@;
+  var RACE_EXCLUDE_KINDS = @@RACE_EXCLUDE_KINDS@@; // 2026-10-15 레이스에서 빠지는 종류 (확정 층수)
+  function kindOff(ci) { return !!RACE_MODE && RACE_EXCLUDE_KINDS.indexOf(TYPES[ci].key) >= 0; }
+  // 2026-10-15 레일 화면 고르기 키: 왼쪽(1번) 자리 A S D, 오른쪽(2번) 자리 J K L (현장 물리 버튼을 이 키로 연결)
+  var RAIL_PICK_KEYS = { "1": ["KeyA", "KeyS", "KeyD"], "2": ["KeyJ", "KeyK", "KeyL"] };
+  var RAIL_PICK_LABEL = { "1": ["A", "S", "D"], "2": ["J", "K", "L"] };
   var VOTING_MS = @@VOTE_MS@@, THIEF_PER_HALF = @@THIEF_PER_HALF@@; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = @@ELEVATOR_JOLT@@; // 2026-10-14 덜컹 (game-data.js)
   var BUILD_TAG = "@@BUILD_TAG@@"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
@@ -750,6 +756,7 @@ APP_JS_TEMPLATE = r"""
   function renderFeePoster() {
     var html = '<div class="fee-poster"><div class="fee-head"><span class="fee-title">택배 요금표</span>' + FEE_TRUCK_SVG + '</div><div class="fee-road"></div>';
     html += '<div class="fee-cards">' + TYPES.map(function (t, i) {
+      if (kindOff(i)) return '';
       return '<div class="fee-card fee-t' + i + '">' + feeName(i, true) + feeTable(t) + '</div>';
     }).join('') + '</div>';
     html += '<div class="fee-foot"><span class="i">i</span><div><ul>';
@@ -1027,12 +1034,12 @@ APP_JS_TEMPLATE = r"""
           + '<span class="tut-step">택배 쌓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>투입!</small></span></div>'; },
       l: function () { return ["라운드마다 둘이 동시에 시작해요. 먼저 투입한 사람이 택배를 먼저 골라요.", "택배 쌓기 문제는 <b>레일 화면</b>에만 떠요."]; } },
     { t: "② 택배 고르기", v: function () {
-        return '<div class="tut-parcels">' + tutParcel(0) + tutParcel(3, '<span class="rp-hint rp-floor">2F 확정</span>') + tutParcel(2) + '</div>'
-          + '<div class="tut-keys"><b>←</b><b>↑</b><b>→</b> 로 고르기 · ' + Math.round(RACE_PICK_MS / 1000) + '초 안에</div>'; },
-      l: function () { return ["레일에 택배 3개가 종류만 보여요. 고르면 <b>내 화면에만</b> 송장(층·호실)이 나와요. 확정 층수 택배만 층이 미리 보여요.",
+        return '<div class="tut-parcels">' + tutParcel(0, '<span class="rp-floorbig">1F</span>') + tutParcel(1, '<span class="rp-floorbig">4F</span>') + tutParcel(2, '<span class="rp-floorbig">3F</span>') + '</div>'
+          + '<div class="tut-keys">레일 앞 내 자리 버튼으로 고르기 · 왼쪽 <b>A</b><b>S</b><b>D</b> / 오른쪽 <b>J</b><b>K</b><b>L</b> · ' + Math.round(RACE_PICK_MS / 1000) + '초 안에</div>'; },
+      l: function () { return ["<b>레일 화면</b>에 택배 3개가 종류·금액·<b>층</b>과 함께 떠요. 엘리베이터로 갈 층을 생각해서 골라요. 호실은 고르면 내 자리 송장에 나와요.",
           RACE_CONSOLATION_MS > 0 ? "늦은 사람도 상대가 고른 뒤 " + Math.round(RACE_CONSOLATION_MS / 1000) + "초 안에 투입하면 남은 것 중 고르고, 못 하면 무작위로 하나 받아요." : "늦은 사람은 마감 안에 투입하면 남은 것 중 골라요."]; } },
     { t: "③ 요금과 세트 보너스", v: function () {
-        return '<div class="tut-fees">' + TYPES.map(function (_, ci) { return renderFeeMini(ci); }).join('') + '</div>'; },
+        return '<div class="tut-fees">' + TYPES.map(function (_, ci) { return kindOff(ci) ? '' : renderFeeMini(ci); }).join('') + '</div>'; },
       l: function () { return ["배송에 성공하면 요금을 받고, 끝까지 못 보내면 감점이에요.",
           setRuleOf(state).amount > 0 ? "<b>서로 다른 종류 " + setRuleOf(state).kinds + "가지</b>를 배송하면 세트 보너스 <b>" + fmtWon(setRuleOf(state).amount) + "</b> · 상대가 뭘 모으는지도 보여요." : "비싼 택배일수록 실패 감점도 커요."]; } },
     { t: "④ 엘리베이터 줄다리기", v: function () {
@@ -1135,6 +1142,8 @@ APP_JS_TEMPLATE = r"""
       + (prefix || '') + Math.max(0, Math.ceil((endsAt - nowMs()) / 1000)) + (suffix || '') + '</b>';
   }
   var RACE_KEYS = ["←", "↑", "→"]; // 택배 3개 고르기 키 (현장 물리 버튼과 같은 배치)
+  // 레일 화면이 접속해 있으면 고르기는 레일에서 (플레이어 화면은 안내만). 레일이 없으면 예전처럼 내 화면에서.
+  function railPicks() { return !RAIL && !MAIN && railInfo && railInfo.count > 0; }
   function raceCanPick(r, seat) {
     if (!seat || r.status !== "picking" || r.picks[seat] !== null) return false;
     if (r.first === seat) return true;
@@ -1144,13 +1153,14 @@ APP_JS_TEMPLATE = r"""
   function raceParcel(st, r, it, i, seat) {
     var owner = r.picks["1"] === i ? "1" : (r.picks["2"] === i ? "2" : null);
     var left = r.status === "reveal" && !owner;
-    var canPick = !owner && raceCanPick(r, seat);
+    var canPick = !owner && raceCanPick(r, seat) && !railPicks();
     var t = TYPES[it.catIdx];
     var cls = 'race-parcel is-open fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + (canPick ? ' can-pick' : '') + (owner && owner === seat ? ' is-mine' : '');
     var inner = '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span>'
       + '<span class="rp-amt">' + (multsVary() ? '기본 ' : '') + fmtWon(t.reward) + '</span>'
       // 2026-10-15: 확정 층수 택배만 층을 미리 보여 준다 (이름 그대로 층이 정해진 택배). 나머지는 송장이 나와야 안다.
-      + (t.fixedFloor ? '<span class="rp-hint rp-floor">' + esc(FLOORS[it.floorIdx]) + ' 확정</span>' : '<span class="rp-hint">층은 송장에서</span>');
+      // 2026-10-15: 층을 보고 고른다 -- 모든 택배의 층을 카드에 크게 (호실은 송장에서)
+      + '<span class="rp-floorbig">' + esc(FLOORS[it.floorIdx]) + '</span>';
     // 종류 모으기: 이걸 가져가면 내 세트가 완성되는지 / 상대 세트를 막는지 (가진 종류 기준 -- 보너스는 배송해야 받는다)
     var rule = setRuleOf(st);
     if (!owner && !left && rule.amount > 0) {
@@ -1232,7 +1242,8 @@ APP_JS_TEMPLATE = r"""
     var me = r.stage[seat];
     if (r.status === "picking") {
       if (raceCanPick(r, seat)) {
-        var ends = f === seat ? r.pickEndsAt : r.secondPickEndsAt; // 자동 선택이 꺼져 있으면(기본) 마감 없음 -- 고를 때까지 기다린다
+        var ends = f === seat ? r.pickEndsAt : r.secondPickEndsAt;
+        if (railPicks()) return '<div class="race-msg hot">' + (f === seat ? '먼저 끝냈어요! ' : '') + '<b>레일 화면</b>에서 층을 보고 고르세요 · 내 자리 버튼 <b>' + RAIL_PICK_LABEL[seat].join(' ') + '</b>' + (ends ? ' <small>· 시간 안에 안 고르면 무작위</small>' : '') + '</div>'; // 자동 선택이 꺼져 있으면(기본) 마감 없음 -- 고를 때까지 기다린다
         return '<div class="race-msg hot">' + (f === seat ? '먼저 끝냈어요! ' : '남은 택배 중 ') + '<b>← ↑ →</b> 로 고르세요' + (ends ? ' <small>· 시간 안에 안 고르면 무작위</small>' : '') + '</div>';
       }
       if (f === seat) {
@@ -1304,7 +1315,8 @@ APP_JS_TEMPLATE = r"""
     var me = r.stage[seat];
     // 2026-10-14 (사용자 요청): 첫 게임·택배 쌓기 중에는 플레이어 화면에 아무것도 없다 (문제는 레일 화면에만).
     //   택배 3개는 내가 택배 쌓기를 끝내고 투입한 뒤에야 나온다. 화면엔 지금 할 일 한 줄(늦은 사람은 투입 마감)과 작은 투입/포기 버튼만.
-    if (r.status !== "reveal" && (me === "sticker" || me === "ubongo")) {
+    var pickAtRail = r.status === "picking" && railPicks() && raceCanPick(r, seat);
+    if (r.status !== "reveal" && (me === "sticker" || me === "ubongo" || pickAtRail)) {
       return '<main class="stage stage--race">' + cartOpen('cart--race') + '<div class="race-blank">'
         + '<div class="race-head"><span class="round-pill">레이스 ' + r.round + '</span>'
         + racePickClock(r, seat) + '</div>'
@@ -2130,8 +2142,44 @@ APP_JS_TEMPLATE = r"""
   // 2026-10-14 (사용자 요청): 레이스 중 레일 화면엔 택배 쌓기 문제만. 누군가 첫 게임을 끝내면 문제가 화면 가득,
   //   그 전엔 "곧 문제가 나와요" 대기 화면. 택배·진행 단계·송장은 그리지 않는다 (택배 고르기는 각자 플레이어 화면).
   function railPuzzleOn(r) { return !!r.first || ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "done"; }); }
+  // 레일 화면 고르기 카드: 종류·금액·층 + 자리별 버튼(1번 A S D / 2번 J K L)
+  function railParcel(st, r, it, i) {
+    var owner = r.picks["1"] === i ? "1" : (r.picks["2"] === i ? "2" : null);
+    var left = r.status === "reveal" && !owner;
+    var t = TYPES[it.catIdx];
+    var html = '<div class="race-parcel is-open rail-pk fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + '">'
+      + '<span class="rp-floorbig">' + esc(FLOORS[it.floorIdx]) + '</span>'
+      + '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span><span class="rp-amt">' + fmtWon(t.reward) + '</span>';
+    if (owner) html += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + (r.randomPick && r.randomPick[owner] ? ' (무작위)' : '') + ' 획득</span>';
+    else if (left) html += '<span class="rp-owner gone">레일로 돌아감</span>';
+    else {
+      var rule = setRuleOf(st), tags = [];
+      ["1", "2"].forEach(function (s) {
+        var hk = heldKinds(st.players[s].invoices), n = Object.keys(hk).length;
+        if (rule.amount > 0 && !hk[it.catIdx] && n + 1 >= rule.kinds && n < rule.kinds) tags.push('<span class="rp-set">' + esc(seatName(s, st)) + ' 세트 완성</span>');
+      });
+      html += tags.join('') + '<span class="rail-pk-btns">' + ["1", "2"].map(function (s) {
+        var ok = r.status === "picking" && raceCanPick(r, s);
+        return '<button class="rail-pk-btn seat-' + s + (ok ? ' on' : '') + '" data-action="rail-pick" data-side="' + s + '" data-idx="' + i + '"' + (ok ? '' : ' disabled') + '>'
+          + esc(seatName(s, st)) + ' <b>' + RAIL_PICK_LABEL[s][i] + '</b></button>';
+      }).join('') + '</span>';
+    }
+    return html + '</div>';
+  }
   function renderRailRace(st) {
     var r = st.race;
+    // 누군가 투입한 뒤(고르기/결과): 위쪽에 택배 3개(층 보고 고르기), 아직 택배 쌓기 중인 사람이 있으면 문제 그림도 옆에 계속
+    if (r.status === "picking" || r.status === "reveal") {
+      var solving = ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "sticker"; }) && r.status === "picking";
+      var meta0 = cellMeta(r.puzzleId, st.half);
+      return '<div class="rv rv-pick' + (solving ? ' with-puzzle' : '') + '">'
+        + '<div class="rv-pick-main"><div class="rp-cap">레이스 ' + r.round + ' · 층을 보고 택배를 고르세요</div>'
+        + '<div class="race-rail rv-pick-rail"><span class="race-belt"></span>' + r.pair.map(function (it, i) { return railParcel(st, r, it, i); }).join('') + '</div>'
+        + raceMessage(st, r, null)
+        + '<div class="race-lanes">' + ["1", "2"].map(function (s) { return raceLane(st, r, s, false); }).join('') + '</div></div>'
+        + (solving ? '<div class="race-puzzle rv-pick-puzzle"><div class="rp-cap">택배 쌓기 · 조각 ' + racePieces(st, r) + '개</div>' + (meta0 && meta0.src ? '<img src="' + meta0.src + '" alt="택배 쌓기 문제">' : '') + '</div>' : '')
+        + '</div>';
+    }
     if (!railPuzzleOn(r)) {
       return '<div class="rv rv-race-wait"><div class="rv-center"><span class="round-pill">레이스 ' + r.round + '</span>'
         + '<h2>' + esc(raceGameName(r)) + ' 중</h2><p>먼저 끝낸 사람이 나오면 여기에 택배 쌓기 문제가 떠요</p></div></div>';
@@ -2380,6 +2428,10 @@ APP_JS_TEMPLATE = r"""
       return;
     }
     if (action === "open-cell") { openCell(t.getAttribute("data-cell")); return; }
+    if (action === "rail-pick") {
+      send({ type: "rail-pick", side: t.getAttribute("data-side"), idx: parseInt(t.getAttribute("data-idx"), 10) });
+      return;
+    }
     if (action === "rail-press") {
       // 레일 화면 전용: side(1/2) 쪽 플레이어에게 그 종류 게임을 띄우라고 서버에 요청한다. 칸 선택/중복 방지는 서버가 한다.
       var rp = { type: "rail-press", side: t.getAttribute("data-side"), cat: parseInt(t.getAttribute("data-cat"), 10) };
@@ -2467,7 +2519,16 @@ APP_JS_TEMPLATE = r"""
   });
 
   document.addEventListener("keydown", function (e) {
-    if (MAIN) return; // 메인 모니터는 입력을 받지 않는다 (스페이스/방향키가 게임에 영향 주면 안 됨)
+    if (MAIN) return;
+    // 2026-10-15 레일 화면: 자리별 고르기 키 (1번 A S D / 2번 J K L)
+    if (RAIL) {
+      if (e.repeat || !state || state.phase !== "secure" || !state.race || state.race.status !== "picking") return;
+      ["1", "2"].forEach(function (s) {
+        var k = RAIL_PICK_KEYS[s].indexOf(e.code);
+        if (k >= 0 && state.race.pair[k] && raceCanPick(state.race, s)) { e.preventDefault(); send({ type: "rail-pick", side: s, idx: k }); }
+      });
+      return;
+    } // 메인 모니터는 입력을 받지 않는다 (스페이스/방향키가 게임에 영향 주면 안 됨)
     if (e.code === "Space" || e.key === " " || e.key === "Spacebar") {
       var seat = mySeat();
       if (seat && state && state.phase === "tutorial" && state.tutorial && !e.repeat) {
@@ -2500,7 +2561,7 @@ APP_JS_TEMPLATE = r"""
     if (!e.repeat && /^(ArrowLeft|ArrowUp|ArrowDown|ArrowRight|Digit1|Digit2|Digit3)$/.test(e.code)) {
       // 레이스: 택배 고르기 (← = 왼쪽, ↑/↓ = 가운데, → = 오른쪽, 숫자 1/2/3도 가능)
       var seat3 = mySeat(), rr = state && state.phase === "secure" ? state.race : null;
-      if (seat3 && rr && raceCanPick(rr, seat3)) {
+      if (seat3 && rr && raceCanPick(rr, seat3) && !railPicks()) {
         e.preventDefault();
         var want = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 1, ArrowRight: 2, Digit1: 0, Digit2: 1, Digit3: 2 }[e.code];
         if (rr.pair.length === 2 && e.code === "ArrowRight") want = 1;
@@ -2600,6 +2661,7 @@ APP_JS = (APP_JS_TEMPLATE
           .replace("@@RACE_STICKER_LEVEL@@", json.dumps(RACE_CONST["RACE_STICKER_LEVEL"]))
           .replace("@@ELEVATOR_JOLT@@", str(RACE_CONST["ELEVATOR_JOLT"]))
           .replace("@@VOTE_MS@@", str(RACE_CONST["VOTE_MS"]))
+          .replace("@@RACE_EXCLUDE_KINDS@@", json.dumps(RACE_CONST["RACE_EXCLUDE_KINDS"]))
           .replace("@@THIEF_PER_HALF@@", str(RACE_CONST["THIEF_PER_HALF"]))
           .replace("@@BUILD_TAG@@", "v" + __import__("datetime").datetime.now(__import__("datetime").timezone(__import__("datetime").timedelta(hours=9))).strftime("%m%d-%H%M"))
           .replace("@@SAME_FLOOR_CHOICE_MS@@", str(SAME_FLOOR_CHOICE_MS))

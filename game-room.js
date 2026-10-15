@@ -12,7 +12,7 @@ const {
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
-  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS,
+  RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -35,6 +35,7 @@ const DEFAULT_RULES = {
   raceAutoPickMode: RACE_AUTO_PICK_MODE,
   racePiecesByRound: RACE_PIECES_BY_ROUND,
   raceConsolationMs: RACE_CONSOLATION_MS,
+  raceExcludeKinds: RACE_EXCLUDE_KINDS,
   elevatorJolt: !!ELEVATOR_JOLT,
   setBonus: SET_BONUS,
   setBonusKinds: SET_BONUS_KINDS,
@@ -86,9 +87,17 @@ function rewardFor(catIdx, floorIdx, floorRewardMult) {
   const mult = (floorRewardMult && floorRewardMult[floorIdx] != null) ? floorRewardMult[floorIdx] : 1;
   return Math.round(TYPES[catIdx].reward * mult);
 }
+// 2026-10-15: 종류별 가능한 층 (FLOOR_LIMITS, 예: 귀중품은 B1·5F 제외). 확정 층수 택배는 칸 번호가 곧 층.
+function drawFloor(catIdx, num) {
+  const t = TYPES[catIdx];
+  if (t.fixedFloor) return num;
+  const allowed = (FLOOR_LIMITS && FLOOR_LIMITS[t.key]) || null;
+  if (allowed && allowed.length) return allowed[Math.floor(Math.random() * allowed.length)];
+  return Math.floor(Math.random() * FLOORS.length);
+}
 function randomInvoice(seat, catIdx, num, acquiredSeq, room, floorRewardMult) {
   const t = TYPES[catIdx];
-  const floorIdx = t.fixedFloor ? num : Math.floor(Math.random() * FLOORS.length);
+  const floorIdx = drawFloor(catIdx, num);
   return {
     id: "inv-" + seat + "-" + acquiredSeq,
     catIdx, floorIdx, room, acquiredSeq,
@@ -363,11 +372,15 @@ class GameRoom {
   }
 
   _raceNewRound(roundNo) {
+    // 2026-10-15: 레이스에서 빼는 종류(raceExcludeKinds, 기본 확정 층수)는 하프 첫 라운드에 보드에서 치운다(주인 없이 taken) --
+    //   레일에 안 나오고, "보드가 다 비면 조기 종료"도 그대로 동작한다.
+    if (roundNo === 1 && this.rules.raceExcludeKinds && this.rules.raceExcludeKinds.length) {
+      this.state.board.forEach((c) => { if (!c.taken && this.rules.raceExcludeKinds.includes(TYPES[c.catIdx].key)) { c.taken = true; c.takenBy = null; c.excluded = true; } });
+    }
     const free = this.state.board.filter((c) => !c.taken);
     if (!free.length) { this.state.race = null; this._raceAt(null); return; }
     const pair = shuffled(free).slice(0, Math.max(1, this.rules.raceParcels || 3)).map((c) => {
-      const t = TYPES[c.catIdx];
-      const floorIdx = t.fixedFloor ? c.num : Math.floor(Math.random() * FLOORS.length);
+      const floorIdx = drawFloor(c.catIdx, c.num);
       return { cellId: c.id, catIdx: c.catIdx, floorIdx, reward: rewardFor(c.catIdx, floorIdx, this.rules.floorRewardMult) };
     });
     this.state.race = {
