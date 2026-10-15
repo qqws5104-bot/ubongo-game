@@ -1324,3 +1324,9 @@ node test_minigames_live.js
 - 서버: `tutorialStep`/`tutorialSkip`, 규칙 `tutorial`(DEFAULT_RULES는 끔 -- GameRoom 직접 테스트용, **server.js가 켬**, 환경변수 `TUTORIAL=0`이면 끔.
   regress.sh의 예전 브라우저 테스트는 `TUTORIAL=0`으로 띄움). 문구는 game-data.js 값(확보 시간, 라운드 수, 고르기 초, 세트 보너스 등)을 그대로 쓴다.
 - 테스트: `test_tutorial_e2e.js`.
+
+### 18.19 엘리베이터 안 바닥에 내 택배 그림 (2026-10-15, 사용자 요청)
+
+- 플레이어 화면의 엘리베이터 안 그림(`renderElevArt(el, st, seat)` → `elevParcels`) 바닥에 **아직 안 보낸 내 택배**를 상자로 그린다.
+  상자 위 띠 = 종류 색, 앞면 송장 = 종류 아이콘 + 호실(예: 205호). **지금 층에서 내려질 택배는 노랗게 반짝**, 이번 라운드 우선 택배엔 "우선".
+  배송·도난된 송장은 빠진다. 6개 이상이면 작게. 레일 화면·메인 모니터의 엘리베이터 안 그림엔 안 그린다(송장 비공개).

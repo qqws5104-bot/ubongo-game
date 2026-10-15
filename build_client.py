@@ -1735,7 +1735,24 @@ APP_JS_TEMPLATE = r"""
     });
   }
 
-  function renderElevArt(el) {
+  // 2026-10-15 (사용자 요청): 엘리베이터 안 바닥에 "내가 보내야 할 택배"를 그림으로 -- 상자(종류 색) + 앞면에 송장(호실).
+  //   플레이어 화면에서만(seat가 있을 때) -- 레일 화면/메인 모니터에는 그리지 않는다(송장은 비공개).
+  //   지금 층에서 내려질 택배는 반짝(is-here), 이번 라운드 우선 택배는 "우선" 표시. 배송/도난된 송장은 빠진다.
+  function elevParcels(el, st, seat) {
+    var invs = st.players[seat].invoices.filter(function (v) { return v.deliveredRound === null && !v.stolen; })
+      .sort(function (a, b) { return a.floorIdx - b.floorIdx || a.acquiredSeq - b.acquiredSeq; });
+    if (!invs.length) return '<div class="ea-pks empty"><span>실을 택배가 없어요</span></div>';
+    var pri = el.priorityPick ? el.priorityPick[seat] : null;
+    return '<div class="ea-pks' + (invs.length > 5 ? ' many' : '') + '">' + invs.map(function (v) {
+      var t = TYPES[v.catIdx];
+      return '<div class="ea-pk fee-t' + v.catIdx + (v.floorIdx === el.floorIdx ? ' is-here' : '') + (pri === v.id ? ' is-pri' : '') + '">'
+        + '<span class="ea-pk-tape"></span>'
+        + '<span class="ea-pk-slip"><i class="ea-pk-ico">' + CAT_ICONS[v.catIdx] + '</i><b>' + esc(roomCode(v.floorIdx, v.room)) + '</b></span>'
+        + (pri === v.id ? '<span class="ea-pk-pri">우선</span>' : '')
+        + '</div>';
+    }).join('') + '</div>';
+  }
+  function renderElevArt(el, st, seat) {
     var f = el.floorIdx, dir = elevDir(el);
     var panel = EA_PANEL.map(function (row) {
       return row.map(function (i) {
@@ -1746,6 +1763,7 @@ APP_JS_TEMPLATE = r"""
       + '<div class="ea-ind"><i class="ea-up' + (dir === "up" ? ' on' : '') + '"></i><b>' + eaLabel(f) + '</b><i class="ea-down' + (dir === "down" ? ' on' : '') + '"></i></div>'
       + '<div class="ea-panel">' + panel + '</div>'
       + (floorMult(f) !== 1 ? '<span class="ea-mult' + (floorMult(f) > 1 ? ' hi' : '') + '">배송비 ' + multLabel(f) + '</span>' : '')
+      + (st && seat ? elevParcels(el, st, seat) : '')
       + '</div>';
   }
 
@@ -1754,7 +1772,7 @@ APP_JS_TEMPLATE = r"""
     // left column: gauge, then my own package list directly beneath it -- opponent's list is
     // never rendered here (or anywhere in the elevator phase), only mine.
     html += '<div class="elev-left">' + renderBuilding(st.elevator) + '</div>'
-      + '<div class="elev-mid">' + renderElevArt(st.elevator)
+      + '<div class="elev-mid">' + renderElevArt(st.elevator, st, seat)
       + '<div class="player-col me"><h3>내 택배' + setProgressLine(st, seat) + '</h3>' + renderInvoiceList(st, seat) + '</div>'
       + '</div>';
 

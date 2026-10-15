@@ -426,3 +426,24 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
 .tut-prog { display: flex; gap: 14px; }
 .tut-who { background: #fffaf0; border-radius: 999px; padding: 4px 14px; font-weight: 800; color: #3a2a1a; }
 @media (max-width: 760px) { .tut-fees { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tut-parcels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ===== 14. 엘리베이터 안 바닥에 내 택배 + 송장(호실) (2026-10-15) ===== */
+.ea-pks { position: absolute; left: 9%; right: 9%; bottom: 5%; height: 42%; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; align-content: flex-end; gap: 1.4cqw 2cqw; }
+.ea-pks.empty { align-items: center; }
+.ea-pks.empty span { background: rgba(255, 255, 255, 0.85); border-radius: 999px; padding: 0.8cqw 2.6cqw; font-size: 3cqw; font-weight: 800; color: #8a7256; }
+.ea-pk { position: relative; width: 21cqw; height: 15cqw; border-radius: 1cqw; background: linear-gradient(180deg, #ddc08f, #c9a576); border: 0.45cqw solid #7a5a30;
+  box-shadow: 0 1.2cqw 1.6cqw rgba(30, 30, 50, 0.35), inset 0 -1.6cqw 0 rgba(0, 0, 0, 0.08); }
+.ea-pks.many .ea-pk { width: 16cqw; height: 11.5cqw; }
+.ea-pk::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1.6cqw; background: var(--fc, #e8d6b4); border-bottom: 0.35cqw solid var(--fb, #7a5a30); border-radius: 0.6cqw 0.6cqw 0 0; }
+.ea-pk-tape { position: absolute; left: 50%; top: 0; bottom: 0; width: 3cqw; transform: translateX(-50%); background: rgba(234, 216, 176, 0.85); }
+.ea-pk-slip { position: absolute; left: 7%; right: 7%; bottom: 9%; background: #fffefa; border: 0.3cqw solid #9a8460; border-radius: 0.6cqw; border-top: 1.4cqw solid #E8681C;
+  display: flex; align-items: center; justify-content: center; gap: 0.6cqw; padding: 0.6cqw 0.4cqw; white-space: nowrap; }
+.ea-pk-slip b { font-family: var(--font-display); font-weight: 900; font-size: 4.2cqw; line-height: 1; color: #2b1d12; letter-spacing: 0.01em; }
+.ea-pks.many .ea-pk-slip b { font-size: 3.2cqw; }
+.ea-pk-ico { font-style: normal; display: inline-flex; color: var(--fb, #7a5a30); }
+.ea-pk-ico svg { width: 3.2cqw; height: 3.2cqw; }
+.ea-pks.many .ea-pk-ico svg { width: 2.4cqw; height: 2.4cqw; }
+.ea-pk.is-here { outline: 0.8cqw solid #ffd84d; box-shadow: 0 0 3cqw 0.8cqw rgba(255, 214, 64, 0.9); animation: eaPkHere 0.9s ease-in-out infinite; }
+@keyframes eaPkHere { 50% { transform: translateY(-1cqw); } }
+.ea-pk-pri { position: absolute; top: -2.4cqw; left: 50%; transform: translateX(-50%); background: #c7402d; color: #fff; font-weight: 900; font-size: 2.6cqw; padding: 0.3cqw 1.4cqw; border-radius: 999px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .ea-pk.is-here { animation: none; } }

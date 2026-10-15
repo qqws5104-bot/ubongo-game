@@ -1379,6 +1379,27 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
 .tut-who { background: #fffaf0; border-radius: 999px; padding: 4px 14px; font-weight: 800; color: #3a2a1a; }
 @media (max-width: 760px) { .tut-fees { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tut-parcels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
+/* ===== 14. 엘리베이터 안 바닥에 내 택배 + 송장(호실) (2026-10-15) ===== */
+.ea-pks { position: absolute; left: 9%; right: 9%; bottom: 5%; height: 42%; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; align-content: flex-end; gap: 1.4cqw 2cqw; }
+.ea-pks.empty { align-items: center; }
+.ea-pks.empty span { background: rgba(255, 255, 255, 0.85); border-radius: 999px; padding: 0.8cqw 2.6cqw; font-size: 3cqw; font-weight: 800; color: #8a7256; }
+.ea-pk { position: relative; width: 21cqw; height: 15cqw; border-radius: 1cqw; background: linear-gradient(180deg, #ddc08f, #c9a576); border: 0.45cqw solid #7a5a30;
+  box-shadow: 0 1.2cqw 1.6cqw rgba(30, 30, 50, 0.35), inset 0 -1.6cqw 0 rgba(0, 0, 0, 0.08); }
+.ea-pks.many .ea-pk { width: 16cqw; height: 11.5cqw; }
+.ea-pk::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1.6cqw; background: var(--fc, #e8d6b4); border-bottom: 0.35cqw solid var(--fb, #7a5a30); border-radius: 0.6cqw 0.6cqw 0 0; }
+.ea-pk-tape { position: absolute; left: 50%; top: 0; bottom: 0; width: 3cqw; transform: translateX(-50%); background: rgba(234, 216, 176, 0.85); }
+.ea-pk-slip { position: absolute; left: 7%; right: 7%; bottom: 9%; background: #fffefa; border: 0.3cqw solid #9a8460; border-radius: 0.6cqw; border-top: 1.4cqw solid #E8681C;
+  display: flex; align-items: center; justify-content: center; gap: 0.6cqw; padding: 0.6cqw 0.4cqw; white-space: nowrap; }
+.ea-pk-slip b { font-family: var(--font-display); font-weight: 900; font-size: 4.2cqw; line-height: 1; color: #2b1d12; letter-spacing: 0.01em; }
+.ea-pks.many .ea-pk-slip b { font-size: 3.2cqw; }
+.ea-pk-ico { font-style: normal; display: inline-flex; color: var(--fb, #7a5a30); }
+.ea-pk-ico svg { width: 3.2cqw; height: 3.2cqw; }
+.ea-pks.many .ea-pk-ico svg { width: 2.4cqw; height: 2.4cqw; }
+.ea-pk.is-here { outline: 0.8cqw solid #ffd84d; box-shadow: 0 0 3cqw 0.8cqw rgba(255, 214, 64, 0.9); animation: eaPkHere 0.9s ease-in-out infinite; }
+@keyframes eaPkHere { 50% { transform: translateY(-1cqw); } }
+.ea-pk-pri { position: absolute; top: -2.4cqw; left: 50%; transform: translateX(-50%); background: #c7402d; color: #fff; font-weight: 900; font-size: 2.6cqw; padding: 0.3cqw 1.4cqw; border-radius: 999px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .ea-pk.is-here { animation: none; } }
+
 </style>
 </head><body>
 <div id="app"></div>
@@ -2648,7 +2669,7 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
   var RACE_STICKER_LEVEL = [1, 1];
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1015-1036"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1015-1117"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -3685,7 +3706,24 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
     });
   }
 
-  function renderElevArt(el) {
+  // 2026-10-15 (사용자 요청): 엘리베이터 안 바닥에 "내가 보내야 할 택배"를 그림으로 -- 상자(종류 색) + 앞면에 송장(호실).
+  //   플레이어 화면에서만(seat가 있을 때) -- 레일 화면/메인 모니터에는 그리지 않는다(송장은 비공개).
+  //   지금 층에서 내려질 택배는 반짝(is-here), 이번 라운드 우선 택배는 "우선" 표시. 배송/도난된 송장은 빠진다.
+  function elevParcels(el, st, seat) {
+    var invs = st.players[seat].invoices.filter(function (v) { return v.deliveredRound === null && !v.stolen; })
+      .sort(function (a, b) { return a.floorIdx - b.floorIdx || a.acquiredSeq - b.acquiredSeq; });
+    if (!invs.length) return '<div class="ea-pks empty"><span>실을 택배가 없어요</span></div>';
+    var pri = el.priorityPick ? el.priorityPick[seat] : null;
+    return '<div class="ea-pks' + (invs.length > 5 ? ' many' : '') + '">' + invs.map(function (v) {
+      var t = TYPES[v.catIdx];
+      return '<div class="ea-pk fee-t' + v.catIdx + (v.floorIdx === el.floorIdx ? ' is-here' : '') + (pri === v.id ? ' is-pri' : '') + '">'
+        + '<span class="ea-pk-tape"></span>'
+        + '<span class="ea-pk-slip"><i class="ea-pk-ico">' + CAT_ICONS[v.catIdx] + '</i><b>' + esc(roomCode(v.floorIdx, v.room)) + '</b></span>'
+        + (pri === v.id ? '<span class="ea-pk-pri">우선</span>' : '')
+        + '</div>';
+    }).join('') + '</div>';
+  }
+  function renderElevArt(el, st, seat) {
     var f = el.floorIdx, dir = elevDir(el);
     var panel = EA_PANEL.map(function (row) {
       return row.map(function (i) {
@@ -3696,6 +3734,7 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
       + '<div class="ea-ind"><i class="ea-up' + (dir === "up" ? ' on' : '') + '"></i><b>' + eaLabel(f) + '</b><i class="ea-down' + (dir === "down" ? ' on' : '') + '"></i></div>'
       + '<div class="ea-panel">' + panel + '</div>'
       + (floorMult(f) !== 1 ? '<span class="ea-mult' + (floorMult(f) > 1 ? ' hi' : '') + '">배송비 ' + multLabel(f) + '</span>' : '')
+      + (st && seat ? elevParcels(el, st, seat) : '')
       + '</div>';
   }
 
@@ -3704,7 +3743,7 @@ button.race-parcel.can-pick:hover { transform: translateY(-4px); }
     // left column: gauge, then my own package list directly beneath it -- opponent's list is
     // never rendered here (or anywhere in the elevator phase), only mine.
     html += '<div class="elev-left">' + renderBuilding(st.elevator) + '</div>'
-      + '<div class="elev-mid">' + renderElevArt(st.elevator)
+      + '<div class="elev-mid">' + renderElevArt(st.elevator, st, seat)
       + '<div class="player-col me"><h3>내 택배' + setProgressLine(st, seat) + '</h3>' + renderInvoiceList(st, seat) + '</div>'
       + '</div>';
 
