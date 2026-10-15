@@ -13,9 +13,10 @@ async function clickSel(page, selector) { return page.evaluate((sel) => { const 
 async function pressSpace(page) { await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true, cancelable: true }))); }
 async function bodyText(page) { return page.evaluate(() => document.body.innerText); }
 // 2026-10-13: 층 행에 배송비 배율 배지(.floor-mult, 예 "x1.3")가 붙으므로 층 이름만 읽는다.
-async function currentFloorLabel(page) { return page.evaluate(() => { const el = document.querySelector(".floor-stop.current"); if (!el) return null; const c = el.cloneNode(true); c.querySelectorAll(".floor-mult").forEach((m) => m.remove()); return c.textContent.trim(); }); }
+// 2026-10-15: 플레이어 화면엔 건물 단면도가 없다 -- 엘리베이터 안 그림(.elev-art)의 data-floor-name이 현재 층
+async function currentFloorLabel(page) { return page.evaluate(() => { const el = document.querySelector(".elev-art[data-floor-name]"); return el ? el.getAttribute("data-floor-name") : null; }); }
 const FLOORS = ["B1", "1F", "2F", "3F", "4F", "5F"];
-async function currentFloorCount(page) { return page.evaluate(() => document.querySelectorAll(".floor-stop.current").length); }
+async function currentFloorCount(page) { return page.evaluate(() => document.querySelectorAll(".elev-art[data-floor-name]").length); }
 async function waitFor(fn, { timeout = 15000, interval = 100, label = "condition" } = {}) {
   const start = Date.now();
   for (;;) { const v = await fn(); if (v) return v; if (Date.now() - start > timeout) throw new Error("timeout: " + label); await new Promise((r) => setTimeout(r, interval)); }
@@ -110,8 +111,9 @@ async function main() {
   // cells, so the panel may legitimately show the empty-state text rather than a populated
   // .invoice-list -- what's being checked here is where the panel itself lives, not its contents;
   // test_hosted.js separately covers a populated list.)
-  const listInLeftColumn = await p1.evaluate(() => !!document.querySelector(".elev-mid .player-col.me"));
-  if (!listInLeftColumn) throw new Error("my package-list panel is not rendered inside .elev-mid");
+  // 2026-10-15: 송장 목록 대신 엘리베이터 안 바닥에 내 택배(.ea-pks)
+  const listInLeftColumn = await p1.evaluate(() => !!document.querySelector(".elev-mid .elev-art .ea-pks"));
+  if (!listInLeftColumn) throw new Error("my parcels are not drawn inside the elevator art (.elev-mid .ea-pks)");
   log("confirmed: my package list panel renders directly under the gauge in the left column");
 
   await browser.close();

@@ -63,6 +63,12 @@ async function main() {
   await key(p2, "ArrowUp", "ArrowUp");
   await waitFor(async () => (await text(p1)).includes("택배 확보") && !(await text(p1)).includes("진행 방법"), { label: "secure starts after p1 done + p2 skip" });
   log("한쪽이 다 보고 다른 쪽이 건너뛰기 -> 확보 시작");
+  // 2026-10-15 기본: 첫 미니게임 없이 바로 택배 쌓기 -- 레일엔 문제, 플레이어 화면엔 투입 버튼
+  await waitFor(() => count(p1, '.race-blank [data-action="race-done"]').then((n) => n === 1), { label: "straight to ubongo (no first game)" });
+  assert((await count(p1, "#mg-layer .mg-root")) === 0, "첫 미니게임 없음");
+  await waitFor(() => count(rail, ".race-puzzle img").then((n) => n === 1), { label: "rail shows puzzle right away" });
+  if (SHOT) { await p1.screenshot({ path: SHOT + "/race_start_p1.png" }); await rail.screenshot({ path: SHOT + "/race_start_rail.png" }); }
+  log("확보 시작 = 바로 택배 쌓기 (첫 미니게임 없음), 레일에 문제");
   await p1.close(); await p2.close(); await mainv.close(); await rail.close();
 
   // ---- 방 2: 한 사람만 건너뛰기는 안 넘어감, 둘 다 누르면 바로 시작 ----

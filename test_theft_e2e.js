@@ -168,11 +168,12 @@ async function main() {
     };
   });
   log("p2 송장 목록에서 찾은 B1행 송장 스티커 상태:", JSON.stringify(invoiceCheck));
-  if (!invoiceCheck.found) throw new Error("could not find the B1 (확정 층수 택배) invoice row in p2's invoice list");
-  if (invoiceCheck.stickerText !== "미배송") {
+  // 2026-10-15: 엘리베이터 화면에서 송장 목록을 뺐다(엘리베이터 안 그림 + ▲▼만). 목록이 없으면 이 확인은 건너뛰고, 아래 최종 결과 표에서 같은 걸 확인한다.
+  if (!invoiceCheck.found) log("엘리베이터 화면에 송장 목록이 없음 (2026-10-15 단순화) -- 최종 결과 표에서 확인");
+  else if (invoiceCheck.stickerText !== "미배송") {
     throw new Error(`REGRESSION: stolen invoice's sticker text should be "미배송", got "${invoiceCheck.stickerText}"`);
   }
-  if (!invoiceCheck.stickerIsPending) {
+  else if (!invoiceCheck.stickerIsPending) {
     throw new Error("REGRESSION: stolen invoice's sticker should have the muted/pending style, not the green success style");
   }
   log("확인: 송장 목록에서도 도난 송장이 초록 '성공' 배지가 아니라 미배송(pending) 스타일로 표시됨");

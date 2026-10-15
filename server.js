@@ -158,6 +158,10 @@ wss.on("connection", (ws, req) => {
       if (type === "rail-press") handleRailPress(entry, code, msg);
       // 2026-10-15: 레이스 택배 고르기는 레일 화면에서 (자리 = 왼쪽 1번 / 오른쪽 2번). 서버의 racePick이 고를 자격(먼저 투입 등)을 확인한다.
       if (type === "rail-pick" && (msg.side === "1" || msg.side === "2") && Number.isInteger(msg.idx)) entry.room.racePick(msg.side, msg.idx);
+      // 2026-10-16 벽 배송: 레일 화면 키보드 -- Ctrl+호실 = 1번, Shift+호실 = 2번, 그냥 누름 = null(켜진 버튼 끄기용 탭)
+      if (type === "wall-press" && typeof msg.unit === "string") entry.room.wallPress(msg.team === "1" || msg.team === "2" ? msg.team : null, msg.unit);
+      if (type === "wall-release" && typeof msg.unit === "string" && (msg.team === "1" || msg.team === "2")) entry.room.wallRelease(msg.team, msg.unit);
+      if (type === "wall-elev" && (msg.team === "1" || msg.team === "2")) entry.room.wallElevator(msg.team, msg.dir);
       return;
     }
     if (seat === "1" || seat === "2") conn.seat = seat;
@@ -214,6 +218,18 @@ wss.on("connection", (ws, req) => {
       case "race-step":
         if (!conn.seat || typeof msg.step !== "string") return;
         entry.room.raceStep(conn.seat, msg.step, typeof msg.round === "number" ? msg.round : null);
+        break;
+      case "wall-release":
+        if (!conn.seat || typeof msg.unit !== "string") return;
+        entry.room.wallRelease(conn.seat, msg.unit);
+        break;
+      case "wall-elev":
+        if (!conn.seat) return;
+        entry.room.wallElevator(conn.seat, msg.dir);
+        break;
+      case "wall-press": // 플레이어 화면에서 호실을 탭 (좌석은 이 연결의 좌석). plain: true면 "Ctrl/Shift 없이" 누른 것(끄기 탭)
+        if (!conn.seat || typeof msg.unit !== "string") return;
+        entry.room.wallPress(msg.plain ? null : conn.seat, msg.unit);
         break;
       case "race-pick":
         if (!conn.seat || typeof msg.idx !== "number") return;

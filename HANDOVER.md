@@ -1341,3 +1341,22 @@ node test_minigames_live.js
   (왼쪽 1번 자리 **A S D**, 오른쪽 2번 자리 **J K L**, 터치/클릭도 됨 -- 현장 물리 버튼을 이 키로 연결). 아직 택배 쌓기 중인 사람이 있으면 문제 그림도 옆에.
   서버 메시지 `rail-pick {side, idx}`(레일 연결만) → `racePick`. 플레이어 화면엔 "레일 화면에서 층을 보고 고르세요 · 내 자리 버튼 A S D" 안내만.
   **레일 화면이 없으면** 예전처럼 플레이어 화면에서 ← ↑ →로 고른다(대체 경로).
+
+### 18.21 첫 미니게임 빼기 + 엘리베이터 플레이어 화면 단순화 (2026-10-15, 사용자 결정)
+- RACE_GAME_POOL = [] (레이스는 바로 택배 쌓기). 다시 켜려면 game-data.js 주석의 5종.
+- 엘리베이터 플레이어 화면 = 엘리베이터 안 그림 + ▲▼만 (송장 목록·건물 단면도 제거). test_theft_e2e는 목록이 없으면 최종 결과 표로만 확인.
+
+### 18.22 벽 배송 + 택배 쌓기 몫 (2026-10-16, 사용자 결정) -- 기본 흐름
+- **확보(택배 쌓기)**: RACE_GRANT_PLAN. 1~2라운드는 3개 중 먼저 끝낸 사람이 2개, 3라운드부터 5개 중 3개. 나머지는 늦은 사람이
+  투입하는 순간 또는 1등이 다 고른 뒤 RACE_CONSOLATION_MS(20초) 뒤 자동으로. 늦은 사람은 고르지 않는다. RACE_UNLIMITED = 1이면
+  보드 칸 수와 상관없이 종류 비율대로 계속 만든다(확보 시간 내내 라운드). state.race.plan / picks는 좌석별 배열 / invoiceIds도 배열.
+- **배송지**: 택배마다 UNITS(34호실: 아파트 7층x2, 맨션 2층x6, 단독주택 8채) 중 하나, 한 하프에서 겹치지 않게. 송장 inv.unit (floorIdx/room은 null).
+- **배송 단계**(phase "delivery", 엘리베이터 라운드 대신, DELIVERY_MS 90초): 팀 키 + 호실 버튼을 DELIVERY_HOLD_MS(2초) 누르고 있으면 배송.
+  레일 화면 키보드: Ctrl = 빨간 팀(1번), Shift = 파란 팀(2번), 호실 키는 build_client.py WALL_KEYS(버튼에 표시). 플레이어 화면은 레일이 없을 때만 벽을 그리고 탭(좌석 자동).
+  - 아파트는 엘리베이터가 그 층일 때만 시작, 누르는 동안 엘리베이터가 떠나면 실패(elevleft). 엘리베이터는 Ctrl/Shift+↑↓ 또는 플레이어 화면 ▲▼, 누를 때마다 한 층.
+  - 내 택배 없는 집 = 오배송(players[seat].wrong, 1회 DELIVERY_WRONG_PENALTY 감점, totalScore에 반영). 한 사람 동시 1집(DELIVERY_MAX_ACTIVE).
+  - DELIVERY_HOLD_MS = 0이면 "누르면 켜지고 DELIVERY_PROGRESS_MS 뒤 완료, 켜진 버튼을 보조키 없이 5번 누르면 반송(inv.returned)" 방식.
+  - 이벤트 state.delivery.ev(start/done/wrong/noelev/elevleft/released/busy/taken/tap/returned)로 클라이언트가 소리·팝업.
+- 화면 역할 하나씩(사용자 피드백 "정보 과잉"): 플레이어 = 내 송장 주소 + 지금 상태 + 실적 / 레일 = 벽 / 메인 = 두 팀 점수판(획득·배송 완료·남은 택배·지금).
+- 튜토리얼은 wallRule이 있으면 4장(TUT_PAGES_WALL).
+- 예전 흐름(한 사람 하나씩 -> 엘리베이터 7라운드)은 환경변수 WALL=0. regress.sh는 예전 테스트를 WALL=0으로 돌리고 마지막에 test_wall.js / test_wall_e2e.js.

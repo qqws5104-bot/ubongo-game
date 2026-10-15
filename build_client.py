@@ -71,6 +71,7 @@ def load_shared_constants():
         "ELEVATOR_JOLT": eval(grab("ELEVATOR_JOLT")),
         "VOTE_MS": eval(grab("VOTE_MS")),
         "RACE_EXCLUDE_KINDS": json.loads(grab("RACE_EXCLUDE_KINDS")),
+        "RACE_GAME_POOL": json.loads(grab("RACE_GAME_POOL")),
         "THIEF_PER_HALF": eval(grab("THIEF_PER_HALF")),
     }
 
@@ -697,11 +698,13 @@ APP_JS_TEMPLATE = r"""
   var RACE_SECOND_MS = @@RACE_SECOND_MS@@;
   var RACE_CONSOLATION_MS = @@RACE_CONSOLATION_MS@@; // 2026-10-14 한 사람만 끝내면 1등이 고르고 이 시간 뒤 다른 사람도 무작위로 하나
   var RACE_STICKER_LEVEL = @@RACE_STICKER_LEVEL@@;
-  var RACE_EXCLUDE_KINDS = @@RACE_EXCLUDE_KINDS@@; // 2026-10-15 레이스에서 빠지는 종류 (확정 층수)
+  var RACE_EXCLUDE_KINDS = @@RACE_EXCLUDE_KINDS@@;
+  var RACE_HAS_FIRST_GAME = @@RACE_HAS_FIRST_GAME@@; // 2026-10-15: 첫 미니게임 없음(바로 택배 쌓기)이 기본 // 2026-10-15 레이스에서 빠지는 종류 (확정 층수)
   function kindOff(ci) { return !!RACE_MODE && RACE_EXCLUDE_KINDS.indexOf(TYPES[ci].key) >= 0; }
   // 2026-10-15 레일 화면 고르기 키: 왼쪽(1번) 자리 A S D, 오른쪽(2번) 자리 J K L (현장 물리 버튼을 이 키로 연결)
-  var RAIL_PICK_KEYS = { "1": ["KeyA", "KeyS", "KeyD"], "2": ["KeyJ", "KeyK", "KeyL"] };
-  var RAIL_PICK_LABEL = { "1": ["A", "S", "D"], "2": ["J", "K", "L"] };
+  // 2026-10-16: 택배가 5개까지 나온다 -- 1번 A S D F G / 2번 H J K L ;
+  var RAIL_PICK_KEYS = { "1": ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG"], "2": ["KeyH", "KeyJ", "KeyK", "KeyL", "Semicolon"] };
+  var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = @@VOTE_MS@@, THIEF_PER_HALF = @@THIEF_PER_HALF@@; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = @@ELEVATOR_JOLT@@; // 2026-10-14 덜컹 (game-data.js)
   var BUILD_TAG = "@@BUILD_TAG@@"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
@@ -822,6 +825,7 @@ APP_JS_TEMPLATE = r"""
   function scoreInvoice(inv) {
     var t = TYPES[inv.catIdx];
     if (inv.stolen) return -t.penalty;
+    if (inv.returned) return -t.penalty; // 2026-10-16 반송
     if (inv.deliveredRound === null) return -t.penalty;
     var base = invReward(inv); // 2026-10-13: 층 배율 적용 금액 (game-room.js scoreInvoice와 동일)
     return inv.deliveredWasPriority ? base * PRIORITY_MULTIPLIER : base;
@@ -830,6 +834,7 @@ APP_JS_TEMPLATE = r"""
     // 2026-08-27: 도난당한 송장도 "미배송"으로 통합 표기 (사용자 요청 -- 배송이 안 됐으니까).
     // 페널티/소진 로직(scoreInvoice, deliveredRound 처리)은 그대로, 영구 라벨만 통일했다. 그 라운드의
     // 실시간 안내(renderDeliveredCallout의 "택배도둑에게 도난당했어요!")는 별개로 남겨둠.
+    if (inv.returned) return "반송";
     if (inv.stolen) return "미배송";
     return inv.deliveredRound === null ? "미배송" : "성공";
   }
@@ -843,7 +848,8 @@ APP_JS_TEMPLATE = r"""
   function heldKinds(invs) { var k = {}; invs.forEach(function (inv) { k[inv.catIdx] = true; }); return k; }
   function totalScore(seat, st) {
     var invs = st.players[seat].invoices;
-    return invs.reduce(function (sum, inv) { return sum + scoreInvoice(inv); }, 0) + setBonusFor(invs, setRuleOf(st));
+    var wrong = (st.players[seat].wrong || 0) * ((st.wallRule && st.wallRule.wrongPenalty) || 0); // 2026-10-16 오배송 감점
+    return invs.reduce(function (sum, inv) { return sum + scoreInvoice(inv); }, 0) + setBonusFor(invs, setRuleOf(st)) - wrong;
   }
   function fmtWon(n) {
     var sign = n > 0 ? "+" : (n < 0 ? "-" : "");
@@ -889,6 +895,7 @@ APP_JS_TEMPLATE = r"""
           ["1", "2"].forEach(function (s) { if (state.seatOwners[s] === CLIENT_ID) setMySeat(s); });
         }
         render();
+        dEvents(state);
         syncMiniGame();
       }
       else if (msg.type === "error") { handleWsError(msg); }
@@ -1030,7 +1037,7 @@ APP_JS_TEMPLATE = r"""
           + '<div class="tut-flow sub"><span>전반</span><i>+</i><span>후반</span><i>=</i><span><b>총점 높은 사람 승리</b></span></div>'; },
       l: function () { return ["택배를 모아서, 하나뿐인 엘리베이터로 각자 송장의 층까지 배달해요.", "전반과 후반 두 번 반복해요."]; } },
     { t: "① 택배 확보 — 먼저 끝내기 경주", v: function () {
-        return '<div class="tut-flow"><span class="tut-step">화면 미니게임<small>5종 중 하나 · 둘이 같은 게임</small></span><i>→</i>'
+        return '<div class="tut-flow">' + (RACE_HAS_FIRST_GAME ? '<span class="tut-step">화면 미니게임<small>5종 중 하나 · 둘이 같은 게임</small></span><i>→</i>' : '')
           + '<span class="tut-step">택배 쌓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>투입!</small></span></div>'; },
       l: function () { return ["라운드마다 둘이 동시에 시작해요. 먼저 투입한 사람이 택배를 먼저 골라요.", "택배 쌓기 문제는 <b>레일 화면</b>에만 떠요."]; } },
     { t: "② 택배 고르기", v: function () {
@@ -1051,7 +1058,26 @@ APP_JS_TEMPLATE = r"""
           + '<span class="tut-step">다음 라운드<small>상대가 그 층에서 배송하면</small></span><i>→</i><span class="tut-step bad">도난!<small>상대 감점</small></span></div>'; },
       l: function () { return ["상대가 어느 층으로 갈지 읽어서 숨겨 두세요.", "준비됐으면 Space! 두 사람이 다 보면 바로 시작해요."]; } },
   ];
+  // 2026-10-16 벽 배송 규칙용 튜토리얼 (서버 wallRule이 있으면 이걸 쓴다 -- 4장, 서버 _startTutorial과 장 수를 맞춘다)
+  var TUT_PAGES_WALL = [
+    { t: "이렇게 진행돼요", v: function () {
+        return '<div class="tut-flow"><span class="tut-step">① 택배 쌓기<small>' + Math.round(SECURE_PHASE_MS / 60000) + '분 · 먼저 끝내기 경주</small></span><i>→</i>'
+          + '<span class="tut-step">② 배송<small>호실 버튼 누르기</small></span></div>'
+          + '<div class="tut-flow sub"><span class="t1">빨간 팀</span><i>vs</i><span class="t2">파란 팀</span><i>=</i><span><b>전반+후반 배송 실적</b></span></div>'; },
+      l: function () { return ["택배 쌓기로 택배를 따고, 송장에 적힌 집의 버튼을 눌러 배송해요."]; } },
+    { t: "① 택배 쌓기", v: function () {
+        return '<div class="tut-flow"><span class="tut-step">택배 쌓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>투입!</small></span></div>'; },
+      l: function () { return ["먼저 끝낸 사람이 <b>3개 중 2개</b>를 골라요 · 3라운드부터는 <b>5개 중 3개</b>.", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
+    { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
+        return '<div class="tut-keys big"><span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> + 호실 버튼 <b>' + Math.round(((state && state.wallRule && state.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르기</div>'; },
+      l: function () { return ["송장의 집 버튼을 누르고 있으면 띵동, 배송 완료!", "중간에 떼면 처음부터 · 내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
+    { t: "③ 아파트는 엘리베이터", v: function () {
+        return '<div class="tut-keys big"><b>▲</b> / <b>▼</b> 로 엘리베이터 끌기</div>'; },
+      l: function () { return ["아파트 집은 엘리베이터가 <b>그 층</b>에 있어야 배송돼요. 누르는 동안 떠나면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
+  ];
+  function tutPages(st) { return (st && st.wallRule) ? TUT_PAGES_WALL : TUT_PAGES; }
   function tutPageHtml(st, pg) {
+    var TUT_PAGES = tutPages(st);
     var p = TUT_PAGES[pg];
     return '<div class="tut-page"><div class="tut-num">' + (pg + 1) + ' / ' + TUT_PAGES.length + '</div><h2>' + p.t + '</h2>'
       + '<div class="tut-visual">' + p.v() + '</div>'
@@ -1071,9 +1097,9 @@ APP_JS_TEMPLATE = r"""
       html += '<div class="tut-page tut-wait"><h2>다 봤어요!</h2><p>' + esc(seatName(other, st)) + ' · ' + tutProgText(tt, other) + '</p>'
         + '<p class="tut-hint">두 사람이 다 보면 바로 택배 확보가 시작돼요</p></div>';
     } else {
-      html += tutPageHtml(st, Math.min(mine, TUT_PAGES.length - 1));
+      html += tutPageHtml(st, Math.min(mine, tutPages(st).length - 1));
     }
-    html += '<div class="tut-dots">' + TUT_PAGES.map(function (_, i) { return '<i class="' + (i < mine ? 'seen' : '') + (i === mine ? ' now' : '') + '"></i>'; }).join('') + '</div>';
+    html += '<div class="tut-dots">' + tutPages(st).map(function (_, i) { return '<i class="' + (i < mine ? 'seen' : '') + (i === mine ? ' now' : '') + '"></i>'; }).join('') + '</div>';
     html += '<div class="tut-actions">'
       + '<button class="btn" data-action="tutorial-prev"' + (mine <= 0 ? ' disabled' : '') + '>← 이전</button>'
       + (mine < tt.pages ? '<button class="btn primary" data-action="tutorial-next">' + (mine === tt.pages - 1 ? '다 봤어요 (Space)' : '다음 (Space)') + '</button>' : '')
@@ -1144,14 +1170,25 @@ APP_JS_TEMPLATE = r"""
   var RACE_KEYS = ["←", "↑", "→"]; // 택배 3개 고르기 키 (현장 물리 버튼과 같은 배치)
   // 레일 화면이 접속해 있으면 고르기는 레일에서 (플레이어 화면은 안내만). 레일이 없으면 예전처럼 내 화면에서.
   function railPicks() { return !RAIL && !MAIN && railInfo && railInfo.count > 0; }
+  // 2026-10-16 몫 계획(r.plan): picks가 좌석별 배열. 먼저 끝낸 사람만 r.plan.first개까지 고르고, 나머지는 늦은 사람에게 자동으로 간다.
+  function rOwner(r, i) {
+    if (r.plan) return r.picks["1"].indexOf(i) >= 0 ? "1" : (r.picks["2"].indexOf(i) >= 0 ? "2" : null);
+    return r.picks["1"] === i ? "1" : (r.picks["2"] === i ? "2" : null);
+  }
+  function rRestCount(r) { var n = 0; r.pair.forEach(function (_, i) { if (!rOwner(r, i)) n++; }); return n; }
+  function itAddrHtml(it) {
+    if (it.unit && unitById[it.unit]) { var u = unitById[it.unit]; return '<span class="rp-floorbig rp-addr"><small>' + esc(bShort(u.b)) + '</small>' + esc(u.b === "apt" ? u.floor + "층 " + u.label : u.label.replace("성수로 ", "성수로 ")) + '</span>'; }
+    return '<span class="rp-floorbig">' + esc(FLOORS[it.floorIdx] || '') + '</span>';
+  }
   function raceCanPick(r, seat) {
+    if (r && r.plan) return !!seat && r.status === "picking" && r.first === seat && r.picks[seat].length < r.plan.first && rRestCount(r) > 0;
     if (!seat || r.status !== "picking" || r.picks[seat] !== null) return false;
     if (r.first === seat) return true;
     return r.picks[r.first] !== null && r.stage[seat] === "done";
   }
   // 택배는 종류만 보인다. 층·금액은 고른 사람 자기 자리 송장(raceSlip)에만.
   function raceParcel(st, r, it, i, seat) {
-    var owner = r.picks["1"] === i ? "1" : (r.picks["2"] === i ? "2" : null);
+    var owner = rOwner(r, i);
     var left = r.status === "reveal" && !owner;
     var canPick = !owner && raceCanPick(r, seat) && !railPicks();
     var t = TYPES[it.catIdx];
@@ -1160,7 +1197,7 @@ APP_JS_TEMPLATE = r"""
       + '<span class="rp-amt">' + (multsVary() ? '기본 ' : '') + fmtWon(t.reward) + '</span>'
       // 2026-10-15: 확정 층수 택배만 층을 미리 보여 준다 (이름 그대로 층이 정해진 택배). 나머지는 송장이 나와야 안다.
       // 2026-10-15: 층을 보고 고른다 -- 모든 택배의 층을 카드에 크게 (호실은 송장에서)
-      + '<span class="rp-floorbig">' + esc(FLOORS[it.floorIdx]) + '</span>';
+      + itAddrHtml(it);
     // 종류 모으기: 이걸 가져가면 내 세트가 완성되는지 / 상대 세트를 막는지 (가진 종류 기준 -- 보너스는 배송해야 받는다)
     var rule = setRuleOf(st);
     if (!owner && !left && rule.amount > 0) {
@@ -1177,12 +1214,23 @@ APP_JS_TEMPLATE = r"""
     }
     if (owner) inner += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + ' 획득</span>';
     else if (left) inner += '<span class="rp-owner gone">레일로 돌아감</span>';
-    else if (canPick) inner += '<span class="rp-owner pick">' + (RACE_KEYS[i] || '') + ' 고르기</span>';
+    else if (canPick) inner += '<span class="rp-owner pick">' + (r.plan ? (i + 1) : (RACE_KEYS[i] || '')) + ' 고르기</span>';
     return canPick ? '<button class="' + cls + '" data-action="race-pick" data-idx="' + i + '">' + inner + '</button>'
       : '<div class="' + cls + '">' + inner + '</div>';
   }
   // 자기 자리에서 나오는 송장 (고른 사람 화면에만)
   function raceSlip(st, r, seat) {
+    if (r.plan) {
+      var ids = (r.invoiceIds && r.invoiceIds[seat]) || [];
+      if (!ids.length) return '';
+      var invs = st.players[seat].invoices.filter(function (v) { return ids.indexOf(v.id) >= 0; });
+      local.raceSlipSeenSet = local.raceSlipSeenSet || {};
+      return '<div class="race-slips">' + invs.map(function (inv) {
+        var isNew2 = !local.raceSlipSeenSet[inv.id]; local.raceSlipSeenSet[inv.id] = 1;
+        return '<div class="race-slip fee-t' + inv.catIdx + (isNew2 ? ' is-new' : '') + '"><div class="rs-bar">송장</div>'
+          + '<div class="rs-room">' + esc(invAddr(inv)) + '</div><div class="rs-amt">' + fmtWon(invReward(inv)) + '</div></div>';
+      }).join('') + '</div>';
+    }
     var id = r.invoiceIds && r.invoiceIds[seat];
     if (!id) return '';
     var inv = null;
@@ -1194,20 +1242,22 @@ APP_JS_TEMPLATE = r"""
     local.raceSlipSeen = id;
     return '<div class="race-slip fee-t' + inv.catIdx + (isNew ? ' is-new' : '') + '"><div class="rs-bar">송장 출력</div>'
       + '<div class="rs-name"><span class="rp-ico">' + CAT_ICONS[inv.catIdx] + '</span>' + esc(t.name) + '</div>'
-      + '<div class="rs-room">' + esc(roomCode(inv.floorIdx, inv.room)) + '</div>'
+      + '<div class="rs-room">' + esc(invAddr(inv)) + '</div>'
       + '<div class="rs-floor">' + esc(FLOORS[inv.floorIdx]) + (floorMult(inv.floorIdx) !== 1 ? ' <small>' + multLabel(inv.floorIdx) + '</small>' : '') + '</div>'
       + '<div class="rs-amt">' + fmtWon(invReward(inv)) + '</div>'
       + '<div class="rs-code">||| ||||| || |||| ||| |||||</div></div>';
   }
   function raceLane(st, r, s, isMe) {
     var stg = r.stage[s];
-    var steps = [["sticker", raceGameName(r)], ["ubongo", "택배 쌓기"], ["done", "투입"]];
-    var idx = stg === "sticker" ? 0 : (stg === "ubongo" ? 1 : (stg === "done" ? 2 : -1));
+    // 2026-10-15: 첫 게임이 없으면(기본) 택배 쌓기 > 투입 두 단계
+    var steps = r.game ? [["sticker", raceGameName(r)], ["ubongo", "택배 쌓기"], ["done", "투입"]] : [["ubongo", "택배 쌓기"], ["done", "투입"]];
+    var idx = -1; steps.forEach(function (sp, k) { if (sp[0] === stg) idx = k; });
+    var last = steps.length - 1;
     var html = '<div class="race-lane' + (isMe ? ' me' : '') + (stg === "out" ? ' is-out' : '') + '"><span class="rl-name">' + (isMe ? '나 · ' : '') + esc(seatName(s, st))
       + (r.first === s ? ' <em>1등</em>' : '') + '</span><span class="rl-steps">';
     steps.forEach(function (sp, k) {
-      html += '<span class="rl-step' + (k < idx || (k === 2 && idx === 2) ? ' done' : '') + (k === idx && idx < 2 ? ' now' : '') + '">' + sp[1] + '</span>';
-      if (k < 2) html += '<i class="rl-arrow">›</i>';
+      html += '<span class="rl-step' + (k < idx || (k === last && idx === last) ? ' done' : '') + (k === idx && idx < last ? ' now' : '') + '">' + sp[1] + '</span>';
+      if (k < last) html += '<i class="rl-arrow">›</i>';
     });
     html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '');
     // 2026-10-15 종류 모으기: 이번 하프에 가진 종류 (공개 정보 -- 상대가 뭘 노리는지 보이게)
@@ -1222,6 +1272,7 @@ APP_JS_TEMPLATE = r"""
     return html;
   }
   function raceMessage(st, r, seat) {
+    if (r.plan) return raceMessagePlan(st, r, seat);
     if (r.status === "reveal") {
       var parts = ["1", "2"].map(function (s) {
         var i = r.picks[s];
@@ -1237,7 +1288,7 @@ APP_JS_TEMPLATE = r"""
         if (r.stage[o] === "done") return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배 고르는 중</div>';
         return '<div class="race-msg hot">' + esc(seatName(o, st)) + ' 남은 택배를 노린다!' + (r.secondEndsAt ? ' ' + raceCount(r.secondEndsAt, '', '초') : '') + '</div>';
       }
-      return '<div class="race-msg">' + esc(raceGameName(r)) + ' → 택배 쌓기 → 투입! 먼저 끝낸 사람이 먼저 골라요</div>';
+      return '<div class="race-msg">' + (r.game ? esc(raceGameName(r)) + ' → ' : '') + '택배 쌓기 → 투입! 먼저 끝낸 사람이 먼저 골라요</div>';
     }
     var me = r.stage[seat];
     if (r.status === "picking") {
@@ -1264,10 +1315,40 @@ APP_JS_TEMPLATE = r"""
     if (me === "out") return '<div class="race-msg">이번 라운드는 포기했어요. ' + (RACE_CONSOLATION_MS > 0 ? '상대가 끝내고 고르면 ' + Math.round(RACE_CONSOLATION_MS / 1000) + '초 뒤 남은 택배 중 하나를 받아요' : '다음 라운드를 기다려요') + '</div>';
     return '<div class="race-msg">투입 완료!</div>';
   }
+  function raceMessagePlan(st, r, seat) {
+    var f = r.first, n = r.plan.first, rest = rRestCount(r);
+    if (r.status === "reveal") {
+      return '<div class="race-msg reveal">' + ["1", "2"].map(function (s) {
+        return esc(seatName(s, st)) + ' · ' + r.picks[s].length + '개' + (r.randomPick && r.randomPick[s] ? ' (자동)' : '');
+      }).join('<span class="sep">|</span>') + '</div>';
+    }
+    if (r.status !== "picking") {
+      if (seat && r.stage[seat] === "out") return '<div class="race-msg">이번 라운드는 포기했어요 · 상대가 고르고 남은 택배를 받아요</div>';
+      if (seat && r.stage[seat] === "ubongo") return '<div class="race-msg hot"><b>택배 쌓기</b> → <b>투입</b> (Space) · 먼저 끝내면 ' + r.pair.length + '개 중 ' + n + '개</div>';
+      return '<div class="race-msg">택배 쌓기 → 투입! 먼저 끝낸 사람이 ' + r.pair.length + '개 중 ' + n + '개, 나머지는 늦은 사람</div>';
+    }
+    var o = raceOther(f), firstLeft = n - r.picks[f].length;
+    if (!seat) {
+      if (firstLeft > 0 && rest) return '<div class="race-msg hot">' + esc(seatName(f, st)) + ' 먼저 투입! ' + firstLeft + '개 더 고르는 중' + (r.pickEndsAt ? ' ' + raceCount(r.pickEndsAt, '', '초') : '') + '</div>';
+      return '<div class="race-msg hot">남은 ' + rest + '개는 ' + esc(seatName(o, st)) + ' 몫 · 투입하면 바로' + (r.secondEndsAt ? ', 늦어도 ' + raceCount(r.secondEndsAt, '', '초') + ' 뒤' : '') + '</div>';
+    }
+    if (raceCanPick(r, seat)) {
+      var how = railPicks() ? '<b>레일 화면</b>에서 내 자리 버튼으로' : '숫자 <b>1~' + r.pair.length + '</b> 또는 클릭으로';
+      return '<div class="race-msg hot">먼저 끝냈어요! 주소를 보고 ' + how + ' <b>' + firstLeft + '개</b> 더 고르세요 <small>· 시간이 지나면 무작위</small></div>';
+    }
+    if (f === seat) return '<div class="race-msg">고르기 끝! 남은 ' + rest + '개는 상대 몫이에요</div>';
+    if (r.stage[seat] === "done") return '<div class="race-msg">상대가 고르는 중 · 남은 택배가 내 몫이에요</div>';
+    return '<div class="race-msg hot">상대가 먼저 끝냈어요! 투입하면 바로, 아니어도 ' + (r.secondEndsAt ? raceCount(r.secondEndsAt, '', '초') + ' 뒤' : '상대가 고른 뒤') + ' 남은 택배를 받아요</div>';
+  }
   // seat가 null이면 관전용(레일 화면/메인 모니터): 고르기 버튼·내 우봉고 영역 없음
   // 카트 안 오른쪽 위: 택배 고르기 남은 초 (내가 고를 차례일 때) / 늦은 사람은 투입 마감 초. 해당 없으면 비워 둔다.
   function racePickClock(r, seat) {
     if (r.status !== "picking") return '<span></span>';
+    if (r.plan) {
+      if (raceCanPick(r, seat) && r.pickEndsAt) return '<span class="race-clock is-pick">택배 고르기 ' + raceCount(r.pickEndsAt, '', '초') + '</span>';
+      if (r.first !== seat && r.stage[seat] !== "done" && r.secondEndsAt) return '<span class="race-clock is-pick">남은 택배까지 ' + raceCount(r.secondEndsAt, '', '초') + '</span>';
+      return '<span></span>';
+    }
     if (raceCanPick(r, seat)) {
       var ends = r.first === seat ? r.pickEndsAt : r.secondPickEndsAt;
       return ends ? '<span class="race-clock is-pick">택배 고르기 ' + raceCount(ends, '', '초') + '</span>' : '<span class="race-clock is-pick">택배 고르기</span>';
@@ -1328,7 +1409,7 @@ APP_JS_TEMPLATE = r"""
     var html = '<main class="stage stage--race">' + cartOpen('cart--race') + '<div class="race-wrap' + (slip ? ' has-slip' : '') + '">'
       + raceStage(st, seat) + slip + '</div>';
     html += '<div class="race-mine"><span class="rm-label">내 택배</span>' + (st.players[seat].invoices.length
-      ? st.players[seat].invoices.map(function (inv) { return '<span class="my-chip fee-t' + inv.catIdx + '">' + esc(TYPES[inv.catIdx].name) + ' ' + esc(roomCode(inv.floorIdx, inv.room)) + ' ' + fmtWon(invReward(inv)) + '</span>'; }).join('')
+      ? st.players[seat].invoices.map(function (inv) { return '<span class="my-chip fee-t' + inv.catIdx + '">' + esc(TYPES[inv.catIdx].name) + ' ' + esc(invAddr(inv)) + ' ' + fmtWon(invReward(inv)) + '</span>'; }).join('')
       : '<small>아직 없음</small>') + '</div>';
     return html + cartClose() + '</main>';
   }
@@ -1412,7 +1493,7 @@ APP_JS_TEMPLATE = r"""
           if (!cell.taken) mine += '<button class="floor-btn" data-action="open-cell" data-cell="' + cell.id + '"><span>' + esc(FLOORS[num]) + '</span><small>' + fmtWon(Math.round(t.reward * floorMult(num))) + '</small></button>';
           else if (cell.takenBy === seat) {
             var fInv = invFor(cell);
-            mine += '<button class="floor-btn is-gone mine" disabled><span>' + esc(FLOORS[num]) + '</span>' + (fInv ? '<small>' + esc(roomCode(fInv.floorIdx, fInv.room)) + '</small>' : '') + '</button>';
+            mine += '<button class="floor-btn is-gone mine" disabled><span>' + esc(FLOORS[num]) + '</span>' + (fInv ? '<small>' + esc(invAddr(fInv)) + '</small>' : '') + '</button>';
           }
           else mine += '<button class="floor-btn is-gone" disabled title="상대가 먼저 가져갔어요">' + esc(FLOORS[num]) + '</button>';
         }
@@ -1424,7 +1505,7 @@ APP_JS_TEMPLATE = r"""
           + '<span class="rbp">성공 ' + rewardRange(t) + ' · 실패 ' + fmtWon(-t.penalty) + '</span></button>';
         mine += '<div class="my-chips">' + myCells.map(function (c) {
           var inv = invFor(c);
-          return '<span class="my-chip">' + (inv ? esc(roomCode(inv.floorIdx, inv.room)) : '확보') + '</span>';
+          return '<span class="my-chip">' + (inv ? esc(invAddr(inv)) : '확보') + '</span>';
         }).join('') + '</div>';
       }
       mine += '</div>';
@@ -1575,7 +1656,7 @@ APP_JS_TEMPLATE = r"""
       var flagText = inv.deliveredWasPriority ? ('우선 x' + PRIORITY_MULTIPLIER + ' 성공') : (isPendingPriority ? ('이번 라운드 우선 x' + PRIORITY_MULTIPLIER) : '');
       return '<div class="invoice' + (delivered ? ' delivered' : '') + (isPriority ? ' is-priority' : '') + '">'
         + '<span class="swatch" style="background:' + t.color + '"></span>'
-        + '<div class="meta"><div class="t">' + esc(t.name) + (flagText ? ' <span class="priority-flag">' + flagText + '</span>' : '') + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + ' · ' + fmtWon(invReward(inv)) + '</div></div>'
+        + '<div class="meta"><div class="t">' + esc(t.name) + (flagText ? ' <span class="priority-flag">' + flagText + '</span>' : '') + '</div><div class="d">' + invAddr(inv) + ' · ' + fmtWon(invReward(inv)) + '</div></div>'
         + '<span class="sticker' + (delivered && !inv.stolen ? '' : ' pending') + '">' + stickerText + '</span>'
         + '</div>';
     }).join("") + '</div>';
@@ -1637,7 +1718,7 @@ APP_JS_TEMPLATE = r"""
       return '<div class="invoice' + (confirmed ? ' delivered' : ' pickable') + (picked ? ' is-priority' : '') + '"'
         + (confirmed ? '' : (' data-action="pick-priority" data-inv="' + (picked ? '' : inv.id) + '"')) + '>'
         + '<span class="swatch" style="background:' + t.color + '"></span>'
-        + '<div class="meta"><div class="t">' + esc(t.name) + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + ' · 성공 시 ' + fmtWon(invReward(inv)) + '</div></div>'
+        + '<div class="meta"><div class="t">' + esc(t.name) + '</div><div class="d">' + invAddr(inv) + ' · 성공 시 ' + fmtWon(invReward(inv)) + '</div></div>'
         + '<span class="sticker' + (picked ? '' : ' pending') + '">' + (picked ? ('우선 x' + PRIORITY_MULTIPLIER) : '선택') + '</span>'
         + '</div>';
     }).join('') + '</div>';
@@ -1759,7 +1840,7 @@ APP_JS_TEMPLATE = r"""
       var t = TYPES[v.catIdx];
       return '<div class="ea-pk fee-t' + v.catIdx + (v.floorIdx === el.floorIdx ? ' is-here' : '') + (pri === v.id ? ' is-pri' : '') + '">'
         + '<span class="ea-pk-tape"></span>'
-        + '<span class="ea-pk-slip"><i class="ea-pk-ico">' + CAT_ICONS[v.catIdx] + '</i><b>' + esc(roomCode(v.floorIdx, v.room)) + '</b></span>'
+        + '<span class="ea-pk-slip"><i class="ea-pk-ico">' + CAT_ICONS[v.catIdx] + '</i><b>' + esc(invAddr(v)) + '</b></span>'
         + (pri === v.id ? '<span class="ea-pk-pri">우선</span>' : '')
         + '</div>';
     }).join('') + '</div>';
@@ -1771,7 +1852,7 @@ APP_JS_TEMPLATE = r"""
         return i === null ? '<span class="ea-gap"></span>' : '<span class="ea-btn' + (i === f ? ' on' : '') + '" data-floor="' + i + '">' + eaLabel(i) + '</span>';
       }).join('');
     }).join('');
-    return '<div class="elev-art' + joltClass(el, 'art') + '" aria-label="엘리베이터 ' + esc(FLOORS[f]) + '">'
+    return '<div class="elev-art' + joltClass(el, 'art') + '" data-floor-name="' + esc(FLOORS[f]) + '" aria-label="엘리베이터 ' + esc(FLOORS[f]) + '">'
       + '<div class="ea-ind"><i class="ea-up' + (dir === "up" ? ' on' : '') + '"></i><b>' + eaLabel(f) + '</b><i class="ea-down' + (dir === "down" ? ' on' : '') + '"></i></div>'
       + '<div class="ea-panel">' + panel + '</div>'
       + (floorMult(f) !== 1 ? '<span class="ea-mult' + (floorMult(f) > 1 ? ' hi' : '') + '">배송비 ' + multLabel(f) + '</span>' : '')
@@ -1783,9 +1864,10 @@ APP_JS_TEMPLATE = r"""
     var html = '<main class="stage"><div class="elev-frame"><div class="elev-layout">';
     // left column: gauge, then my own package list directly beneath it -- opponent's list is
     // never rendered here (or anywhere in the elevator phase), only mine.
-    html += '<div class="elev-left">' + renderBuilding(st.elevator) + '</div>'
-      + '<div class="elev-mid">' + renderElevArt(st.elevator, st, seat)
-      + '<div class="player-col me"><h3>내 택배' + setProgressLine(st, seat) + '</h3>' + renderInvoiceList(st, seat) + '</div>'
+    // 2026-10-15 (사용자 요청, "한 화면에 한 가지 일"): 내 화면엔 엘리베이터 안(바닥에 내 택배 + 송장)과 조작만.
+    //   건물 단면도는 레일 화면/메인 모니터에, 송장 목록은 바닥의 상자가 대신한다.
+    html += '<div class="elev-mid">' + renderElevArt(st.elevator, st, seat)
+      + '<div class="elev-mid-foot">' + setProgressLine(st, seat) + '</div>'
       + '</div>';
 
     html += '<div>';
@@ -1874,7 +1956,7 @@ APP_JS_TEMPLATE = r"""
             + (myChosen ? '' : (' data-action="choose-delivery" data-inv="' + invId + '"'))
             + '>'
             + '<span class="swatch" style="background:' + t.color + '"></span>'
-            + '<div class="meta"><div class="t">' + esc(t.name) + '</div><div class="d">' + roomCode(inv.floorIdx, inv.room) + '</div></div>'
+            + '<div class="meta"><div class="t">' + esc(t.name) + '</div><div class="d">' + invAddr(inv) + '</div></div>'
             + '<span class="sticker' + (isChosen ? '' : ' pending') + '">' + (isChosen ? '선택됨' : '선택') + '</span>'
             + '</div>';
         }).join('') + '</div>';
@@ -1968,7 +2050,7 @@ APP_JS_TEMPLATE = r"""
       var t = TYPES[inv.catIdx];
       var pts = scoreInvoice(inv);
       var label = resultLabel(inv) + (inv.deliveredWasPriority ? ' · 우선' : '');
-      html += '<tr><td>' + esc(t.name) + '</td><td>' + roomCode(inv.floorIdx, inv.room) + '</td><td>' + label + '</td><td>' + fmtWon(pts) + '</td></tr>';
+      html += '<tr><td>' + esc(t.name) + '</td><td>' + invAddr(inv) + '</td><td>' + label + '</td><td>' + fmtWon(pts) + '</td></tr>';
     });
     if (!invs.length) html += '<tr><td colspan="4" style="color:var(--muted)">확보한 택배 없음</td></tr>';
     var sb = setBonusFor(invs, setRuleOf(state));
@@ -2034,6 +2116,250 @@ APP_JS_TEMPLATE = r"""
       + '<p>서버에 접속하고 있어요. 잠시만 기다려 주세요.</p></div>', 'cart--lobby') + '</div></main>';
   }
 
+  // ---------- 2026-10-16 벽 배송 (phase "delivery") ----------
+  // 화면마다 볼 것 하나만 (사용자 피드백: 정보가 흩어져 시선이 분산됨):
+  //   플레이어 화면 = 내 송장(주소)과 지금 상태 / 레일 화면 = 벽(호실 버튼) / 메인 모니터 = 두 팀 점수판
+  var WALL = @@WALL_JSON@@;
+  function dWon(n) { return (n < 0 ? "-" : "") + Math.abs(n || 0).toLocaleString("ko-KR") + "원"; }
+  var TEAM = { "1": "빨간 팀", "2": "파란 팀" };
+  var TEAM_KEY = { "1": "Ctrl", "2": "Shift" };
+  // 호실 키 (34개). Ctrl+W/T/N/Q와 Ctrl+숫자는 브라우저가 가로채서 쓰지 않는다. 현장에서는 물리 버튼을 이 키로 연결.
+  var WALL_KEYS = ["KeyE", "KeyR", "KeyD", "KeyF", "KeyC", "KeyV", "KeyU", "KeyI", "KeyJ", "KeyK", "KeyM", "Comma", "KeyO", "KeyP",
+    "KeyA", "KeyS", "KeyG", "KeyH", "KeyL", "Semicolon", "KeyZ", "KeyX", "KeyB", "Period", "Slash", "Quote",
+    "KeyY", "BracketLeft", "BracketRight", "Backslash", "Minus", "Equal", "Backquote", "Enter"];
+  var KEY_LABEL = { Comma: ",", Period: ".", Slash: "/", Semicolon: ";", Quote: "'", BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Backquote: "`", Enter: "↵" };
+  var unitById = {}, unitByKey = {};
+  WALL.units.forEach(function (u, i) { u.key = WALL_KEYS[i]; u.keyLabel = KEY_LABEL[u.key] || u.key.replace("Key", ""); unitById[u.id] = u; unitByKey[u.key] = u; });
+  function unitAddr(u) { return u.b === "house" ? u.label : (u.b === "apt" ? "아파트 " + u.floor + "층 " + u.label : "맨션 " + u.label); }
+  function invAddr(inv) { return (inv && inv.unit && unitById[inv.unit]) ? unitAddr(unitById[inv.unit]) : roomCode(inv.floorIdx, inv.room); }
+  function bShort(b) { return b === "apt" ? "아파트" : (b === "mansion" ? "맨션" : "주택"); }
+  function dStats(st, s) {
+    var invs = st.players[s].invoices, r = { got: invs.length, gotSum: 0, done: 0, doneSum: 0, pending: [], returned: 0, wrong: st.players[s].wrong || 0 };
+    invs.forEach(function (v) {
+      r.gotSum += invReward(v);
+      if (v.returned) r.returned++;
+      else if (v.deliveredRound !== null && !v.stolen) { r.done++; r.doneSum += invReward(v); }
+      else if (v.deliveredRound === null) r.pending.push(v);
+    });
+    return r;
+  }
+  function dActive(st, s) {
+    var d = st.delivery, out = null;
+    if (!d) return null;
+    Object.keys(d.doors).forEach(function (id) { if (d.doors[id].seat === s) out = { unit: id, door: d.doors[id] }; });
+    return out;
+  }
+  function dNeedMs(door) { var w = state.wallRule || {}; return door.hold ? (w.holdMs || 2000) : (w.progressMs || 5000); }
+  function dClock(st) { return '<b class="d-clock" data-ends="' + (st.delivery.endsAt || nowMs()) + '">' + fmtClock((st.delivery.endsAt || nowMs()) - nowMs()) + '</b>'; }
+
+  // 호실 버튼 하나. interactive: 레일 화면(키/클릭) 또는 레일이 없을 때 플레이어 화면(탭)
+  function unitBtn(st, u, keyHint) {
+    var door = st.delivery.doors[u.id];
+    var cls = 'du du-' + u.b + (door ? ' on-' + door.seat : '');
+    return '<button class="' + cls + '" data-unit="' + u.id + '"' + (door ? ' data-dstart="' + door.start + '" data-dneed="' + dNeedMs(door) + '"' : '') + '>'
+      + '<span class="du-ring"></span><span class="du-label">' + esc(u.b === "house" ? u.label.replace("성수로 ", "") : u.label) + '</span>'
+      + (keyHint ? '<kbd>' + esc(u.keyLabel) + '</kbd>' : '') + '</button>';
+  }
+  function renderWalls(st, keyHint) {
+    var d = st.delivery, ef = d.elev ? d.elev.floor : null;
+    var apt = '<div class="dw dw-apt"><div class="dw-name">아파트 <small>7층 · 엘리베이터</small></div><div class="dw-apt-grid">';
+    for (var f = 7; f >= 1; f--) {
+      apt += '<span class="dw-fl' + (ef === f ? ' here' : '') + '">' + f + 'F</span>'
+        + unitBtn(st, unitById["a" + f + "01"], keyHint) + unitBtn(st, unitById["a" + f + "02"], keyHint)
+        + '<span class="dw-shaft' + (ef === f ? ' here' : '') + '">' + (ef === f ? '<i class="dw-car"></i>' : '') + '</span>';
+    }
+    apt += '</div></div>';
+    var man = '<div class="dw dw-mansion"><div class="dw-name">맨션 <small>2층</small></div><div class="dw-man-grid">';
+    [2, 1].forEach(function (f) { for (var k = 1; k <= 6; k++) man += unitBtn(st, unitById["m" + f + "0" + k], keyHint); });
+    man += '</div></div>';
+    var hs = '<div class="dw dw-house"><div class="dw-name">단독주택 <small>성수로</small></div><div class="dw-house-grid">';
+    for (var h = 1; h <= 8; h++) hs += '<div class="dw-home"><i class="dw-roof"></i>' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
+    hs += '</div></div>';
+    return '<div class="dwalls">' + apt + man + hs + '</div>';
+  }
+  function elevCtl(st, withButtons) {
+    var e = st.delivery.elev;
+    if (!e) return '';
+    return '<div class="d-elev"><span class="d-elev-l">엘리베이터</span><b class="d-elev-f">' + e.floor + '층</b>'
+      + (withButtons ? '<button class="btn d-elev-b" data-action="wall-elev" data-dir="up">▲</button><button class="btn d-elev-b" data-action="wall-elev" data-dir="down">▼</button>' : '')
+      + '</div>';
+  }
+
+  // 플레이어 화면: 내 송장(주소)과 지금 할 일만 크게
+  function renderDelivery(st, seat) {
+    var s = dStats(st, seat), act = dActive(st, seat), rail = railInfo && railInfo.count > 0;
+    var now = '';
+    if (act) {
+      var u = unitById[act.unit];
+      now = '<div class="d-now is-on t' + seat + '" data-dstart="' + act.door.start + '" data-dneed="' + dNeedMs(act.door) + '"><b>' + esc(unitAddr(u)) + '</b> 배송 중 · 손 떼지 마세요<i class="d-now-bar"><i></i></i></div>';
+    } else if (s.pending.length) {
+      now = '<div class="d-now">' + (rail ? '<b>' + TEAM_KEY[seat] + '</b> + 호실 버튼을 ' : '호실을 ') + '<b>' + Math.round(((st.wallRule && st.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르고 있으면 배송 완료</div>';
+    } else now = '<div class="d-now is-clear">내 택배를 모두 처리했어요</div>';
+    var slips = s.pending.map(function (v) {
+      var u = unitById[v.unit];
+      var on = act && act.unit === v.unit;
+      return '<div class="d-slip' + (on ? ' on' : '') + '"><span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span><span class="d-slip-a">' + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w">' + dWon(invReward(v)) + '</span></div>';
+    }).join('');
+    var html = '<main class="stage stage--dlv">' + cartOpen('cart--dlv') + '<div class="dlv t' + seat + '">'
+      + '<div class="dlv-top"><span class="dlv-team t' + seat + '">' + TEAM[seat] + '</span>' + dClock(st)
+      + '<span class="dlv-earn">실적 <b>' + dWon(s.doneSum) + '</b><small>배송 ' + s.done + '건</small></span></div>'
+      + now
+      + '<div class="d-slips">' + (slips || '') + '</div>'
+      + elevCtl(st, true)
+      + (rail ? '' : renderWalls(st, false))
+      + '</div>' + cartClose() + '</main>';
+    return html;
+  }
+
+  // 팀 점수 칸 (레일 화면 위쪽 작게 / 메인 모니터 크게)
+  function teamCard(st, s, big) {
+    var x = dStats(st, s), act = dActive(st, s);
+    if (!big) return '<div class="d-team t' + s + '"><span>' + TEAM[s] + '</span><b>' + dWon(x.doneSum) + '</b><small>' + x.done + '건</small></div>';
+    return '<div class="d-team big t' + s + '"><div class="d-team-h">' + TEAM[s] + ' · 배송 실적</div><div class="d-team-v">' + dWon(x.doneSum) + '</div>'
+      + '<div class="d-team-rows">'
+      + '<div><span>획득</span><b>' + x.got + '개 · ' + dWon(x.gotSum) + '</b></div>'
+      + '<div><span>배송 완료</span><b>' + x.done + '개 · ' + dWon(x.doneSum) + '</b></div>'
+      + '<div><span>남은 택배</span><b>' + x.pending.length + '개</b></div>'
+      + '<div><span>지금</span><b>' + (act ? esc(unitAddr(unitById[act.unit])) + ' 배송 중' : '—') + '</b></div>'
+      + (x.returned || x.wrong ? '<div class="d-team-neg"><span>반송 · 오배송</span><b>' + x.returned + ' · ' + x.wrong + '</b></div>' : '')
+      + '</div>' + (act ? '<i class="d-team-bar" data-dstart="' + act.door.start + '" data-dneed="' + dNeedMs(act.door) + '"><i></i></i>' : '') + '</div>';
+  }
+  // 레일 화면 = 벽
+  function renderRailDelivery(st, head, halfName) {
+    return '<div class="rv rv-dlv">' + head("배송 · " + halfName)
+      + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
+      + renderWalls(st, true)
+      + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 · Ctrl+↑↓ 엘리베이터</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 · Shift+↑↓ 엘리베이터</span></div></div>';
+  }
+  // 메인 모니터 = 점수판
+  function renderMainDelivery(st, head, halfName) {
+    return head("배송 · " + halfName) + '<div class="mv-body"><div class="d-board">'
+      + teamCard(st, "1", true)
+      + '<div class="d-board-mid">' + dClock(st) + elevCtl(st, false) + '</div>'
+      + teamCard(st, "2", true) + '</div></div>';
+  }
+
+  // ---- 소리 ----
+  var dAudio = null;
+  function dTone(f, t, dur, type, vol) {
+    try {
+      if (!dAudio) dAudio = new (window.AudioContext || window.webkitAudioContext)();
+      if (dAudio.state === "suspended") dAudio.resume();
+      var o = dAudio.createOscillator(), g = dAudio.createGain(), s0 = dAudio.currentTime + t;
+      o.type = type || "sine"; o.frequency.value = f; g.gain.setValueAtTime(vol || 0.2, s0); g.gain.exponentialRampToValueAtTime(0.001, s0 + dur);
+      o.connect(g); g.connect(dAudio.destination); o.start(s0); o.stop(s0 + dur + 0.02);
+    } catch (e) {}
+  }
+  var DSND = {
+    start: function () { dTone(659, 0, 0.45); dTone(523, 0.25, 0.6); },
+    done: function () { dTone(1046, 0, 0.1, "triangle", 0.25); dTone(1318, 0.1, 0.1, "triangle", 0.25); dTone(1568, 0.2, 0.3, "triangle", 0.25); },
+    err: function () { dTone(150, 0, 0.3, "square", 0.08); },
+    soft: function () { dTone(330, 0, 0.18, "triangle", 0.12); },
+    beep: function () { dTone(880, 0, 0.14, "square", 0.08); },
+  };
+
+  // ---- 이벤트 → 소리·팝업 (진행 중 표시와 겹치지 않게 결과만 팝업) ----
+  var dLocal = { lastEv: -1, keyHold: {}, ptrHold: null, beeped: {} };
+  function dPop(kind, title, sub, team) {
+    var el = document.getElementById("dpop");
+    if (!el) { el = document.createElement("div"); el.id = "dpop"; document.body.appendChild(el); }
+    el.className = "dpop " + kind + (team ? " t" + team : "");
+    el.innerHTML = '<b>' + esc(title) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '');
+    void el.offsetWidth; el.classList.add("show");
+    clearTimeout(dLocal.popT); dLocal.popT = setTimeout(function () { el.classList.remove("show"); }, kind === "ok" ? 2200 : 1600);
+  }
+  function dEvents(st) {
+    if (!st || st.phase !== "delivery" || !st.delivery) { dLocal.lastEv = -1; dLocal.beeped = {}; return; }
+    var evs = st.delivery.ev || [];
+    if (dLocal.lastEv < 0) { dLocal.lastEv = evs.length ? evs[evs.length - 1].n : 0; return; }
+    var me = (RAIL || MAIN) ? null : mySeat();
+    evs.forEach(function (e) {
+      if (e.n <= dLocal.lastEv) return;
+      dLocal.lastEv = e.n;
+      var mine = !me || e.seat === me, u = unitById[e.unit], addr = u ? unitAddr(u) : "", who = e.seat ? TEAM[e.seat] : "";
+      if (e.k === "start") { if (mine || !me) DSND.start(); return; }
+      if (e.k === "done") { DSND.done(); if (mine) dPop("ok", "배송 완료! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat); return; }
+      if (e.k === "returned") { DSND.err(); dPop("bad", (me && e.seat === me ? "반송됐어요" : who + " 택배 반송"), addr, e.seat); return; }
+      if (!mine) return;
+      var pre = me ? "" : who + " · ";
+      if (e.k === "wrong") { DSND.err(); dPop("bad", pre + "오배송! 내 택배가 없는 집", addr + " · -" + dWon((st.wallRule && st.wallRule.wrongPenalty) || 0), e.seat); }
+      else if (e.k === "noelev") { DSND.err(); dPop("warn", pre + "엘리베이터가 " + (e.floor || "?") + "층에 있어요", addr + "는 엘리베이터가 와야 배송돼요", e.seat); }
+      else if (e.k === "elevleft") { DSND.err(); dPop("bad", pre + "엘리베이터가 떠났어요", addr + " 배송 실패 · 다시 누르세요", e.seat); }
+      else if (e.k === "released") { DSND.soft(); dPop("warn", pre + "손을 뗐어요", addr + " · 처음부터 다시", e.seat); }
+      else if (e.k === "busy") { DSND.soft(); dPop("warn", pre + "한 번에 한 집만", "누르고 있는 집을 먼저 끝내세요", e.seat); }
+      else if (e.k === "taken") { DSND.soft(); dPop("warn", pre + "상대 팀이 배송 중인 집", addr, e.seat); }
+    });
+  }
+  // 진행 링·시계·마감 경고 (render 사이에도 계속)
+  function dTick() {
+    if (!state || state.phase !== "delivery" || !state.delivery) { document.body.classList.remove("d-warn", "d-crit"); return; }
+    var n = nowMs();
+    Array.prototype.forEach.call(document.querySelectorAll("[data-dstart]"), function (el) {
+      var p = Math.max(0, Math.min(1, (n - parseInt(el.getAttribute("data-dstart"), 10)) / parseInt(el.getAttribute("data-dneed"), 10)));
+      el.style.setProperty("--p", p.toFixed(3));
+      el.classList.toggle("near", p > 0.7);
+    });
+    var ends = state.delivery.endsAt, left = ends ? ends - n : 0;
+    Array.prototype.forEach.call(document.querySelectorAll(".d-clock[data-ends]"), function (el) { el.textContent = fmtClock(Math.max(0, left)); });
+    document.body.classList.toggle("d-warn", left <= 10000 && left > 5000);
+    document.body.classList.toggle("d-crit", left <= 5000 && left > 0);
+    var sec = Math.ceil(left / 1000);
+    if (sec <= 5 && sec > 0 && !dLocal.beeped[sec]) { dLocal.beeped[sec] = 1; DSND.beep(); }
+    if (sec === 10 && !dLocal.beeped[10]) { dLocal.beeped[10] = 1; DSND.beep(); dPop("warn", "배송 마감 10초 전!", "", null); }
+  }
+  (function dLoop() { dTick(); requestAnimationFrame(dLoop); })();
+
+  // ---- 입력 ----
+  function dTeamOf(e) { if (e.ctrlKey && !e.shiftKey) return "1"; if (e.shiftKey && !e.ctrlKey) return "2"; if (e.ctrlKey && e.shiftKey) return "both"; return null; }
+  function dPress(unit, team) {
+    if (RAIL) send({ type: "wall-press", unit: unit, team: team });
+    else send({ type: "wall-press", seat: mySeat(), unit: unit });
+  }
+  function dRelease(unit, team) {
+    if (RAIL) send({ type: "wall-release", unit: unit, team: team });
+    else send({ type: "wall-release", seat: mySeat(), unit: unit });
+  }
+  function dKeyDown(e) {
+    if (!state || state.phase !== "delivery") return false;
+    var team = dTeamOf(e);
+    if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+      if (e.repeat) { e.preventDefault(); return true; }
+      if (RAIL && (team === "1" || team === "2")) { e.preventDefault(); send({ type: "wall-elev", team: team, dir: e.code === "ArrowUp" ? "up" : "down" }); return true; }
+      if (!RAIL && mySeat()) { e.preventDefault(); send({ type: "wall-elev", seat: mySeat(), dir: e.code === "ArrowUp" ? "up" : "down" }); return true; }
+      return false;
+    }
+    if (!RAIL) return false;
+    var u = unitByKey[e.code];
+    if (!u) return false;
+    e.preventDefault();
+    if (e.repeat || dLocal.keyHold[e.code]) return true;
+    if (team === "both") { DSND.err(); dPop("warn", "Ctrl과 Shift를 같이 눌렀어요", "한 팀 키만 누른 채로 호실을 누르세요", null); return true; }
+    dLocal.keyHold[e.code] = { unit: u.id, team: team };
+    dPress(u.id, team);
+    return true;
+  }
+  function dKeyUp(e) {
+    var h = dLocal.keyHold[e.code];
+    if (!h) return;
+    delete dLocal.keyHold[e.code];
+    if (h.team) dRelease(h.unit, h.team);
+  }
+  document.addEventListener("keyup", dKeyUp);
+  window.addEventListener("blur", function () { Object.keys(dLocal.keyHold).forEach(function (c) { dKeyUp({ code: c }); }); if (dLocal.ptrHold) { dRelease(dLocal.ptrHold.unit, dLocal.ptrHold.team); dLocal.ptrHold = null; } });
+  document.addEventListener("pointerdown", function (e) {
+    var b = e.target.closest && e.target.closest("[data-unit]");
+    if (!b || MAIN || !state || state.phase !== "delivery") return;
+    e.preventDefault();
+    var team = RAIL ? dTeamOf(e) : mySeat();
+    if (RAIL && team === "both") return;
+    dLocal.ptrHold = { unit: b.getAttribute("data-unit"), team: team };
+    dPress(dLocal.ptrHold.unit, team);
+  });
+  function dPtrUp() { if (!dLocal.ptrHold) return; var h = dLocal.ptrHold; dLocal.ptrHold = null; if (h.team) dRelease(h.unit, h.team); }
+  document.addEventListener("pointerup", dPtrUp);
+  document.addEventListener("pointercancel", dPtrUp);
+  document.addEventListener("contextmenu", function (e) { if (e.target.closest && e.target.closest("[data-unit]")) e.preventDefault(); });
+
   function renderBody() {
     if (RAIL && !ROOM) return renderRailJoin();
     if (!ROOM) return '<main class="stage"><div class="center-screen">' + cartWrap('<div class="lobby-box card"><h2>잘못된 링크예요</h2><p>방 코드가 없어요. 처음 받은 링크로 다시 들어와 주세요.</p></div>', 'cart--lobby') + '</div></main>';
@@ -2063,6 +2389,7 @@ APP_JS_TEMPLATE = r"""
     }
     else if (state.phase === "tutorial") body += renderTutorial(state, seat);
     else if (state.phase === "elevator") body += renderElevator(state, seat);
+    else if (state.phase === "delivery" && state.delivery) body += renderDelivery(state, seat);
     else if (state.phase === "halftime") body += renderHalftime(state, seat);
     else if (state.phase === "end") body += renderEnd(state, seat);
     return body;
@@ -2144,11 +2471,11 @@ APP_JS_TEMPLATE = r"""
   function railPuzzleOn(r) { return !!r.first || ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "done"; }); }
   // 레일 화면 고르기 카드: 종류·금액·층 + 자리별 버튼(1번 A S D / 2번 J K L)
   function railParcel(st, r, it, i) {
-    var owner = r.picks["1"] === i ? "1" : (r.picks["2"] === i ? "2" : null);
+    var owner = rOwner(r, i);
     var left = r.status === "reveal" && !owner;
     var t = TYPES[it.catIdx];
     var html = '<div class="race-parcel is-open rail-pk fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + '">'
-      + '<span class="rp-floorbig">' + esc(FLOORS[it.floorIdx]) + '</span>'
+      + itAddrHtml(it)
       + '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span><span class="rp-amt">' + fmtWon(t.reward) + '</span>';
     if (owner) html += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + (r.randomPick && r.randomPick[owner] ? ' (무작위)' : '') + ' 획득</span>';
     else if (left) html += '<span class="rp-owner gone">레일로 돌아감</span>';
@@ -2173,7 +2500,7 @@ APP_JS_TEMPLATE = r"""
       var solving = ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "sticker"; }) && r.status === "picking";
       var meta0 = cellMeta(r.puzzleId, st.half);
       return '<div class="rv rv-pick' + (solving ? ' with-puzzle' : '') + '">'
-        + '<div class="rv-pick-main"><div class="rp-cap">레이스 ' + r.round + ' · 층을 보고 택배를 고르세요</div>'
+        + '<div class="rv-pick-main"><div class="rp-cap">레이스 ' + r.round + (r.plan ? ' · 주소를 보고 택배를 고르세요 · 먼저 끝낸 사람 ' + r.plan.first + '개' : ' · 층을 보고 택배를 고르세요') + '</div>'
         + '<div class="race-rail rv-pick-rail"><span class="race-belt"></span>' + r.pair.map(function (it, i) { return railParcel(st, r, it, i); }).join('') + '</div>'
         + raceMessage(st, r, null)
         + '<div class="race-lanes">' + ["1", "2"].map(function (s) { return raceLane(st, r, s, false); }).join('') + '</div></div>'
@@ -2198,10 +2525,11 @@ APP_JS_TEMPLATE = r"""
     if (!st) return '<div class="rv">' + head('') + '<div class="rv-center"><h2>연결 중...</h2></div></div>';
     var halfName = st.half === 2 ? "후반" : "전반";
     if (st.phase === "elevator" && st.elevator) return renderRailElevator(st, head, halfName);
+    if (st.phase === "delivery" && st.delivery) return renderRailDelivery(st, head, halfName);
     if (st.phase !== "secure") {
       var msg = st.phase === "lobby" ? ['참가자를 기다리고 있어요', '두 플레이어가 준비하면 이 화면에 레일이 열려요']
         : st.phase === "tutorial" ? ['진행 방법을 보는 중이에요', '두 사람이 다 보면 곧 시작해요 · 택배 쌓기 문제가 여기에 떠요']
-        : st.phase === "elevator" ? ['배송 중이에요', '다음 택배 확보 단계에서 레일이 다시 열려요']
+        : (st.phase === "elevator" || st.phase === "delivery") ? ['배송 중이에요', '다음 택배 확보 단계에서 레일이 다시 열려요']
         : st.phase === "halftime" ? ['하프타임', '후반이 시작되면 레일이 새 택배로 채워져요']
         : ['게임이 끝났어요', '다시 시작하면 레일이 열려요'];
       return '<div class="rv">' + head(st.phase === "lobby" ? '대기 중' : halfName) + '<div class="rv-center"><h2>' + msg[0] + '</h2><p>' + msg[1] + '</p>'
@@ -2252,7 +2580,7 @@ APP_JS_TEMPLATE = r"""
     TYPES.forEach(function (t, catIdx) {
       var left = boardLeft(st, catIdx);
       var chips = mine.filter(function (inv) { return inv.catIdx === catIdx; })
-        .map(function (inv) { return '<span class="my-chip">' + esc(roomCode(inv.floorIdx, inv.room)) + '</span>'; }).join('');
+        .map(function (inv) { return '<span class="my-chip">' + esc(invAddr(inv)) + '</span>'; }).join('');
       html += '<div class="rw-row' + (left === 0 ? ' is-empty' : '') + '" data-cat="' + catIdx + '" style="--c:' + t.color + '">'
         + '<span class="rw-ico">' + CAT_ICONS[catIdx] + '</span><span class="rw-name">' + esc(t.name) + '<small>' + esc(MINI_NAME[t.mini] || '택배 쌓기') + '</small></span>'
         + '<span class="rw-left">남은 <b>' + left + '</b>/' + t.count + '</span><span class="rw-mine">' + (chips || '<small>아직 없음</small>') + '</span></div>';
@@ -2311,7 +2639,7 @@ APP_JS_TEMPLATE = r"""
     }
     else if (st.phase === "tutorial" && st.tutorial) {
       // 메인 모니터: 늦게 보고 있는 사람의 장을 크게 (구경꾼도 규칙을 같이 보게) + 두 사람 진행
-      var tt = st.tutorial, pg = Math.min(tt.page["1"], tt.page["2"], TUT_PAGES.length - 1);
+      var tt = st.tutorial, pg = Math.min(tt.page["1"], tt.page["2"], tutPages(st).length - 1);
       html = head("진행 방법") + '<div class="mv-body"><div class="tut tut--main">' + tutPageHtml(st, pg)
         + '<div class="tut-prog">' + ["1", "2"].map(function (sn) { return '<span class="tut-who">' + esc(seatName(sn, st)) + ' · ' + tutProgText(tt, sn) + '</span>'; }).join('') + '</div>'
         + '</div></div>';
@@ -2350,6 +2678,9 @@ APP_JS_TEMPLATE = r"""
         + '</div></div></div>';
       mvPrevFloor = floorIdx;
       return '<div class="mv">' + html + '</div>';
+    }
+    else if (st.phase === "delivery" && st.delivery) {
+      html = renderMainDelivery(st, head, halfName);
     }
     else if (st.phase === "halftime") {
       var h1 = st.halfHistory && st.halfHistory[0];
@@ -2428,6 +2759,7 @@ APP_JS_TEMPLATE = r"""
       return;
     }
     if (action === "open-cell") { openCell(t.getAttribute("data-cell")); return; }
+    if (action === "wall-elev") { send({ type: "wall-elev", seat: mySeat(), dir: t.getAttribute("data-dir") }); return; }
     if (action === "rail-pick") {
       send({ type: "rail-pick", side: t.getAttribute("data-side"), idx: parseInt(t.getAttribute("data-idx"), 10) });
       return;
@@ -2520,6 +2852,7 @@ APP_JS_TEMPLATE = r"""
 
   document.addEventListener("keydown", function (e) {
     if (MAIN) return;
+    if (dKeyDown(e)) return; // 2026-10-16 벽 배송 (레일 화면 Ctrl/Shift + 호실 키, 엘리베이터 ↑↓)
     // 2026-10-15 레일 화면: 자리별 고르기 키 (1번 A S D / 2번 J K L)
     if (RAIL) {
       if (e.repeat || !state || state.phase !== "secure" || !state.race || state.race.status !== "picking") return;
@@ -2558,12 +2891,13 @@ APP_JS_TEMPLATE = r"""
       send({ type: e.code === "ArrowLeft" ? "tutorial-prev" : (e.code === "ArrowUp" ? "tutorial-skip" : "tutorial-next"), seat: mySeat() });
       return;
     }
-    if (!e.repeat && /^(ArrowLeft|ArrowUp|ArrowDown|ArrowRight|Digit1|Digit2|Digit3)$/.test(e.code)) {
+    if (!e.repeat && /^(ArrowLeft|ArrowUp|ArrowDown|ArrowRight|Digit1|Digit2|Digit3|Digit4|Digit5)$/.test(e.code)) {
       // 레이스: 택배 고르기 (← = 왼쪽, ↑/↓ = 가운데, → = 오른쪽, 숫자 1/2/3도 가능)
       var seat3 = mySeat(), rr = state && state.phase === "secure" ? state.race : null;
       if (seat3 && rr && raceCanPick(rr, seat3) && !railPicks()) {
         e.preventDefault();
-        var want = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 1, ArrowRight: 2, Digit1: 0, Digit2: 1, Digit3: 2 }[e.code];
+        var want = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 1, ArrowRight: 2, Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code];
+        if (want === undefined || (rr.plan && rOwner(rr, want))) return;
         if (rr.pair.length === 2 && e.code === "ArrowRight") want = 1;
         if (rr.pair[want]) send({ type: "race-pick", seat: seat3, idx: want });
         return;
@@ -2640,7 +2974,10 @@ APP_JS_TEMPLATE = r"""
 })();
 """
 
+import subprocess as _sp
+WALL_JSON = _sp.check_output(["node", "-e", "const d=require(" + json.dumps(GAME_DATA_JS) + ");process.stdout.write(JSON.stringify({units:d.UNITS,buildings:d.BUILDINGS}))"]).decode("utf-8")
 APP_JS = (APP_JS_TEMPLATE
+          .replace("@@WALL_JSON@@", WALL_JSON)
           .replace("@@TYPES_JSON@@", TYPES_JSON)
           .replace("@@CELLS_1_JSON@@", CELLS_1_JSON)
           .replace("@@CELLS_2_JSON@@", CELLS_2_JSON)
@@ -2662,6 +2999,7 @@ APP_JS = (APP_JS_TEMPLATE
           .replace("@@ELEVATOR_JOLT@@", str(RACE_CONST["ELEVATOR_JOLT"]))
           .replace("@@VOTE_MS@@", str(RACE_CONST["VOTE_MS"]))
           .replace("@@RACE_EXCLUDE_KINDS@@", json.dumps(RACE_CONST["RACE_EXCLUDE_KINDS"]))
+          .replace("@@RACE_HAS_FIRST_GAME@@", "true" if RACE_CONST["RACE_GAME_POOL"] else "false")
           .replace("@@THIEF_PER_HALF@@", str(RACE_CONST["THIEF_PER_HALF"]))
           .replace("@@BUILD_TAG@@", "v" + __import__("datetime").datetime.now(__import__("datetime").timezone(__import__("datetime").timedelta(hours=9))).strftime("%m%d-%H%M"))
           .replace("@@SAME_FLOOR_CHOICE_MS@@", str(SAME_FLOOR_CHOICE_MS))

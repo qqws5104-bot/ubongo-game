@@ -13,6 +13,7 @@ const {
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
+  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_UNLIMITED,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -41,6 +42,19 @@ const DEFAULT_RULES = {
   setBonusKinds: SET_BONUS_KINDS,
   // 2026-10-15 시작 전 튜토리얼. 기본은 끔(GameRoom을 직접 쓰는 테스트가 곧장 확보로 가도록) -- 실제 서버(server.js)가 켠다.
   tutorial: false,
+  // 2026-10-16 벽 배송 + 택배 쌓기 몫(game-data.js WALL_MODE / RACE_GRANT_PLAN 참고)
+  // 환경변수 WALL=0이면 예전 흐름(한 사람 하나씩 고르기 -> 엘리베이터 라운드). 예전 회귀 테스트(regress.sh)가 이걸로 돈다.
+  wallMode: !!WALL_MODE && process.env.WALL !== "0",
+  raceGrantPlan: process.env.WALL === "0" ? null : RACE_GRANT_PLAN,
+  raceUnlimited: !!RACE_UNLIMITED && process.env.WALL !== "0",
+  deliveryMs: DELIVERY_MS,
+  deliveryProgressMs: DELIVERY_PROGRESS_MS,
+  deliveryHoldMs: DELIVERY_HOLD_MS,
+  deliveryElevator: !!DELIVERY_ELEVATOR,
+  deliveryElevStart: DELIVERY_ELEV_START,
+  deliveryReturnTaps: DELIVERY_RETURN_TAPS,
+  deliveryMaxActive: DELIVERY_MAX_ACTIVE,
+  deliveryWrongPenalty: DELIVERY_WRONG_PENALTY,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -52,6 +66,9 @@ const LEGACY_RULES = {
   raceMode: false,
   elevatorJolt: false,
   setBonus: 0,
+  wallMode: false,
+  raceGrantPlan: null,
+  raceUnlimited: false,
 };
 
 // 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
@@ -116,6 +133,7 @@ function randomInvoice(seat, catIdx, num, acquiredSeq, room, floorRewardMult) {
 function scoreInvoice(inv) {
   const t = TYPES[inv.catIdx];
   if (inv.stolen) return -t.penalty;
+  if (inv.returned) return -t.penalty; // 2026-10-16 벽 배송: 반송(상대가 5번 눌러 끔)
   if (inv.deliveredRound === null) return -t.penalty;
   // inv.reward가 없는 송장(2026-10-13 이전 형식)은 종류 기본 금액 그대로.
   const base = typeof inv.reward === "number" ? inv.reward : t.reward;
@@ -128,6 +146,7 @@ function scoreInvoice(inv) {
 // renderDeliveredCallout "택배도둑에게 도난당했어요!")는 별개로 남겨뒀다 -- 그건 "이번 라운드에 무슨
 // 일이 있었는지"를 보여주는 즉시성 정보라 계속 유용하다는 판단.
 function resultLabel(inv) {
+  if (inv.returned) return "반송";
   if (inv.stolen) return "미배송"; // deliveredRound는 채워져 있지만(재배송 방지용) 라벨은 미배송 취급
   return inv.deliveredRound === null ? "미배송" : "성공";
 }
@@ -143,7 +162,8 @@ function setBonusFor(invoices, setRule) {
 }
 function totalScore(seat, state) {
   const invs = state.players[seat].invoices;
-  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule);
+  const wrong = (state.players[seat].wrong || 0) * ((state.wallRule && state.wallRule.wrongPenalty) || 0); // 2026-10-16 오배송 감점
+  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule) - wrong;
 }
 
 function freshBoard() {
@@ -154,7 +174,7 @@ function freshBoard() {
 function freshPlayers() {
   // roomBag: 이 플레이어의 이번 하프용 "안 겹치는 호수" 셔플 가방 (drawRoom() 참고). 하프가 바뀌면
   // (freshPlayers()가 다시 호출되면) 완전히 새로 셔플돼서 이전 하프의 소진 상태를 이어받지 않는다.
-  return { "1": { invoices: [], roomBag: shuffledRooms() }, "2": { invoices: [], roomBag: shuffledRooms() } };
+  return { "1": { invoices: [], roomBag: shuffledRooms(), wrong: 0 }, "2": { invoices: [], roomBag: shuffledRooms(), wrong: 0 } };
 }
 function pickStartFloor(choices) {
   const list = choices && choices.length ? choices : [START_FLOOR_IDX];
@@ -208,6 +228,9 @@ function initialState(rules) {
   return {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
+    // 2026-10-16 벽 배송: 규칙 묶음(클라이언트 표시·점수 계산용)과 진행 상태(phase "delivery"일 때만)
+    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive } : null,
+    delivery: null,
     phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
     seatOwners: { "1": null, "2": null },
@@ -267,6 +290,7 @@ class GameRoom {
   destroy() {
     if (this.timer) clearTimeout(this.timer);
     if (this.raceTimer) clearTimeout(this.raceTimer);
+    if (this.deliveryTimer) clearInterval(this.deliveryTimer);
   }
 
   touch() { this.lastActivityAt = Date.now(); }
@@ -325,7 +349,8 @@ class GameRoom {
   // 각자 넘기고, 둘 다 끝까지 보거나(page >= pages) 둘 다 건너뛰기를 누르면 확보 단계 시작.
   _startTutorial() {
     this.state.phase = "tutorial";
-    this.state.tutorial = { pages: TUTORIAL_PAGES, page: { "1": 0, "2": 0 }, skip: { "1": false, "2": false } };
+    this.state.tutorial = { pages: this.rules.wallMode ? 4 : TUTORIAL_PAGES, // 2026-10-16 벽 배송 튜토리얼은 4장 (build_client.py TUT_PAGES_WALL)
+       page: { "1": 0, "2": 0 }, skip: { "1": false, "2": false } };
     this.emit();
   }
   tutorialStep(seat, dir) {
@@ -377,6 +402,8 @@ class GameRoom {
     if (roundNo === 1 && this.rules.raceExcludeKinds && this.rules.raceExcludeKinds.length) {
       this.state.board.forEach((c) => { if (!c.taken && this.rules.raceExcludeKinds.includes(TYPES[c.catIdx].key)) { c.taken = true; c.takenBy = null; c.excluded = true; } });
     }
+    const plan = this._racePlanFor(roundNo);
+    if (plan) { this._planNewRound(roundNo, plan); return; }
     const free = this.state.board.filter((c) => !c.taken);
     if (!free.length) { this.state.race = null; this._raceAt(null); return; }
     const pair = shuffled(free).slice(0, Math.max(1, this.rules.raceParcels || 3)).map((c) => {
@@ -384,16 +411,105 @@ class GameRoom {
       return { cellId: c.id, catIdx: c.catIdx, floorIdx, reward: rewardFor(c.catIdx, floorIdx, this.rules.floorRewardMult) };
     });
     this.state.race = {
-      round: roundNo, pair, game: this._raceNextGame(),
+      round: roundNo, pair, game: null,
       puzzleId: this._racePuzzleFor(roundNo),
-      stage: { "1": "sticker", "2": "sticker" },
+      stage: { "1": "sticker", "2": "sticker" }, // 아래에서 첫 게임이 없으면 둘 다 "ubongo"로
       finishedAt: { "1": null, "2": null },
       first: null, status: "playing",
       pickEndsAt: null, secondEndsAt: null, secondPickEndsAt: null, revealEndsAt: null,
       picks: { "1": null, "2": null }, invoiceIds: { "1": null, "2": null }, discarded: [],
       randomPick: { "1": false, "2": false }, // 시간이 지나 무작위로 받은 좌석 (화면 표시용)
     };
+    this.state.race.game = this._raceNextGame();
+    if (!this.state.race.game) this.state.race.stage = { "1": "ubongo", "2": "ubongo" };
     this._raceAt(null);
+  }
+
+
+  // ---- 2026-10-16 택배 쌓기 몫 계획 (rules.raceGrantPlan): 라운드마다 n개를 걸고 먼저 끝낸 사람이 first개, 늦은 사람이 나머지 ----
+  _racePlanFor(roundNo) {
+    const plan = this.rules.raceGrantPlan;
+    if (!plan || !plan.length) return null;
+    return plan[Math.min(roundNo, plan.length) - 1];
+  }
+  _usedUnits() {
+    const used = {};
+    ["1", "2"].forEach((s) => this.state.players[s].invoices.forEach((v) => { if (v.unit) used[v.unit] = true; }));
+    return used;
+  }
+  _planNewRound(roundNo, plan) {
+    const n = Math.max(1, plan.parcels | 0);
+    const excl = this.rules.raceExcludeKinds || [];
+    let items = [];
+    if (this.rules.raceUnlimited) {
+      const bag = [];
+      TYPES.forEach((t, ci) => { if (!excl.includes(t.key)) for (let k = 0; k < t.count; k++) bag.push(ci); });
+      for (let k = 0; k < n; k++) items.push({ cellId: null, catIdx: bag[Math.floor(Math.random() * bag.length)] });
+    } else {
+      if (roundNo === 1 && excl.length) this.state.board.forEach((c) => { if (!c.taken && excl.includes(TYPES[c.catIdx].key)) { c.taken = true; c.takenBy = null; c.excluded = true; } });
+      const free = this.state.board.filter((c) => !c.taken);
+      if (!free.length) { this.state.race = null; this._raceAt(null); return; }
+      items = shuffled(free).slice(0, n).map((c) => ({ cellId: c.id, catIdx: c.catIdx, num: c.num }));
+    }
+    const used = this._usedUnits();
+    const pool = shuffled(UNITS.filter((u) => !used[u.id]));
+    const pair = items.map((it, k) => {
+      const out = { cellId: it.cellId, catIdx: it.catIdx, floorIdx: null, unit: null, reward: TYPES[it.catIdx].reward };
+      if (this.rules.wallMode) out.unit = (pool[k] || UNITS[Math.floor(Math.random() * UNITS.length)]).id;
+      else { out.floorIdx = drawFloor(it.catIdx, it.num || 0); out.reward = rewardFor(it.catIdx, out.floorIdx, this.rules.floorRewardMult); }
+      return out;
+    });
+    this.state.race = {
+      round: roundNo, pair, game: null, plan: { parcels: pair.length, first: Math.min(plan.first, pair.length) },
+      puzzleId: this._racePuzzleFor(roundNo),
+      stage: { "1": "ubongo", "2": "ubongo" },
+      finishedAt: { "1": null, "2": null },
+      first: null, status: "playing",
+      pickEndsAt: null, secondEndsAt: null, secondPickEndsAt: null, revealEndsAt: null,
+      picks: { "1": [], "2": [] }, invoiceIds: { "1": [], "2": [] }, discarded: [],
+      randomPick: { "1": false, "2": false },
+    };
+    this._raceAt(null);
+  }
+  _planRest() {
+    const r = this.state.race;
+    const taken = r.picks["1"].concat(r.picks["2"]);
+    return r.pair.map((_, i) => i).filter((i) => !taken.includes(i));
+  }
+  _planAdvance() {
+    const r = this.state.race;
+    const now = Date.now();
+    const other = (s) => (s === "1" ? "2" : "1");
+    if (r.status === "playing" && r.stage["1"] === "out" && r.stage["2"] === "out") this._raceReveal();
+    if (r.status === "picking") {
+      const f = r.first, s2 = other(f);
+      const firstFull = () => r.picks[f].length >= r.plan.first || !this._planRest().length;
+      if (!firstFull() && this.rules.raceAutoPick && now >= r.pickEndsAt) {
+        while (!firstFull()) { const rest = this._planRest(); this._raceGrant(f, rest[Math.floor(Math.random() * rest.length)]); }
+      }
+      if (firstFull()) {
+        if (!r.secondEndsAt) r.secondEndsAt = now + (this.rules.raceConsolationMs || 0);
+        const rest = this._planRest();
+        if (rest.length && (r.stage[s2] === "done" || now >= r.secondEndsAt)) {
+          if (r.stage[s2] !== "done") { r.randomPick[s2] = true; r.stage[s2] = "done"; }
+          rest.forEach((i) => this._raceGrant(s2, i));
+        }
+        if (!this._planRest().length) this._raceReveal();
+      }
+    }
+    if (r.status === "reveal" && now >= r.revealEndsAt) {
+      this._raceNewRound(r.round + 1);
+      if (!this.state.race) { this.emit(); return; }
+    }
+    const cur = this.state.race;
+    let nextTs = null;
+    if (cur.status === "picking") {
+      const f = cur.first;
+      if (cur.picks[f].length < cur.plan.first && this._planRest().length) nextTs = this.rules.raceAutoPick ? cur.pickEndsAt : null;
+      else nextTs = cur.secondEndsAt;
+    } else if (cur.status === "reveal") nextTs = cur.revealEndsAt;
+    this._raceAt(nextTs);
+    this.emit();
   }
 
   // 2026-10-14: 이번 라운드 우봉고 문제. racePiecesByRound[하프-1][라운드-1](끝나면 마지막 값)의 조각 수 문제 중에서,
@@ -420,7 +536,8 @@ class GameRoom {
 
   // 섞은 순서대로 꺼내고, 다 쓰면 다시 섞는다(새로 섞은 첫 게임이 직전 게임과 같으면 한 칸 미룬다)
   _raceNextGame() {
-    const pool = (this.rules.raceGamePool && this.rules.raceGamePool.length) ? this.rules.raceGamePool : ["sticker"];
+    const pool = this.rules.raceGamePool || [];
+    if (!pool.length) return null; // 2026-10-15: 첫 게임 없음 -> 바로 택배 쌓기
     if (!this.raceGameBag || !this.raceGameBag.length) {
       this.raceGameBag = shuffled(pool);
       if (this.raceGameBag.length > 1 && this.raceGameBag[0] === this.raceLastGame) this.raceGameBag.push(this.raceGameBag.shift());
@@ -448,7 +565,9 @@ class GameRoom {
       if (!consol && r.first && r.first !== seat && now > r.secondEndsAt) { r.stage[seat] = "out"; this._raceAdvance(); return; }
       r.stage[seat] = "done";
       r.finishedAt[seat] = now;
-      if (!r.first) {
+      if (r.plan) {
+        if (!r.first) { r.first = seat; r.status = "picking"; r.pickEndsAt = this.rules.raceAutoPick ? now + this.rules.racePickMs : null; }
+      } else if (!r.first) {
         r.first = seat;
         r.status = "picking";
         r.pickEndsAt = this.rules.raceAutoPick ? now + this.rules.racePickMs : null;
@@ -466,6 +585,14 @@ class GameRoom {
   racePick(seat, idx) {
     if (this.state.phase !== "secure" || !this.rules.raceMode) return;
     const r = this.state.race;
+    if (r && r.plan) {
+      if (r.status !== "picking" || r.first !== seat || typeof idx !== "number" || !r.pair[idx]) return;
+      if (r.picks[seat].length >= r.plan.first || !this._planRest().includes(idx)) return;
+      this.touch();
+      this._raceGrant(seat, idx);
+      this._raceAdvance();
+      return;
+    }
     if (!r || r.status !== "picking" || r.picks[seat] !== null) return;
     if (typeof idx !== "number" || !r.pair[idx]) return;
     if (r.picks["1"] === idx || r.picks["2"] === idx) return; // 이미 가져간 택배
@@ -481,6 +608,20 @@ class GameRoom {
   _raceGrant(seat, idx) {
     const r = this.state.race;
     const item = r.pair[idx];
+    if (r.plan) {
+      if (item.cellId) { const c = cellById(this.state, item.cellId); if (c) { c.taken = true; c.takenBy = seat; } }
+      this.state.acquireCounter[seat] += 1;
+      const seq = this.state.acquireCounter[seat];
+      const inv = {
+        id: "inv-" + seat + "-" + seq, catIdx: item.catIdx, floorIdx: item.floorIdx, unit: item.unit || null,
+        room: item.unit ? null : drawRoom(this.state.players[seat]), acquiredSeq: seq,
+        reward: item.reward, deliveredRound: null, stolen: false, deliveredWasPriority: false, returned: false,
+      };
+      this.state.players[seat].invoices.push(inv);
+      r.picks[seat].push(idx);
+      r.invoiceIds[seat].push(inv.id);
+      return;
+    }
     const cell = cellById(this.state, item.cellId);
     if (!cell || cell.taken) return;
     cell.taken = true;
@@ -514,6 +655,7 @@ class GameRoom {
     if (this.state.phase !== "secure") return;
     const r = this.state.race;
     if (!r) return;
+    if (r.plan) { this._planAdvance(); return; }
     const now = Date.now();
     const other = (s) => (s === "1" ? "2" : "1");
     if (r.status === "playing") {
@@ -570,14 +712,14 @@ class GameRoom {
   _raceReveal() {
     const r = this.state.race;
     r.status = "reveal";
-    r.discarded = r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
+    r.discarded = r.plan ? this._planRest() : r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
     // 아무도 안 가져간 택배: 레일로 돌아가 다음 라운드에 다시 나올 수 있다(기본). raceLeftoverReturn이 false면 사라진다(주인 없이 보드에서 빠짐).
-    if (!this.rules.raceLeftoverReturn) {
+    if (!this.rules.raceLeftoverReturn && !r.plan) {
       r.discarded.forEach((i) => { const c = cellById(this.state, r.pair[i].cellId); if (c && !c.taken) { c.taken = true; c.takenBy = null; } });
     }
     r.revealEndsAt = Date.now() + this.rules.raceRevealMs;
     // 보드가 다 비면 결과를 잠깐 보여 준 뒤 엘리베이터로 (예전 조기 종료와 같은 방식, 결과 표시 시간만큼 기다림)
-    if (this.state.board.every((c) => c.taken)) {
+    if (!(r.plan && this.rules.raceUnlimited) && this.state.board.every((c) => c.taken)) {
       this.state.secureEndsAt = r.revealEndsAt;
       this._scheduleAt(this.state.secureEndsAt, () => this._endSecurePhase());
     }
@@ -642,9 +784,141 @@ class GameRoom {
     if (this.state.phase !== "secure") return;
     this._raceAt(null);
     this.state.race = null;
+    if (this.rules.wallMode) { this._startDelivery(); return; }
     this.state.phase = "elevator";
     this.state.elevator = freshElevator(this.rules);
     this.emit();
+  }
+
+  // ---- 2026-10-16 벽 배송 단계 (rules.wallMode) ----
+  // state.delivery = { endsAt, doors: {unitId: {seat, invId, start, taps}}, ev: [{n,k,unit,seat,taps}], evN }
+  //   k: start(켜짐) / done(배송 완료) / tap(끄기 1회) / returned(반송) / wrong(오배송) / busy(이미 다른 집 배송 중) / own(내가 켠 걸 또 누름)
+  _startDelivery() {
+    this.state.phase = "delivery";
+    this.state.delivery = { endsAt: Date.now() + this.rules.deliveryMs, doors: {}, ev: [], evN: 0,
+      elev: this.rules.deliveryElevator ? { floor: this.rules.deliveryElevStart || 1, top: 7, presses: { "1": { up: 0, down: 0 }, "2": { up: 0, down: 0 } } } : null };
+    if (this.deliveryTimer) clearInterval(this.deliveryTimer);
+    this.deliveryTimer = setInterval(() => this._deliveryTick(), 100);
+    this.emit();
+  }
+  _dEv(k, unit, seat, extra) {
+    const d = this.state.delivery;
+    d.evN += 1;
+    d.ev.push(Object.assign({ n: d.evN, k, unit, seat: seat || null }, extra || {}));
+    if (d.ev.length > 30) d.ev.shift();
+  }
+  // seat: "1"/"2"(Ctrl/Shift 또는 플레이어 화면) 또는 null(Ctrl/Shift 없이 누름 -- 누군지 모름)
+  wallPress(seat, unitId) {
+    if (this.state.phase !== "delivery" || !this.state.delivery) return;
+    if (!UNITS.some((u) => u.id === unitId)) return;
+    if (seat !== "1" && seat !== "2") seat = null;
+    const d = this.state.delivery;
+    const door = d.doors[unitId];
+    this.touch();
+    if (this.rules.deliveryHoldMs > 0) { this._holdDown(seat, unitId); return; }
+    if (door) {
+      if (seat && door.seat === seat) { this._dEv("own", unitId, seat); this.emit(); return; }
+      this._wallTap(unitId);
+      this.emit();
+      return;
+    }
+    if (!seat) return; // 꺼진 버튼을 Ctrl/Shift 없이 누름 -- 아무 일 없음
+    const inv = this.state.players[seat].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned);
+    if (!inv) {
+      this.state.players[seat].wrong = (this.state.players[seat].wrong || 0) + 1;
+      this._dEv("wrong", unitId, seat);
+      this.emit();
+      return;
+    }
+    const active = Object.values(d.doors).filter((x) => x.seat === seat).length;
+    if (active >= Math.max(1, this.rules.deliveryMaxActive || 1)) { this._dEv("busy", unitId, seat); this.emit(); return; }
+    d.doors[unitId] = { seat, invId: inv.id, start: Date.now(), taps: 0 };
+    this._dEv("start", unitId, seat);
+    this.emit();
+  }
+  // ---- 유지 방식 (rules.deliveryHoldMs > 0) ----
+  // 누르는 순간: 내 택배 + (아파트면) 엘리베이터가 그 층 -> doors[unit] = {seat, invId, start, hold:true}. 아니면 즉시 오류 이벤트(진행과 구분).
+  //   오류 종류: wrong(내 택배가 없는 호실, 오배송 감점) / noelev(아파트인데 엘리베이터가 다른 층 -- 감점 없음) / busy(이미 다른 집을 누르고 있음)
+  // 떼는 순간(wallRelease) 시간이 안 찼으면 released(처음부터). 누르고 있는 동안 엘리베이터가 떠나면 elevleft.
+  _unitOf(id) { return UNITS.find((u) => u.id === id); }
+  _holdDown(seat, unitId) {
+    const d = this.state.delivery;
+    if (!seat) return; // 유지 방식에서는 보조키 없는 입력은 쓰지 않는다
+    if (d.doors[unitId]) { if (d.doors[unitId].seat !== seat) this._dEv("taken", unitId, seat); this.emit(); return; }
+    const inv = this.state.players[seat].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned);
+    if (!inv) {
+      this.state.players[seat].wrong = (this.state.players[seat].wrong || 0) + 1;
+      this._dEv("wrong", unitId, seat); this.emit(); return;
+    }
+    const u = this._unitOf(unitId);
+    if (d.elev && u.b === "apt" && d.elev.floor !== u.floor) { this._dEv("noelev", unitId, seat, { floor: d.elev.floor }); this.emit(); return; }
+    const active = Object.values(d.doors).filter((x) => x.seat === seat).length;
+    if (active >= Math.max(1, this.rules.deliveryMaxActive || 1)) { this._dEv("busy", unitId, seat); this.emit(); return; }
+    d.doors[unitId] = { seat, invId: inv.id, start: Date.now(), taps: 0, hold: true };
+    this._dEv("start", unitId, seat);
+    this.emit();
+  }
+  wallRelease(seat, unitId) {
+    if (this.state.phase !== "delivery" || !this.state.delivery || !(this.rules.deliveryHoldMs > 0)) return;
+    const d = this.state.delivery;
+    const door = d.doors[unitId];
+    if (!door || door.seat !== seat) return;
+    if (Date.now() - door.start >= this.rules.deliveryHoldMs) { this._deliveryTick(); return; } // 이미 찼다 -- 완료 처리
+    delete d.doors[unitId];
+    this._dEv("released", unitId, seat);
+    this.emit();
+  }
+  // 엘리베이터: 누를 때마다 한 층 (예전 vote와 같음). 두 팀이 반대로 누르면 차이만큼 움직인다.
+  wallElevator(seat, dir) {
+    if (this.state.phase !== "delivery" || !this.state.delivery || !this.state.delivery.elev) return;
+    if ((seat !== "1" && seat !== "2") || (dir !== "up" && dir !== "down")) return;
+    const e = this.state.delivery.elev;
+    this.touch();
+    e.presses[seat][dir] += 1;
+    e.floor = Math.max(1, Math.min(e.top, e.floor + (dir === "up" ? 1 : -1)));
+    // 아파트를 누르고 있던 배송은 엘리베이터가 떠나면 실패
+    const d = this.state.delivery;
+    Object.keys(d.doors).forEach((id) => {
+      const u = this._unitOf(id);
+      if (u.b === "apt" && u.floor !== e.floor) { const s2 = d.doors[id].seat; delete d.doors[id]; this._dEv("elevleft", id, s2, { floor: e.floor }); }
+    });
+    this.emit();
+  }
+
+  _wallTap(unitId) {
+    const d = this.state.delivery;
+    const door = d.doors[unitId];
+    door.taps += 1;
+    if (door.taps < this.rules.deliveryReturnTaps) { this._dEv("tap", unitId, door.seat, { taps: door.taps }); return; }
+    const inv = this.state.players[door.seat].invoices.find((v) => v.id === door.invId);
+    if (inv) inv.returned = true;
+    delete d.doors[unitId];
+    this._dEv("returned", unitId, door.seat);
+  }
+  _deliveryTick() {
+    if (this.state.phase !== "delivery" || !this.state.delivery) { clearInterval(this.deliveryTimer); this.deliveryTimer = null; return; }
+    const d = this.state.delivery;
+    const now = Date.now();
+    let changed = false;
+    Object.keys(d.doors).forEach((unitId) => {
+      const door = d.doors[unitId];
+      if (now - door.start < (door.hold ? this.rules.deliveryHoldMs : this.rules.deliveryProgressMs)) return;
+      const inv = this.state.players[door.seat].invoices.find((v) => v.id === door.invId);
+      if (inv) inv.deliveredRound = 1;
+      delete d.doors[unitId];
+      this._dEv("done", unitId, door.seat, { reward: inv ? (typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward) : 0, count: this.state.players[door.seat].invoices.filter((v) => v.deliveredRound !== null && !v.stolen && !v.returned).length });
+      changed = true;
+    });
+    if (now >= d.endsAt) { this._endDelivery(); return; }
+    if (changed) this.emit();
+  }
+  _endDelivery() {
+    if (this.deliveryTimer) clearInterval(this.deliveryTimer);
+    this.deliveryTimer = null;
+    const d = this.state.delivery;
+    d.doors = {};
+    d.endsAt = null;
+    this._finishHalf();
   }
 
   // ---- elevator phase ----
@@ -1061,6 +1335,7 @@ class GameRoom {
     this.state.acquireCounter = { "1": 0, "2": 0 };
     this.state.players = freshPlayers();
     this.state.elevator = freshElevator(this.rules);
+    this.state.delivery = null;
     this.state.half = 1;
     this.state.halfHistory = [];
     this.state.scores = null;
@@ -1076,6 +1351,7 @@ class GameRoom {
     this.state.board = freshBoard();
     this.state.acquireCounter = { "1": 0, "2": 0 };
     this.state.players = freshPlayers();
+    this.state.delivery = null;
     this._startGame(); // phase="secure" again, fresh secure timer; also emits
   }
 

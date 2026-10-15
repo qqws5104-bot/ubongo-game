@@ -159,7 +159,9 @@ const RACE_STICKER_LEVEL = [1, 1];
 // 2026-10-14 (사용자 요청): 라운드 첫 게임은 송장 붙이기 고정이 아니라 아래 5종 중 무작위. 한 라운드에서 두 사람은 같은 게임을 한다.
 //   바로 앞 라운드와 같은 게임은 안 나온다(5종을 섞은 순서대로 돌고, 다 돌면 다시 섞음). 박스 포장은 실물 택배 쌓기와 같은 퍼즐이라,
 //   지도 배달은 길어서 뺐다. 한 종류로 고정하려면 ["sticker"]처럼 하나만 두면 된다. 난이도는 RACE_STICKER_LEVEL(전반/후반)을 같이 쓴다.
-const RACE_GAME_POOL = ["sticker", "inspect", "match", "weigh", "tape"];
+// 2026-10-15 (사용자 결정, "공부하는 느낌" 줄이기): 첫 미니게임을 뺐다 -- 레이스는 바로 실물 택배 쌓기로 시작한다.
+//   다시 켜려면 ["sticker", "inspect", "match", "weigh", "tape"] (minigames.js에 5종 다 남아 있음).
+const RACE_GAME_POOL = [];
 // 라운드마다 띄울 우봉고 문제(퍼즐 이미지가 있는 칸 id). 내용물(택배 종류)과는 무관 -- 라운드가 갈수록 조각이 늘게(2 -> 3 -> 4조각) 배치.
 // 현장에서는 이 순서대로 두 스테이션에 같은 실물 퍼즐을 준비한다. 끝까지 가면 처음부터 다시.
 // 2026-10-14 (사용자 결정): 위 고정 순서 대신 라운드별 조각(색) 수로 고른다. [전반, 후반] 각각 라운드 순서대로, 목록이 끝나면 마지막 값 반복.
@@ -169,7 +171,42 @@ const RACE_GAME_POOL = ["sticker", "inspect", "match", "weigh", "tape"];
 const RACE_PIECES_BY_ROUND = [[2, 2, 2, 3], [3, 3, 3, 3, 4]];
 const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1", "fixed-floor-2", "fragile-2", "valuable-1", "fixed-floor-3", "valuable-2", "valuable-3"];
 
+// ---- 2026-10-16 벽 배송 (사용자 결정): 엘리베이터 대신 "호실 버튼 = 배송지". ----
+// 건물 3동: 아파트 7층 x 2호 = 14 / 맨션 2층 x 6호 = 12 / 단독주택 8채(모양이 비슷한 집, 번지로 구분) = 34개 버튼.
+// 확보 단계에서 택배마다 배송지(UNITS의 id)가 정해지고(레일에서 주소를 보고 고른다), 배송 단계에서 그 호실 버튼을 누른다.
+// 입력: 레일 화면 키보드에서 Ctrl + 호실 키 = 1번(빨강), Shift + 호실 키 = 2번(파랑). 플레이어 화면에서는 호실을 탭(좌석은 자동).
+// 누르면 그 호실 불이 켜지고 DELIVERY_PROGRESS_MS 뒤 배송 완료. 켜진 동안 그 호실 버튼을 Ctrl/Shift 없이 DELIVERY_RETURN_TAPS번 누르면
+// 그 택배는 "반송"(배송 실패, 미배송과 같은 감점, 다시 배송 불가). 내 택배가 없는 호실을 Ctrl/Shift로 누르면 오배송 감점.
+const WALL_MODE = 1;
+const UNITS = [];
+for (let f = 7; f >= 1; f--) for (let u = 1; u <= 2; u++) UNITS.push({ id: "a" + f + "0" + u, b: "apt", label: f + "0" + u + "호", floor: f });
+for (let f = 2; f >= 1; f--) for (let u = 1; u <= 6; u++) UNITS.push({ id: "m" + f + "0" + u, b: "mansion", label: f + "0" + u + "호", floor: f });
+["11", "11-1", "13", "13-1", "15", "15-1", "17", "17-1"].forEach((n, i) => UNITS.push({ id: "h" + (i + 1), b: "house", label: "성수로 " + n }));
+const BUILDINGS = [
+  { key: "apt", name: "성수타워 아파트", short: "아파트" },
+  { key: "mansion", name: "체키맨션", short: "맨션" },
+  { key: "house", name: "단독주택", short: "주택" },
+];
+const DELIVERY_MS = 90 * 1000;          // 배송 단계 길이 (하프마다)
+const DELIVERY_PROGRESS_MS = 5000;      // (유지 방식이 꺼졌을 때만) 버튼을 켠 뒤 배송 완료까지
+// 2026-10-16 (사용자 제안, 첫 테스트): 팀 보조키 + 호실 버튼을 이 시간 동안 "누르고 있어야" 배송 완료. 중간에 떼면 처음부터.
+//   0이면 위 DELIVERY_PROGRESS_MS 방식(한 번 누르면 켜지고 시간이 지나면 완료, 상대가 Ctrl/Shift 없이 5번 누르면 반송).
+const DELIVERY_HOLD_MS = 2000;
+// 엘리베이터(위·아래 줄다리기)는 배송 단계 내내 움직인다. 아파트 호실은 엘리베이터가 그 층에 있을 때만 배송이 시작되고,
+//   누르고 있는 동안 엘리베이터가 떠나면 실패. 맨션(2층)·주택은 엘리베이터와 상관없이 배송.
+const DELIVERY_ELEVATOR = 1;
+const DELIVERY_ELEV_START = 1;          // 시작 층 (아파트 1~7층)
+const DELIVERY_RETURN_TAPS = 5;         // 켜진 버튼을 Ctrl/Shift 없이 이만큼 누르면 반송
+const DELIVERY_MAX_ACTIVE = 1;          // 한 사람이 동시에 켤 수 있는 배송 수
+const DELIVERY_WRONG_PENALTY = 500;     // 오배송(내 택배 없는 호실을 Ctrl/Shift로 누름) 1회 감점
+// 2026-10-16 (사용자 결정): 택배 쌓기 라운드별 걸리는 택배 수와 먼저 끝낸 사람이 가져가는 수. 나머지는 늦은 사람(투입하거나 RACE_CONSOLATION_MS 뒤).
+//   목록이 끝나면 마지막 값 반복. 1~2라운드: 3개 중 2개 / 3라운드부터: 5개 중 3개. null이면 예전(한 사람 하나씩).
+const RACE_GRANT_PLAN = [{ parcels: 3, first: 2 }, { parcels: 3, first: 2 }, { parcels: 5, first: 3 }];
+// 레이스 택배를 보드 칸 수와 상관없이 종류 비율(TYPES count)대로 계속 만든다 -- 라운드가 확보 시간 내내 이어진다.
+const RACE_UNLIMITED = 1;
+
 module.exports = {
+  WALL_MODE, UNITS, BUILDINGS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_UNLIMITED,
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,

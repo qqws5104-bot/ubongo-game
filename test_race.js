@@ -15,7 +15,7 @@ const { TYPES, RACE_PUZZLE_ORDER } = require("./game-data.js");
 function log(...a) { console.log("[test-race]", ...a); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 자동 선택은 기본이 꺼짐(RACE_AUTO_PICK = 0). 자동 선택 규칙도 함께 검증하려고 여기선 켠다 -- 꺼진 경우는 맨 아래에서 따로 확인.
-const FAST = { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: true, raceAutoPickMode: "best", raceConsolationMs: 0 }; // 위로(20초 뒤 무작위)는 아래에서 따로 검사
+const FAST = { racePickMs: 300, raceSecondMs: 500, raceRevealMs: 300, raceAutoPick: true, raceAutoPickMode: "best", raceConsolationMs: 0, raceGamePool: ["sticker"] }; // 첫 게임 단계 흐름도 검사하려고 송장 붙이기 1종을 켠다 (기본은 첫 게임 없음) // 위로(20초 뒤 무작위)는 아래에서 따로 검사
 function newRoom(rules) {
   const room = new GameRoom("RACE", () => {}, Object.assign({}, FAST, rules || {}));
   room.pickCourier("cookbang", "a"); room.pickCourier("cheonil", "b");
@@ -236,6 +236,20 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
     assert.ok(rr.picks["2"] !== null && rr.randomPick["2"], "포기한 사람도 무작위로 받음");
     rm.destroy();
     log("위로: 1등이 고르고 N초 뒤 다른 사람도 무작위로 하나 (그 전 투입이면 직접, 포기해도 받음)");
+  }
+
+  // 2026-10-15 기본: 첫 게임 없음 -> 라운드 시작부터 둘 다 택배 쌓기
+  {
+    const { RACE_GAME_POOL } = require("./game-data.js");
+    assert.deepStrictEqual(RACE_GAME_POOL, []);
+    const rm = new GameRoom("NOGAME", () => {});
+    rm.pickCourier("cookbang", "a"); rm.pickCourier("cheonil", "b"); rm.setReady("1"); rm.setReady("2");
+    assert.strictEqual(rm.state.race.game, null);
+    assert.deepStrictEqual(rm.state.race.stage, { "1": "ubongo", "2": "ubongo" }, "바로 택배 쌓기");
+    rm.raceStep("1", "ubongo-done");
+    assert.strictEqual(rm.state.race.first, "1");
+    rm.destroy();
+    log("기본: 첫 미니게임 없이 바로 택배 쌓기");
   }
 
   // 예전 방식 플래그
