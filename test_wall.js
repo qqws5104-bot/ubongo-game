@@ -6,7 +6,7 @@ const assert = require("assert");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function mk(rules) {
   const box = { st: null };
-  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" } }, rules));
+  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" }, contestRate: 0 }, rules));
   room.pickCourier("cookbang", "c1"); room.pickCourier("cheonil", "c2"); room.setReady("1"); room.setReady("2");
   return { room, box };
 }
@@ -149,7 +149,7 @@ function mk(rules) {
     room.wallPress("1", "m201"); assert.strictEqual(last().k, "done", "5번째 계단에 완료");
     // 주택: 일찍 누르면 다시 울림
     room.wallPress("1", "h2"); const open0 = box.st.delivery.doors.h2.openAt;
-    await sleep(50); room.wallPress("1", "h2"); assert.strictEqual(last().k, "early"); assert(box.st.delivery.doors.h2.openAt > open0);
+    await sleep(50); room.wallPress("1", "h2"); assert.strictEqual(last().k, "early"); assert(box.st.delivery.doors.h2.openAt >= Date.now() + 250, "다시 울림"); void open0;
     // 놓치면 닫힘(택배는 그대로)
     await sleep(900); assert(!box.st.delivery.doors.h2); assert(box.st.delivery.ev.some((e) => e.k === "missed")); assert.strictEqual(box.st.players["1"].invoices[1].deliveredRound, null);
     // 문 열렸을 때 누르면 완료
@@ -160,6 +160,35 @@ function mk(rules) {
     box.st.players["2"].invoices = [{ id: "z", catIdx: 0, unit: "m102", reward: 1000, deliveredRound: null }];
     room.wallPress("2", "m102"); for (let i = 0; i < 5; i++) room.wallPress(null, "m102");
     assert.strictEqual(last().k, "returned");
+    room.destroy();
+  }
+  // 7) 같은 집 쟁탈 + 막기 보상
+  {
+    const { room, box } = mk({ deliveryMs: 4000, deliveryProgressMs: 150, deliveryElevMoveMs: 0, blockReward: 1000 });
+    room._endSecurePhase();
+    box.st.players["1"].invoices = [{ id: "a", catIdx: 0, unit: "h4", reward: 1000, deliveredRound: null }];
+    box.st.players["2"].invoices = [{ id: "b", catIdx: 0, unit: "h4", reward: 1000, deliveredRound: null }, { id: "c", catIdx: 0, unit: "h5", reward: 1000, deliveredRound: null }];
+    const last = () => box.st.delivery.ev[box.st.delivery.ev.length - 1];
+    // 파랑이 h5 배송 -> 빨강이 막음 -> 빨강 +1000
+    room.wallPress("2", "h5"); for (let i = 0; i < 5; i++) room.wallPress(null, "h5");
+    assert.strictEqual(last().k, "returned"); assert.strictEqual(last().blocker, "1"); assert.strictEqual(box.st.players["1"].blocks, 1);
+    // 빨강이 h4 먼저 -> 파랑 h4 선점당함
+    room.wallPress("1", "h4"); await sleep(300);
+    assert.strictEqual(last().k, "done"); assert.strictEqual(last().snatched, 1000);
+    assert.strictEqual(box.st.players["2"].invoices[0].lost, true);
+    room.wallPress("2", "h4"); assert.strictEqual(last().k, "wrong", "선점당한 집은 더 이상 내 택배 없음");
+    await sleep(4000);
+    const sc = box.st.halfHistory[0].scores;
+    assert.strictEqual(sc["1"], 1000 + 1000, "배송 + 막기");
+    room.destroy();
+  }
+  // 8) 쟁탈 주소 생성: 누가 들고 있는 집이 다시 나온다
+  {
+    const { room, box } = mk({ contestRate: 1 });
+    box.st.players["1"].invoices.push({ id: "x", catIdx: 0, unit: "a301", reward: 1000, deliveredRound: null });
+    room._planNewRound(9, { parcels: 3, first: 2 }, box.st.race.puzzleId);
+    assert(box.st.race.pair.some((p) => p.unit === "a301"), "들고 있는 집이 주소로 나옴");
+    assert.strictEqual(new Set(box.st.race.pair.map((p) => p.unit)).size, 3, "한 라운드 안에선 안 겹침");
     room.destroy();
   }
   console.log("test_wall OK");

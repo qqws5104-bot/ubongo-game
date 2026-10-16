@@ -816,3 +816,26 @@ body:has(.d-main) .mv-chip { background: #fffdf6 !important; }
 .d-now.bell-open { background: #1f9a4c !important; }
 .d-now.bell-open .d-bell-wait { display: none; }
 .d-now.bell-open .d-bell-open { display: inline; }
+
+/* ===== 25. 경쟁 장치 (2026-10-16): 같은 집 쟁탈 ⚔ / 줄다리기 막대 / 역전 ===== */
+.du-vs { outline: 3px dashed #ffd23f; outline-offset: 1px; }
+.du-vsb { position: absolute; top: -11px; right: -8px; z-index: 3; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px;
+  background: linear-gradient(90deg, #e53935 50%, #2f6fe0 50%); color: #fff; box-shadow: 0 0 0 2px #ffd23f; animation: duVs 1s ease-in-out infinite; }
+@keyframes duVs { 50% { transform: scale(1.18); } }
+.d-slip.vs { box-shadow: 0 0 0 3px #ffd23f; position: relative; }
+.d-slip-vs { position: absolute; top: -10px; right: 6px; background: #ffd23f; color: #3a2a00; font-weight: 900; font-size: .72rem; border-radius: 999px; padding: 1px 8px; }
+.d-tug { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.d-tug-bar { position: relative; flex: 1; height: 14px; border-radius: 999px; overflow: visible; display: flex; background: #ddd; }
+.d-tug-bar > i { display: block; height: 100%; transition: width .5s ease; }
+.d-tug-1 { background: #e53935; border-radius: 999px 0 0 999px; }
+.d-tug-2 { background: #2f6fe0; border-radius: 0 999px 999px 0; }
+.d-tug-bar > em { position: absolute; top: -5px; width: 6px; height: 24px; margin-left: -3px; background: #fff; border: 2px solid #222; border-radius: 3px; transition: left .5s ease; }
+.d-tug-lead, .d-tug-even { white-space: nowrap; font-weight: 800; font-size: .9rem; }
+.d-tug-lead.t1 { color: #e53935; } .d-tug-lead.t2 { color: #2f6fe0; }
+.d-main .d-tug { margin: 4px 0 8px; }
+.d-main .d-tug-lead, .d-main .d-tug-even { color: #fff; }
+.d-main .d-tug-lead.t1 b { color: #ff8a80; } .d-main .d-tug-lead.t2 b { color: #8ab4ff; }
+.d-board-mid .d-tug { min-width: 220px; }
+.dpop.vs { border-top-color: #ffd23f !important; }
+.dpop.lead { border-top-color: #ffd23f !important; background: #1d1d1d; color: #fff; }
+.dpop.lead b { font-size: 2rem; color: #ffd23f; }

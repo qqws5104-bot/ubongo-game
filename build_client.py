@@ -825,6 +825,7 @@ APP_JS_TEMPLATE = r"""
   function scoreInvoice(inv) {
     var t = TYPES[inv.catIdx];
     if (inv.stolen) return -t.penalty;
+    if (inv.lost) return 0; // 2026-10-16 같은 집 선점당함
     if (inv.returned) return -t.penalty; // 2026-10-16 반송
     if (inv.deliveredRound === null) return -t.penalty;
     var base = invReward(inv); // 2026-10-13: 층 배율 적용 금액 (game-room.js scoreInvoice와 동일)
@@ -834,6 +835,7 @@ APP_JS_TEMPLATE = r"""
     // 2026-08-27: 도난당한 송장도 "미배송"으로 통합 표기 (사용자 요청 -- 배송이 안 됐으니까).
     // 페널티/소진 로직(scoreInvoice, deliveredRound 처리)은 그대로, 영구 라벨만 통일했다. 그 라운드의
     // 실시간 안내(renderDeliveredCallout의 "택배도둑에게 도난당했어요!")는 별개로 남겨둠.
+    if (inv.lost) return "선점당함";
     if (inv.returned) return "반송";
     if (inv.stolen) return "미배송";
     return inv.deliveredRound === null ? "미배송" : "성공";
@@ -855,7 +857,8 @@ APP_JS_TEMPLATE = r"""
   function totalScore(seat, st) {
     var invs = st.players[seat].invoices;
     var wrong = (st.players[seat].wrong || 0) * ((st.wallRule && st.wallRule.wrongPenalty) || 0); // 2026-10-16 오배송 감점
-    return invs.reduce(function (sum, inv) { return sum + scoreInvoice(inv); }, 0) + setBonusFor(invs, setRuleOf(st)) + bldBonusFor(invs, st.wallRule) - wrong;
+    var blocks = (st.players[seat].blocks || 0) * ((st.wallRule && st.wallRule.blockReward) || 0); // 2026-10-16 막기 보상
+    return invs.reduce(function (sum, inv) { return sum + scoreInvoice(inv); }, 0) + setBonusFor(invs, setRuleOf(st)) + bldBonusFor(invs, st.wallRule) - wrong + blocks;
   }
   function fmtWon(n) {
     var sign = n > 0 ? "+" : (n < 0 ? "-" : "");
@@ -902,6 +905,7 @@ APP_JS_TEMPLATE = r"""
         }
         render();
         dEvents(state);
+        dLeadCheck(state);
         microSync();
         syncMiniGame();
       }
@@ -1078,7 +1082,7 @@ APP_JS_TEMPLATE = r"""
       l: function () { return ["조각 2개 문제는 택배 <b>3개</b>(먼저 끝낸 사람 2개), 조각 3개 이상은 택배 <b>5개</b>(먼저 끝낸 사람 3개).", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> 누른 채 + 호실 키</div>'; },
-      l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송(다시 보낼 수 있어요) · 내 택배가 없는 집은 <b>오배송 감점</b>."]; } },
+      l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송 + <b>막은 팀 보너스</b> · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!"]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · 팀 키 + <b>↑</b> / <b>↓</b> 로 엘리베이터 끌기</div>'; },
       l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
@@ -2146,18 +2150,31 @@ APP_JS_TEMPLATE = r"""
   function invAddr(inv) { return (inv && inv.unit && unitById[inv.unit]) ? unitAddr(unitById[inv.unit]) : roomCode(inv.floorIdx, inv.room); }
   function bShort(b) { return b === "apt" ? "아파트" : (b === "mansion" ? "맨션" : "주택"); }
   function dStats(st, s) {
-    var invs = st.players[s].invoices, r = { got: invs.length, gotSum: 0, done: 0, doneSum: 0, pending: [], returned: 0, wrong: st.players[s].wrong || 0 };
+    var invs = st.players[s].invoices, r = { got: invs.length, gotSum: 0, done: 0, doneSum: 0, pending: [], returned: 0, lost: 0, wrong: st.players[s].wrong || 0 };
+    r.blocks = st.players[s].blocks || 0; r.blockSum = r.blocks * ((st.wallRule && st.wallRule.blockReward) || 0);
     var rule = setRuleOf(st);
     r.kinds = deliveredKinds(invs); r.kindsNeed = rule.kinds; r.kindsAmt = rule.amount;
     r.blds = deliveredBlds(invs); r.bldAmt = (st.wallRule && st.wallRule.bldBonus) || 0;
     r.combo = (r.kindsAmt > 0 && r.kinds >= r.kindsNeed ? r.kindsAmt : 0) + (r.bldAmt > 0 && r.blds >= 3 ? r.bldAmt : 0);
     invs.forEach(function (v) {
       r.gotSum += invReward(v);
+      if (v.lost) { r.lost++; return; }
       if (v.returned) r.returned++;
       else if (v.deliveredRound !== null && !v.stolen) { r.done++; r.doneSum += invReward(v); }
       else if (v.deliveredRound === null) r.pending.push(v);
     });
+    r.live = r.doneSum + r.combo + r.blockSum; // 배송 화면 "실적" (미배송 감점은 끝나고 계산)
     return r;
+  }
+  // 2026-10-16 같은 집 쟁탈: 두 팀이 다 미배송으로 들고 있는 집
+  function dHeld(st, s, unit) { return st.players[s].invoices.some(function (v) { return v.unit === unit && v.deliveredRound === null && !v.returned && !v.lost; }); }
+  function dContested(st, unit) { return dHeld(st, "1", unit) && dHeld(st, "2", unit); }
+  // 줄다리기 막대: 두 팀 실적 차이
+  function dTug(st) {
+    var a = dStats(st, "1").live, b = dStats(st, "2").live, diff = a - b;
+    var pct = 50 + Math.max(-46, Math.min(46, diff / Math.max(10000, Math.abs(a) + Math.abs(b)) * 50));
+    var lead = diff === 0 ? '<span class="d-tug-even">동점</span>' : '<span class="d-tug-lead t' + (diff > 0 ? "1" : "2") + '">' + TEAM[diff > 0 ? "1" : "2"] + ' <b>+' + dWon(Math.abs(diff)) + '</b></span>';
+    return '<div class="d-tug"><div class="d-tug-bar"><i class="d-tug-1" style="width:' + pct.toFixed(1) + '%"></i><i class="d-tug-2" style="width:' + (100 - pct).toFixed(1) + '%"></i><em style="left:' + pct.toFixed(1) + '%"></em></div>' + lead + '</div>';
   }
   function comboChips(x) {
     var h = '';
@@ -2191,14 +2208,15 @@ APP_JS_TEMPLATE = r"""
   // 호실 버튼 하나. interactive: 레일 화면(키/클릭) 또는 레일이 없을 때 플레이어 화면(탭)
   function unitBtn(st, u, keyHint) {
     var door = st.delivery.doors[u.id];
-    var cls = 'du du-' + u.b + (door ? ' on-' + door.seat : '');
+    var vs = dContested(st, u.id);
+    var cls = 'du du-' + u.b + (door ? ' on-' + door.seat : '') + (vs ? ' du-vs' : '');
     var taps = door && door.taps ? '<span class="du-taps">막기 ' + door.taps + '/' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '</span>' : '';
     // 2026-10-16 (사용자: "너무 난잡"): 메인 화면에선 문마다 표 하나 -- [호수 | 키] 칩. 맨션은 그림 속 호수가 커서 키만.
     var num = u.b === "house" ? u.label.replace("성수로 ", "") : u.label.replace("호", "");
     var chip = keyHint ? '<span class="du-chip">' + (u.b === "mansion" ? '' : '<b>' + esc(num) + '</b>') + '<kbd>' + esc(u.keyLabel) + '</kbd></span>' : '<span class="du-label">' + esc(u.b === "house" ? u.label.replace("성수로 ", "") : u.label) + '</span>';
     var steps = door && door.mode === "climb" ? '<span class="du-steps">' + door.steps + '/' + door.need + '</span>' : door && door.mode === "bell" ? '<span class="du-bell"></span>' : '';
     return '<button class="' + cls + '" data-unit="' + u.id + '"' + (door ? dDoorAttrs(door) : '') + ' aria-label="' + esc(unitAddr(u)) + '">'
-      + '<span class="du-ring"></span>' + taps + steps + chip + '</button>';
+      + '<span class="du-ring"></span>' + taps + steps + (vs && !door ? '<span class="du-vsb">⚔</span>' : '') + chip + '</button>';
   }
   function renderWalls(st, keyHint) {
     var d = st.delivery, ef = d.elev ? d.elev.floor : null;
@@ -2247,11 +2265,13 @@ APP_JS_TEMPLATE = r"""
     var slips = s.pending.map(function (v) {
       var u = unitById[v.unit];
       var on = act && act.unit === v.unit;
-      return '<div class="d-slip' + (on ? ' on' : '') + '"><span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span><span class="d-slip-a">' + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w"><i class="d-kind fee-t' + v.catIdx + '">' + esc(TYPES[v.catIdx].name) + '</i> ' + dWon(invReward(v)) + '</span></div>';
+      var other = seat === "1" ? "2" : "1", vsx = u && dHeld(st, other, v.unit);
+      return '<div class="d-slip' + (on ? ' on' : '') + (vsx ? ' vs' : '') + '">' + (vsx ? '<span class="d-slip-vs">⚔ 상대도 이 집!</span>' : '') + '<span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span><span class="d-slip-a">' + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w"><i class="d-kind fee-t' + v.catIdx + '">' + esc(TYPES[v.catIdx].name) + '</i> ' + dWon(invReward(v)) + '</span></div>';
     }).join('');
     var html = '<main class="stage stage--dlv">' + cartOpen('cart--dlv') + '<div class="dlv t' + seat + '">'
       + '<div class="dlv-top"><span class="dlv-team t' + seat + '">' + TEAM[seat] + '</span>' + dClock(st)
-      + '<span class="dlv-earn">실적 <b>' + dWon(s.doneSum + s.combo) + '</b><small>배송 ' + s.done + '건</small></span></div>'
+      + '<span class="dlv-earn">실적 <b>' + dWon(s.live) + '</b><small>배송 ' + s.done + '건' + (s.blocks ? ' · 막기 ' + s.blocks : '') + '</small></span></div>'
+      + dTug(st)
       + comboChips(s)
       + now
       + '<div class="d-slips">' + (slips || '') + '</div>'
@@ -2270,12 +2290,13 @@ APP_JS_TEMPLATE = r"""
   function teamCard(st, s, big) {
     var x = dStats(st, s), act = dActive(st, s);
     var combN = (x.kindsAmt > 0 && x.kinds >= x.kindsNeed ? 1 : 0) + (x.bldAmt > 0 && x.blds >= 3 ? 1 : 0);
-    if (!big) return '<div class="d-team t' + s + '"><span>' + TEAM[s] + '</span><b>' + dWon(x.doneSum + x.combo) + '</b><small>' + x.done + '건' + (combN ? ' · 콤보 ' + combN : '') + '</small></div>';
-    return '<div class="d-team big t' + s + '"><div class="d-team-h">' + TEAM[s] + ' · 배송 실적</div><div class="d-team-v">' + dWon(x.doneSum + x.combo) + '</div>'
+    if (!big) return '<div class="d-team t' + s + '"><span>' + TEAM[s] + '</span><b>' + dWon(x.live) + '</b><small>' + x.done + '건' + (combN ? ' · 콤보 ' + combN : '') + '</small></div>';
+    return '<div class="d-team big t' + s + '"><div class="d-team-h">' + TEAM[s] + ' · 배송 실적</div><div class="d-team-v">' + dWon(x.live) + '</div>'
       + '<div class="d-team-rows">'
       + '<div><span>획득</span><b>' + x.got + '개 · ' + dWon(x.gotSum) + '</b></div>'
       + '<div><span>배송 완료</span><b>' + x.done + '개 · ' + dWon(x.doneSum) + '</b></div>'
       + '<div><span>남은 택배</span><b>' + x.pending.length + '개</b></div>'
+      + '<div><span>막기 · 뺏김</span><b>' + x.blocks + '회' + (x.blockSum ? ' +' + dWon(x.blockSum) : '') + ' · ' + x.lost + '개</b></div>'
       + '<div><span>콤보</span><b>종류 ' + Math.min(x.kinds, x.kindsNeed) + '/' + x.kindsNeed + ' · 건물 ' + Math.min(x.blds, 3) + '/3</b></div>'
       + '<div><span>지금</span><b>' + (act ? esc(unitAddr(unitById[act.unit])) + ' 배송 중' : '—') + '</b></div>'
       + (x.returned || x.wrong ? '<div class="d-team-neg"><span>반송 · 오배송</span><b>' + x.returned + ' · ' + x.wrong + '</b></div>' : '')
@@ -2285,13 +2306,14 @@ APP_JS_TEMPLATE = r"""
   function renderMainDelivery(st, head, halfName) {
     return head("배송 · " + halfName) + '<div class="mv-body rv-dlv d-main">'
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
+      + dTug(st)
       + renderWalls(st, true)
-      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · 팀 키 + <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기</div></div>';
+      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · 팀 키 + <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기 <b>+' + dWon((st.wallRule && st.wallRule.blockReward) || 0) + '</b> · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효</div></div>';
   }
   function renderRailDelivery(st, head, halfName) {
     return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
       + teamCard(st, "1", true)
-      + '<div class="d-board-mid">' + dClock(st) + elevCtl(st, false) + '</div>'
+      + '<div class="d-board-mid">' + dClock(st) + elevCtl(st, false) + dTug(st) + '</div>'
       + teamCard(st, "2", true) + '</div></div>';
   }
 
@@ -2313,6 +2335,7 @@ APP_JS_TEMPLATE = r"""
     soft: function () { dTone(330, 0, 0.18, "triangle", 0.12); },
     beep: function () { dTone(880, 0, 0.14, "square", 0.08); },
     step: function (n) { dTone(392 + n * 45, 0, 0.09, "triangle", 0.14); },
+    lead: function () { dTone(523, 0, 0.12, "square", 0.12); dTone(659, 0.12, 0.12, "square", 0.12); dTone(784, 0.24, 0.12, "square", 0.12); dTone(1046, 0.36, 0.35, "square", 0.14); },
     open: function () { dTone(784, 0, 0.12, "sine", 0.25); dTone(988, 0.08, 0.2, "sine", 0.25); },
   };
 
@@ -2344,12 +2367,18 @@ APP_JS_TEMPLATE = r"""
             var cTitle = e.combos.map(function (c) { return c.k === "bld" ? "모든 건물 배송" : "모든 종류 배송"; }).join(" + ");
             var cAmt = e.combos.reduce(function (a, c) { return a + c.amount; }, 0);
             setTimeout(function () { DSND.done(); dPop("ok combo", "콤보! " + cTitle + " +" + dWon(cAmt), (me ? "" : who + " · ") + "배송 +" + dWon(e.reward || 0) + " · " + addr, e.seat); }, 50);
-          } else dPop("ok", "배송 완료! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat);
-        }
+          } else if (e.snatched) dPop("ok vs", "선점! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 상대 택배 무효 (−" + dWon(e.snatched) + ")", e.seat);
+          else dPop("ok", "배송 완료! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat);
+        } else if (e.snatched) { DSND.err(); dPop("bad", "선점당했어요!", addr + " · 상대가 먼저 배송 -- 이 택배는 무효", me); }
         return;
       }
       if (e.k === "tap") { DSND.soft(); if (!me) dPop("warn", TEAM[e.seat] + " 배송 막는 중 " + (e.taps || 0) + "/" + ((st.wallRule && st.wallRule.returnTaps) || 5), addr, e.seat); return; }
-      if (e.k === "returned") { DSND.err(); dPop("bad", (me && e.seat === me ? "상대가 막았어요! 반송" : who + " 배송 막힘! 반송"), addr + " · 다시 보낼 수 있어요", e.seat); return; }
+      if (e.k === "returned") {
+        var gain = e.gain ? " · " + TEAM[e.blocker] + " +" + dWon(e.gain) : "";
+        if (me && e.blocker === me) { DSND.done(); dPop("ok vs", "막기 성공! +" + dWon(e.gain || 0), addr + " · 상대 택배 반송", me); }
+        else { DSND.err(); dPop("bad", (me && e.seat === me ? "상대가 막았어요! 반송" : who + " 배송 막힘! 반송"), addr + gain + " · 다시 보낼 수 있어요", e.seat); }
+        return;
+      }
       if (!mine) return;
       var pre = me ? "" : who + " · ";
       if (e.k === "wrong") { DSND.err(); dPop("bad", pre + "오배송! 내 택배가 없는 집", addr + " · -" + dWon((st.wallRule && st.wallRule.wrongPenalty) || 0), e.seat); }
@@ -2360,8 +2389,15 @@ APP_JS_TEMPLATE = r"""
       else if (e.k === "busy") { DSND.soft(); dPop("warn", pre + "한 번에 한 집만", "누르고 있는 집을 먼저 끝내세요", e.seat); }
       else if (e.k === "early") { DSND.err(); dPop("warn", pre + "아직 문이 안 열렸어요", addr + " · 초인종을 다시 눌렀어요, 초록 불을 기다리세요", e.seat); }
       else if (e.k === "missed") { DSND.err(); dPop("warn", pre + "문이 닫혔어요", addr + " · 초인종부터 다시", e.seat); }
-      else if (e.k === "taken") { DSND.soft(); dPop("warn", pre + "상대 팀이 배송 중인 집", "막으려면 Ctrl/Shift 없이 그 키를 5번 연타", e.seat); }
+      else if (e.k === "taken") { DSND.soft(); dPop("warn", pre + "상대 팀이 배송 중인 집", dHeld(st, e.seat, e.unit) ? "내 택배도 있는 집! 그냥 5번 연타로 막고 내가 먼저 보내세요" : "막으려면 Ctrl/Shift 없이 그 키를 5번 연타", e.seat); }
     });
+  }
+  // 2026-10-16 역전 알림: 실적 1등이 바뀌면 (동점은 무시)
+  function dLeadCheck(st) {
+    if (!st || st.phase !== "delivery" || !st.delivery) { dLocal.leader = null; return; }
+    var a = dStats(st, "1").live, b = dStats(st, "2").live, ld = a === b ? null : (a > b ? "1" : "2");
+    if (ld && dLocal.leader && ld !== dLocal.leader) { setTimeout(function () { DSND.lead(); dPop("lead", "역전! " + TEAM[ld], "+" + dWon(Math.abs(a - b)) + " 앞서요", ld); }, 900); }
+    if (ld) dLocal.leader = ld;
   }
   // 진행 링·시계·마감 경고 (render 사이에도 계속)
   function dTick() {
@@ -2471,7 +2507,7 @@ APP_JS_TEMPLATE = r"""
   // 2026-10-16 (사용자 피드백 2차 "아직 쉽다"): 게임마다 제한 시간(MX_LIMIT, 넘기면 같은 게임을 새 문제로 다시) + 각 게임 난이도 한 단계 더.
   // 2026-10-16 (사용자: "시간 압박이 너무 강하다"): 제한 시간을 크게 늘림 (예전 7/5/5.5/5초)
   // 2026-10-16 (사용자 피드백 "너무 어렵다"): 한 단계 쉽게 -- 성공 횟수↓, 초록불·기억 시간↑, 연타 목표↓, 감쇠 느리게, 제한 시간↑
-  var MX_LIMIT = { react: [14000, 14000], pick: [11000, 10000], mash: [10000, 10000], arrows: [11000, 10000] };
+  var MX_LIMIT = { react: [14000, 14000], pick: [11000, 10000], mash: [0, 0], arrows: [11000, 10000] };
   function mxStart(r, idx) {
     if (mx) { if (mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } if (mx.clock) clearInterval(mx.clock); }
     var kind = r.pieceGames[idx] || "react";
@@ -2479,12 +2515,12 @@ APP_JS_TEMPLATE = r"""
     mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0, tries: (mx && mx.round === r.round && mx.idx === idx ? (mx.tries || 0) + 1 : 0) };
     if (kind === "react") { mx.hits = 0; mx.needHits = [1, 2][H]; mx.sched = mxReactSched((r.seed || 1) + idx * 7919, H); mx.t0 = r.startedAt || nowMs(); mx.lastHitSeg = -1; mx.seenSeg = -1; mxArmReact(); }
     else if (kind === "pick") { mx.streak = 0; mx.needStreak = [2, 3][H]; mxNewPick(); }
-    else if (kind === "mash") { mx.count = 0; mx.goal = [11, 13][H]; mxMashDecay(); }
+    else if (kind === "mash") { mx.count = 0; mx.goal = [9, 10][H]; mxMashDecay(); }
     else if (kind === "arrows") { mxNewArrows(); }
-    var limit = MX_LIMIT[kind][H];
+    var limit = MX_LIMIT[kind][H]; // 0 = 제한 시간 없음 (테이프 붙이기 -- 2026-10-16 사용자 요청)
     mx.startAt = Date.now(); mx.deadline = mx.startAt + limit; mx.limit = limit;
     var my = mx;
-    mx.clock = setInterval(function () {
+    if (limit) mx.clock = setInterval(function () {
       if (mx !== my) { clearInterval(my.clock); return; }
       if (mx.won) { clearInterval(mx.clock); return; }
       var bar = document.getElementById("mx-time");
@@ -2553,7 +2589,7 @@ APP_JS_TEMPLATE = r"""
     mx.timer = setInterval(function () {
       if (mx !== my || mx.won) { clearInterval(my.timer); return; }
       if (mx.count > 0) { mx.count = Math.max(0, mx.count - 1); mxRender(); }
-    }, mxHard() ? 260 : 330);
+    }, mxHard() ? 480 : 550); // 2026-10-16 (사용자 "테이프 너무 어려움"): 줄어드는 속도 더 느리게
   }
   // 송장 주소 맞추기: 위 송장의 호수와 같은 것을 고른다. 보기는 숫자를 뒤집거나 하나 바꾼 비슷한 호수들. needStreak번 연속.
   function mxNewPick() {
@@ -2638,7 +2674,7 @@ APP_JS_TEMPLATE = r"""
         + '<div class="mx-hint">' + (hide ? '외운 길 순서대로 운전!' : '골목 길을 외우세요…') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
     }
-    var tbar = mx.won ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + '%"></i></div>';
+    var tbar = (mx.won || !mx.limit) ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + '%"></i></div>';
     el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + tbar + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
   }
   document.addEventListener("keydown", function (e) {

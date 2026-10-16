@@ -13,7 +13,7 @@ const {
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
-  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, COMBO_BUILDING_BONUS, DELIVERY_MODES, DELIVERY_CLIMB_STEPS, DELIVERY_BELL_WAIT_MS, DELIVERY_BELL_WINDOW_MS, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
+  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, COMBO_BUILDING_BONUS, DELIVERY_MODES, DELIVERY_CLIMB_STEPS, DELIVERY_BELL_WAIT_MS, DELIVERY_BELL_WINDOW_MS, CONTEST_RATE, BLOCK_REWARD, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -62,6 +62,8 @@ const DEFAULT_RULES = {
   deliveryClimbSteps: DELIVERY_CLIMB_STEPS,
   deliveryBellWaitMs: DELIVERY_BELL_WAIT_MS,
   deliveryBellWindowMs: DELIVERY_BELL_WINDOW_MS,
+  contestRate: process.env.CONTEST === "0" ? 0 : CONTEST_RATE,
+  blockReward: BLOCK_REWARD,
   comboBuildingBonus: COMBO_BUILDING_BONUS,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
@@ -143,6 +145,7 @@ function randomInvoice(seat, catIdx, num, acquiredSeq, room, floorRewardMult) {
 function scoreInvoice(inv) {
   const t = TYPES[inv.catIdx];
   if (inv.stolen) return -t.penalty;
+  if (inv.lost) return 0; // 2026-10-16 같은 집 쟁탈: 상대가 먼저 배송 -- 0원(감점 없음)
   if (inv.returned) return -t.penalty; // 2026-10-16 벽 배송: 반송(상대가 5번 눌러 끔)
   if (inv.deliveredRound === null) return -t.penalty;
   // inv.reward가 없는 송장(2026-10-13 이전 형식)은 종류 기본 금액 그대로.
@@ -156,6 +159,7 @@ function scoreInvoice(inv) {
 // renderDeliveredCallout "택배도둑에게 도난당했어요!")는 별개로 남겨뒀다 -- 그건 "이번 라운드에 무슨
 // 일이 있었는지"를 보여주는 즉시성 정보라 계속 유용하다는 판단.
 function resultLabel(inv) {
+  if (inv.lost) return "선점당함";
   if (inv.returned) return "반송";
   if (inv.stolen) return "미배송"; // deliveredRound는 채워져 있지만(재배송 방지용) 라벨은 미배송 취급
   return inv.deliveredRound === null ? "미배송" : "성공";
@@ -187,7 +191,8 @@ function buildingBonusFor(invoices, wallRule) {
 function totalScore(seat, state) {
   const invs = state.players[seat].invoices;
   const wrong = (state.players[seat].wrong || 0) * ((state.wallRule && state.wallRule.wrongPenalty) || 0); // 2026-10-16 오배송 감점
-  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule) + buildingBonusFor(invs, state.wallRule) - wrong;
+  const blocks = (state.players[seat].blocks || 0) * ((state.wallRule && state.wallRule.blockReward) || 0); // 2026-10-16 막기 보상
+  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule) + buildingBonusFor(invs, state.wallRule) - wrong + blocks;
 }
 
 function freshBoard() {
@@ -198,7 +203,7 @@ function freshBoard() {
 function freshPlayers() {
   // roomBag: 이 플레이어의 이번 하프용 "안 겹치는 호수" 셔플 가방 (drawRoom() 참고). 하프가 바뀌면
   // (freshPlayers()가 다시 호출되면) 완전히 새로 셔플돼서 이전 하프의 소진 상태를 이어받지 않는다.
-  return { "1": { invoices: [], roomBag: shuffledRooms(), wrong: 0 }, "2": { invoices: [], roomBag: shuffledRooms(), wrong: 0 } };
+  return { "1": { invoices: [], roomBag: shuffledRooms(), wrong: 0, blocks: 0 }, "2": { invoices: [], roomBag: shuffledRooms(), wrong: 0, blocks: 0 } };
 }
 function pickStartFloor(choices) {
   const list = choices && choices.length ? choices : [START_FLOOR_IDX];
@@ -253,7 +258,7 @@ function initialState(rules) {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
     // 2026-10-16 벽 배송: 규칙 묶음(클라이언트 표시·점수 계산용)과 진행 상태(phase "delivery"일 때만)
-    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0 } : null,
+    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.blockReward || 0 } : null,
     delivery: null,
     phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
@@ -470,6 +475,12 @@ class GameRoom {
     if (!tbl || !pieces) return null;
     return tbl[pieces] || null;
   }
+  _heldUnits() {
+    // 한 팀만 들고 있는 집 (이미 두 팀이 다 가진 집은 또 내지 않는다)
+    const h = {};
+    ["1", "2"].forEach((s) => this.state.players[s].invoices.forEach((v) => { if (v.unit && v.deliveredRound === null && !v.returned && !v.lost) { h[v.unit] = h[v.unit] || {}; h[v.unit][s] = true; } }));
+    return Object.keys(h).filter((u) => Object.keys(h[u]).length === 1);
+  }
   _usedUnits() {
     const used = {};
     ["1", "2"].forEach((s) => this.state.players[s].invoices.forEach((v) => { if (v.unit) used[v.unit] = true; }));
@@ -491,9 +502,17 @@ class GameRoom {
     }
     const used = this._usedUnits();
     const pool = shuffled(UNITS.filter((u) => !used[u.id]));
+    // 2026-10-16 같은 집 쟁탈: 일부는 지금 누군가 들고 있는(미배송) 집으로
+    const held = shuffled(this._heldUnits());
+    const inRound = {};
     const pair = items.map((it, k) => {
       const out = { cellId: it.cellId, catIdx: it.catIdx, floorIdx: null, unit: null, reward: TYPES[it.catIdx].reward };
-      if (this.rules.wallMode) out.unit = (pool[k] || UNITS[Math.floor(Math.random() * UNITS.length)]).id;
+      if (this.rules.wallMode) {
+        let uid = null;
+        if (held.length && Math.random() < (this.rules.contestRate || 0)) { uid = held.find((x) => !inRound[x]) || null; }
+        if (!uid) { const f = pool.find((u) => !inRound[u.id]); uid = (f || UNITS[Math.floor(Math.random() * UNITS.length)]).id; }
+        inRound[uid] = true; out.unit = uid;
+      }
       else { out.floorIdx = drawFloor(it.catIdx, it.num || 0); out.reward = rewardFor(it.catIdx, out.floorIdx, this.rules.floorRewardMult); }
       return out;
     });
@@ -886,7 +905,7 @@ class GameRoom {
       return;
     }
     if (!seat) return; // 꺼진 버튼을 Ctrl/Shift 없이 누름 -- 아무 일 없음
-    const inv = this.state.players[seat].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned);
+    const inv = this.state.players[seat].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned && !v.lost);
     if (!inv) {
       this.state.players[seat].wrong = (this.state.players[seat].wrong || 0) + 1;
       this._dEv("wrong", unitId, seat);
@@ -938,7 +957,7 @@ class GameRoom {
     const d = this.state.delivery;
     if (!seat) return; // 유지 방식에서는 보조키 없는 입력은 쓰지 않는다
     if (d.doors[unitId]) { if (d.doors[unitId].seat !== seat) this._dEv("taken", unitId, seat); this.emit(); return; }
-    const inv = this.state.players[seat].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned);
+    const inv = this.state.players[seat].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned && !v.lost);
     if (!inv) {
       this.state.players[seat].wrong = (this.state.players[seat].wrong || 0) + 1;
       this._dEv("wrong", unitId, seat); this.emit(); return;
@@ -990,7 +1009,10 @@ class GameRoom {
     const inv = this.state.players[door.seat].invoices.find((v) => v.id === door.invId);
     if (inv) inv.bounces = (inv.bounces || 0) + 1;
     delete d.doors[unitId];
-    this._dEv("returned", unitId, door.seat);
+    const blocker = door.seat === "1" ? "2" : "1"; // 그냥 누른 입력은 누군지 모르지만, 막는 쪽은 상대 팀
+    const br = (this.state.wallRule && this.state.wallRule.blockReward) || 0;
+    if (br > 0) this.state.players[blocker].blocks = (this.state.players[blocker].blocks || 0) + 1;
+    this._dEv("returned", unitId, door.seat, { blocker, gain: br });
   }
   _completeDoor(unitId) {
     const d = this.state.delivery;
@@ -1001,11 +1023,15 @@ class GameRoom {
     const kindsBefore = deliveredKinds(invs0), bldBefore = deliveredBuildings(invs0);
     if (inv) inv.deliveredRound = 1;
     delete d.doors[unitId];
+    // 같은 집 쟁탈: 상대가 같은 집 택배를 들고 있으면 그건 선점당함
+    const other = door.seat === "1" ? "2" : "1";
+    const lostInv = this.state.players[other].invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned && !v.lost);
+    if (lostInv) lostInv.lost = true;
     const combos = [];
     const sr = this.state.setRule, wr = this.state.wallRule;
     if (sr && sr.amount > 0 && kindsBefore < sr.kinds && deliveredKinds(invs0) >= sr.kinds) combos.push({ k: "kinds", amount: sr.amount });
     if (wr && wr.bldBonus > 0 && bldBefore < 3 && deliveredBuildings(invs0) >= 3) combos.push({ k: "bld", amount: wr.bldBonus });
-    this._dEv("done", unitId, door.seat, { combos, reward: inv ? (typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward) : 0, count: invs0.filter((v) => v.deliveredRound !== null && !v.stolen && !v.returned).length });
+    this._dEv("done", unitId, door.seat, { combos, reward: inv ? (typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward) : 0, count: invs0.filter((v) => v.deliveredRound !== null && !v.stolen && !v.returned).length, snatched: lostInv ? (typeof lostInv.reward === "number" ? lostInv.reward : TYPES[lostInv.catIdx].reward) : 0 });
   }
   _deliveryTick() {
     if (this.state.phase !== "delivery" || !this.state.delivery) { clearInterval(this.deliveryTimer); this.deliveryTimer = null; return; }

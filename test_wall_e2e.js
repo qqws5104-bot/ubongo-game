@@ -80,7 +80,7 @@ const OUT = "/tmp/wall_e2e_";
       await s.keyboard.press(code);
     }
     await s.keyboard.up("Control"); await p1.waitForTimeout(500); await p1.screenshot({ path: OUT + "d_p1_done.png" });
-    assert((await p1.locator("#dpop").textContent()).includes("배송 완료"), "배송 완료 팝업 (" + bb + ")"); await s.screenshot({ path: OUT + "d_main_done.png" });
+    { const pt = await p1.locator("#dpop").textContent(); assert(pt.includes("배송 완료") || pt.includes("선점") || pt.includes("콤보"), "배송 완료 팝업 (" + bb + "): " + pt); } await s.screenshot({ path: OUT + "d_main_done.png" });
   }
   // wrong press by blue: Shift + key of some unit
   await s.keyboard.down("Shift"); await s.keyboard.press("KeyE"); await s.keyboard.up("Shift"); await s.waitForTimeout(300);
