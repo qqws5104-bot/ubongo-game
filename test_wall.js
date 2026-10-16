@@ -6,7 +6,7 @@ const assert = require("assert");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function mk(rules) {
   const box = { st: null };
-  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false }, rules));
+  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" } }, rules));
   room.pickCourier("cookbang", "c1"); room.pickCourier("cheonil", "c2"); room.setReady("1"); room.setReady("2");
   return { room, box };
 }
@@ -115,6 +115,51 @@ function mk(rules) {
     room.wallPress(null, "m101"); assert(!box.st.delivery.doors.m101, "5번째에 반송(꺼짐)");
     assert.strictEqual(box.st.players["1"].invoices[0].bounces, 1); assert(!box.st.players["1"].invoices[0].returned, "반송돼도 다시 보낼 수 있다");
     room.wallPress("1", "m101"); assert(box.st.delivery.doors.m101, "다시 배송 시작");
+    room.destroy();
+  }
+  // 5) 콤보: 아파트·맨션·주택 모두 배송 = 건물 콤보, 3종류 모두 배송 = 종류 콤보(SET_BONUS)
+  {
+    const { room, box } = mk({ deliveryMs: 3000, deliveryProgressMs: 100, deliveryElevMoveMs: 0, setBonus: D.SET_BONUS, setBonusKinds: 3 });
+    room._endSecurePhase();
+    box.st.players["1"].invoices = [
+      { id: "c1", catIdx: 0, unit: "a101", reward: 1000, deliveredRound: null },
+      { id: "c2", catIdx: 1, unit: "m101", reward: 1000, deliveredRound: null },
+      { id: "c3", catIdx: 2, unit: "h1", reward: 1000, deliveredRound: null }];
+    for (const u of ["a101", "m101", "h1"]) { room.wallPress("1", u); await sleep(250); }
+    const doneEv = box.st.delivery.ev.filter((e) => e.k === "done");
+    const last = doneEv[doneEv.length - 1];
+    assert.strictEqual(last.combos.length, 2, "마지막 배송에서 콤보 두 개 동시 달성");
+    await sleep(3000);
+    assert.strictEqual(box.st.halfHistory[0].scores["1"], 3000 + D.SET_BONUS + D.COMBO_BUILDING_BONUS, "점수에 콤보 포함");
+    room.destroy();
+  }
+  // 6) 건물별 방식: 맨션 = 팀 키 연타(계단), 주택 = 초인종 -> 문 열리면 한 번 더 (일찍 누르면 다시, 놓치면 닫힘)
+  {
+    const { room, box } = mk({ deliveryMs: 6000, deliveryProgressMs: 300, deliveryElevMoveMs: 0, deliveryModes: { apt: "wait", mansion: "climb", house: "bell" }, deliveryClimbSteps: { 1: 5, 2: 5 }, deliveryBellWaitMs: [300, 400], deliveryBellWindowMs: 300 });
+    room._endSecurePhase();
+    box.st.players["1"].invoices = [
+      { id: "c1", catIdx: 0, unit: "m201", reward: 1000, deliveredRound: null },
+      { id: "c2", catIdx: 1, unit: "h2", reward: 1000, deliveredRound: null }];
+    const last = () => box.st.delivery.ev[box.st.delivery.ev.length - 1];
+    room.wallPress("1", "m201");
+    assert.strictEqual(box.st.delivery.doors.m201.steps, 1, "첫 누름 = 첫 계단");
+    for (let i = 0; i < 3; i++) room.wallPress("1", "m201");
+    assert.strictEqual(last().k, "step"); assert.strictEqual(last().steps, 4);
+    await sleep(500); assert(box.st.delivery.doors.m201, "계단은 시간으로 안 끝남");
+    room.wallPress("1", "m201"); assert.strictEqual(last().k, "done", "5번째 계단에 완료");
+    // 주택: 일찍 누르면 다시 울림
+    room.wallPress("1", "h2"); const open0 = box.st.delivery.doors.h2.openAt;
+    await sleep(50); room.wallPress("1", "h2"); assert.strictEqual(last().k, "early"); assert(box.st.delivery.doors.h2.openAt > open0);
+    // 놓치면 닫힘(택배는 그대로)
+    await sleep(900); assert(!box.st.delivery.doors.h2); assert(box.st.delivery.ev.some((e) => e.k === "missed")); assert.strictEqual(box.st.players["1"].invoices[1].deliveredRound, null);
+    // 문 열렸을 때 누르면 완료
+    room.wallPress("1", "h2"); const d2 = box.st.delivery.doors.h2;
+    await sleep(d2.openAt - Date.now() + 40); room.wallPress("1", "h2");
+    assert.strictEqual(last().k, "done"); assert.strictEqual(box.st.players["1"].invoices[1].deliveredRound, 1);
+    // 막기는 그대로 (계단 오르는 중 그냥 5번)
+    box.st.players["2"].invoices = [{ id: "z", catIdx: 0, unit: "m102", reward: 1000, deliveredRound: null }];
+    room.wallPress("2", "m102"); for (let i = 0; i < 5; i++) room.wallPress(null, "m102");
+    assert.strictEqual(last().k, "returned");
     room.destroy();
   }
   console.log("test_wall OK");

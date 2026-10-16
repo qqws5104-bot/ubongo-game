@@ -209,6 +209,21 @@ const DELIVERY_ELEV_MOVE_MS = 600;
 const DELIVERY_RETURN_TAPS = 5;         // 켜진 버튼을 Ctrl/Shift 없이 이만큼 누르면 반송
 const DELIVERY_MAX_ACTIVE = 1;          // 한 사람이 동시에 켤 수 있는 배송 수
 const DELIVERY_WRONG_PENALTY = 500;     // 오배송(내 택배 없는 호실을 Ctrl/Shift로 누름) 1회 감점
+// 2026-10-16 (사용자 결정) 콤보 점수 (하프마다 한 번씩):
+//   종류 콤보 = 레이스에 나오는 모든 종류를 배송 성공 -> 기존 SET_BONUS(종류 모으기)를 그대로 씀 (확정 층수가 빠져 3종류 = 전부)
+//   건물 콤보 = 아파트·맨션·주택 세 곳 모두 한 번 이상 배송 성공 -> +COMBO_BUILDING_BONUS
+const COMBO_BUILDING_BONUS = 5000;
+// 2026-10-16 (사용자 결정): 건물마다 배송 방식이 다르다.
+//   아파트 "wait"  = 엘리베이터가 그 층 + 팀 키+호실 키 한 번 -> DELIVERY_PROGRESS_MS(5초) 뒤 완료 (지금 그대로)
+//   맨션   "climb" = 팀 키를 누른 채 호실 키를 계단 수만큼 연타 (한 번 = 한 칸). 다 오르면 바로 완료. 2층이 더 높다.
+//   주택   "bell"  = 팀 키+호실 키로 초인종 -> 무작위로 기다린 뒤 문이 열리면(초록) 제한 시간 안에 한 번 더 눌러 전달.
+//            문 열리기 전에 누르면 초인종을 다시 누른 것(기다림이 처음부터), 시간 안에 못 누르면 문이 닫힘(택배는 그대로, 다시 초인종).
+//   어느 방식이든 켜져 있는 동안 상대가 그 호실 키를 Ctrl/Shift 없이 5번 누르면 반송. 전부 "wait"로 두면 예전과 같다.
+const DELIVERY_MODES = { apt: "wait", mansion: "climb", house: "bell" };
+const DELIVERY_CLIMB_STEPS = { 1: 5, 2: 5 };   // 맨션 층별 계단 수(연타 횟수) -- 2층을 더 높게 하려면 2: 8 등
+
+const DELIVERY_BELL_WAIT_MS = [1500, 3000];    // 주택 문이 열리기까지 (무작위 범위)
+const DELIVERY_BELL_WINDOW_MS = 2500;          // 문이 열려 있는 시간
 // 2026-10-16 (사용자 결정): 택배 쌓기 라운드별 걸리는 택배 수와 먼저 끝낸 사람이 가져가는 수. 나머지는 늦은 사람(투입하거나 RACE_CONSOLATION_MS 뒤).
 //   목록이 끝나면 마지막 값 반복. 1~2라운드: 3개 중 2개 / 3라운드부터: 5개 중 3개. null이면 예전(한 사람 하나씩).
 const RACE_GRANT_PLAN = [{ parcels: 3, first: 2 }, { parcels: 3, first: 2 }, { parcels: 5, first: 3 }];
@@ -219,7 +234,7 @@ const RACE_GRANT_BY_PIECES = { 2: { parcels: 3, first: 2 }, 3: { parcels: 5, fir
 const RACE_UNLIMITED = 1;
 
 module.exports = {
-  WALL_MODE, UNITS, BUILDINGS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
+  WALL_MODE, UNITS, BUILDINGS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, COMBO_BUILDING_BONUS, DELIVERY_MODES, DELIVERY_CLIMB_STEPS, DELIVERY_BELL_WAIT_MS, DELIVERY_BELL_WINDOW_MS, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,

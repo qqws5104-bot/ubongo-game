@@ -13,7 +13,7 @@ const {
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
-  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
+  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, COMBO_BUILDING_BONUS, DELIVERY_MODES, DELIVERY_CLIMB_STEPS, DELIVERY_BELL_WAIT_MS, DELIVERY_BELL_WINDOW_MS, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -58,6 +58,11 @@ const DEFAULT_RULES = {
   deliveryReturnTaps: DELIVERY_RETURN_TAPS,
   deliveryMaxActive: DELIVERY_MAX_ACTIVE,
   deliveryWrongPenalty: DELIVERY_WRONG_PENALTY,
+  deliveryModes: process.env.DELIVERY_MODES === "same" ? { apt: "wait", mansion: "wait", house: "wait" } : DELIVERY_MODES,
+  deliveryClimbSteps: DELIVERY_CLIMB_STEPS,
+  deliveryBellWaitMs: DELIVERY_BELL_WAIT_MS,
+  deliveryBellWindowMs: DELIVERY_BELL_WINDOW_MS,
+  comboBuildingBonus: COMBO_BUILDING_BONUS,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -165,10 +170,24 @@ function setBonusFor(invoices, setRule) {
   if (!setRule || !(setRule.amount > 0)) return 0;
   return deliveredKinds(invoices) >= setRule.kinds ? setRule.amount : 0;
 }
+// 2026-10-16 건물 콤보: 배송 성공한 건물 종류 수 (아파트/맨션/주택). state.wallRule.bldBonus가 있으면 3곳 다 가면 보너스.
+function deliveredBuildings(invoices) {
+  const b = {};
+  invoices.forEach((inv) => {
+    if (inv.stolen || inv.returned || inv.deliveredRound === null || !inv.unit) return;
+    const u = UNITS.find((x) => x.id === inv.unit);
+    if (u) b[u.b] = true;
+  });
+  return Object.keys(b).length;
+}
+function buildingBonusFor(invoices, wallRule) {
+  if (!wallRule || !(wallRule.bldBonus > 0)) return 0;
+  return deliveredBuildings(invoices) >= 3 ? wallRule.bldBonus : 0;
+}
 function totalScore(seat, state) {
   const invs = state.players[seat].invoices;
   const wrong = (state.players[seat].wrong || 0) * ((state.wallRule && state.wallRule.wrongPenalty) || 0); // 2026-10-16 오배송 감점
-  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule) - wrong;
+  return invs.reduce((sum, inv) => sum + scoreInvoice(inv), 0) + setBonusFor(invs, state.setRule) + buildingBonusFor(invs, state.wallRule) - wrong;
 }
 
 function freshBoard() {
@@ -234,7 +253,7 @@ function initialState(rules) {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
     // 2026-10-16 벽 배송: 규칙 묶음(클라이언트 표시·점수 계산용)과 진행 상태(phase "delivery"일 때만)
-    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive } : null,
+    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0 } : null,
     delivery: null,
     phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
@@ -854,7 +873,13 @@ class GameRoom {
     if (this.rules.deliveryHoldMs > 0) { this._holdDown(seat, unitId); return; }
     if (door) {
       // 2026-10-16 (사용자 결정): 막기는 Ctrl/Shift 없이 그 호실 버튼 연타만. 팀 키를 누른 채 남의 켜진 버튼을 누르면 안내만.
-      if (seat && door.seat === seat) { this._dEv("own", unitId, seat); this.emit(); return; }
+      if (seat && door.seat === seat) {
+        if (door.mode === "climb") this._climbStep(unitId);
+        else if (door.mode === "bell") this._bellAnswer(unitId);
+        else this._dEv("own", unitId, seat);
+        this.emit();
+        return;
+      }
       if (seat) { this._dEv("taken", unitId, seat); this.emit(); return; }
       this._wallTap(unitId);
       this.emit();
@@ -873,9 +898,36 @@ class GameRoom {
     if (d.elev && u0.b === "apt" && d.elev.floor !== u0.floor) { this._dEv("noelev", unitId, seat, { floor: d.elev.floor }); this.emit(); return; }
     const active = Object.values(d.doors).filter((x) => x.seat === seat).length;
     if (active >= Math.max(1, this.rules.deliveryMaxActive || 1)) { this._dEv("busy", unitId, seat); this.emit(); return; }
-    d.doors[unitId] = { seat, invId: inv.id, start: Date.now(), taps: 0 };
-    this._dEv("start", unitId, seat);
+    const mode = this._modeOf(u0);
+    const door0 = { seat, invId: inv.id, start: Date.now(), taps: 0, mode };
+    if (mode === "climb") { door0.need = this._climbNeed(u0); door0.steps = 0; }
+    if (mode === "bell") this._bellRing(door0);
+    d.doors[unitId] = door0;
+    this._dEv("start", unitId, seat, { mode });
+    if (mode === "climb") this._climbStep(unitId); // 첫 누름이 첫 계단
     this.emit();
+  }
+  // ---- 건물별 배송 방식 (rules.deliveryModes) ----
+  _modeOf(u) { const m = this.rules.deliveryModes && this.rules.deliveryModes[u.b]; return m === "climb" || m === "bell" ? m : "wait"; }
+  _climbNeed(u) { const c = this.rules.deliveryClimbSteps || {}; return Math.max(1, c[u.floor] || c[1] || 5); }
+  _climbStep(unitId) {
+    const door = this.state.delivery.doors[unitId];
+    door.steps += 1;
+    if (door.steps >= door.need) { this._completeDoor(unitId); return; }
+    this._dEv("step", unitId, door.seat, { steps: door.steps, need: door.need });
+  }
+  _bellRing(door) {
+    const w = this.rules.deliveryBellWaitMs || [1500, 3500];
+    const now = Date.now();
+    door.openAt = now + w[0] + Math.floor(Math.random() * Math.max(1, w[1] - w[0]));
+    door.closeAt = door.openAt + (this.rules.deliveryBellWindowMs || 1800);
+  }
+  _bellAnswer(unitId) {
+    const door = this.state.delivery.doors[unitId];
+    const now = Date.now();
+    if (now >= door.openAt && now < door.closeAt) { this._completeDoor(unitId); return; }
+    this._bellRing(door); // 문 열리기 전에 또 누름 -- 초인종 다시, 기다림 처음부터
+    this._dEv("early", unitId, door.seat);
   }
   // ---- 유지 방식 (rules.deliveryHoldMs > 0) ----
   // 누르는 순간: 내 택배 + (아파트면) 엘리베이터가 그 층 -> doors[unit] = {seat, invId, start, hold:true}. 아니면 즉시 오류 이벤트(진행과 구분).
@@ -940,6 +992,21 @@ class GameRoom {
     delete d.doors[unitId];
     this._dEv("returned", unitId, door.seat);
   }
+  _completeDoor(unitId) {
+    const d = this.state.delivery;
+    const door = d.doors[unitId];
+    if (!door) return;
+    const invs0 = this.state.players[door.seat].invoices;
+    const inv = invs0.find((v) => v.id === door.invId);
+    const kindsBefore = deliveredKinds(invs0), bldBefore = deliveredBuildings(invs0);
+    if (inv) inv.deliveredRound = 1;
+    delete d.doors[unitId];
+    const combos = [];
+    const sr = this.state.setRule, wr = this.state.wallRule;
+    if (sr && sr.amount > 0 && kindsBefore < sr.kinds && deliveredKinds(invs0) >= sr.kinds) combos.push({ k: "kinds", amount: sr.amount });
+    if (wr && wr.bldBonus > 0 && bldBefore < 3 && deliveredBuildings(invs0) >= 3) combos.push({ k: "bld", amount: wr.bldBonus });
+    this._dEv("done", unitId, door.seat, { combos, reward: inv ? (typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward) : 0, count: invs0.filter((v) => v.deliveredRound !== null && !v.stolen && !v.returned).length });
+  }
   _deliveryTick() {
     if (this.state.phase !== "delivery" || !this.state.delivery) { clearInterval(this.deliveryTimer); this.deliveryTimer = null; return; }
     const d = this.state.delivery;
@@ -947,11 +1014,16 @@ class GameRoom {
     let changed = false;
     Object.keys(d.doors).forEach((unitId) => {
       const door = d.doors[unitId];
+      if (door.mode === "climb") return; // 계단은 시간으로 끝나지 않는다
+      if (door.mode === "bell") {
+        if (now < door.closeAt) return;
+        delete d.doors[unitId]; // 문이 닫힘 -- 택배는 그대로, 다시 초인종부터
+        this._dEv("missed", unitId, door.seat);
+        changed = true;
+        return;
+      }
       if (now - door.start < (door.hold ? this.rules.deliveryHoldMs : this.rules.deliveryProgressMs)) return;
-      const inv = this.state.players[door.seat].invoices.find((v) => v.id === door.invId);
-      if (inv) inv.deliveredRound = 1;
-      delete d.doors[unitId];
-      this._dEv("done", unitId, door.seat, { reward: inv ? (typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward) : 0, count: this.state.players[door.seat].invoices.filter((v) => v.deliveredRound !== null && !v.stolen && !v.returned).length });
+      this._completeDoor(unitId);
       changed = true;
     });
     if (now >= d.endsAt) { this._endDelivery(); return; }
@@ -1420,4 +1492,4 @@ class GameRoom {
   }
 }
 
-module.exports = { GameRoom, initialState, scoreInvoice, resultLabel, totalScore, rewardFor, setBonusFor, deliveredKinds, DEFAULT_RULES, LEGACY_RULES };
+module.exports = { GameRoom, initialState, scoreInvoice, resultLabel, totalScore, rewardFor, setBonusFor, deliveredKinds, deliveredBuildings, buildingBonusFor, DEFAULT_RULES, LEGACY_RULES };

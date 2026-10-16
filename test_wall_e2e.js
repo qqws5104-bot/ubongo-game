@@ -59,18 +59,28 @@ const OUT = "/tmp/wall_e2e_";
     const btns = [...document.querySelectorAll("[data-unit]")];
     for (const sl of info) { const [b, a] = sl.split("|"); if (b === "아파트") continue;
       const addr = b === "주택" ? a : b + " " + a; const btn = btns.find(x => x.getAttribute("aria-label") === addr);
-      if (btn) return btn.querySelector("kbd").textContent; }
+      if (btn) return btn.querySelector("kbd").textContent + "|" + b + "|" + btn.getAttribute("data-unit"); }
     return null; }, info);
   console.log("key", keyFor);
   assert(keyFor, "p1에게 아파트 아닌 택배가 있어야 테스트 가능 (무작위라 드물게 실패할 수 있음)");
   const codeOf = (k) => ({ ",": "Comma", ".": "Period", "/": "Slash", ";": "Semicolon", "'": "Quote", "[": "BracketLeft", "]": "BracketRight", "\\": "Backslash", "-": "Minus", "=": "Equal", "`": "Backquote", "↵": "Enter" }[k] || ("Key" + k));
   if (keyFor) {
-    // 2026-10-16: Ctrl 누른 채 호실 키를 한 번 누르면 시작 -> 5초 뒤 완료
-    await s.keyboard.down("Control"); await s.keyboard.press(codeOf(keyFor)); await s.keyboard.up("Control"); await s.waitForTimeout(900);
-    await s.screenshot({ path: OUT + "d_main_holding.png" }); await p1.screenshot({ path: OUT + "d_p1_holding.png" });
-    await s.waitForTimeout(4400);
-    await p1.waitForTimeout(300); await p1.screenshot({ path: OUT + "d_p1_done.png" });
-    assert((await p1.locator("#dpop").textContent()).includes("배송 완료"), "배송 완료 팝업"); await s.screenshot({ path: OUT + "d_main_done.png" });
+    // 2026-10-16 건물별: 맨션 = Ctrl 누른 채 5번 연타 / 주택 = 초인종 -> 초록(문 열림)이면 한 번 더
+    const [kk, bb, uid] = keyFor.split("|"), code = codeOf(kk);
+    await s.keyboard.down("Control");
+    if (bb === "맨션") {
+      for (let i = 0; i < 3; i++) { await s.keyboard.press(code); await s.waitForTimeout(120); }
+      await s.waitForTimeout(300); await s.screenshot({ path: OUT + "d_main_holding.png" }); await p1.screenshot({ path: OUT + "d_p1_holding.png" });
+      for (let i = 0; i < 2; i++) { await s.keyboard.press(code); await s.waitForTimeout(120); }
+    } else {
+      await s.keyboard.press(code); await s.waitForTimeout(600);
+      await s.screenshot({ path: OUT + "d_main_holding.png" }); await p1.screenshot({ path: OUT + "d_p1_holding.png" });
+      await s.waitForSelector('[data-unit="' + uid + '"].bell-open', { timeout: 5000 });
+      await s.screenshot({ path: OUT + "d_main_bellopen.png" });
+      await s.keyboard.press(code);
+    }
+    await s.keyboard.up("Control"); await p1.waitForTimeout(500); await p1.screenshot({ path: OUT + "d_p1_done.png" });
+    assert((await p1.locator("#dpop").textContent()).includes("배송 완료"), "배송 완료 팝업 (" + bb + ")"); await s.screenshot({ path: OUT + "d_main_done.png" });
   }
   // wrong press by blue: Shift + key of some unit
   await s.keyboard.down("Shift"); await s.keyboard.press("KeyE"); await s.keyboard.up("Shift"); await s.waitForTimeout(300);

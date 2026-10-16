@@ -792,3 +792,27 @@ body:has(.d-main) .mv-chip { background: #fffdf6 !important; }
 .d-keys1 .t1 b { color: var(--t1); } .d-keys1 .t2 b { color: var(--t2); }
 .d-keys1 { display: block; }
 .d-keys1 .t1, .d-keys1 .t2 { margin-right: 6px; }
+/* 23) 2026-10-16 콤보 표시 */
+.d-combos { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.d-combo { background: #fffdf6; border: 2px dashed #b9ab8a; border-radius: 999px; padding: 4px 12px; font-size: .9rem; color: #555b70; }
+.d-combo b { color: #1e2233; }
+.d-combo small { color: #7a5a2c; }
+.d-combo.on { border-style: solid; border-color: #1f9a4c; background: #e3f6e8; color: #1f6b3a; }
+.dpop.combo { border-top-color: #ffd23f !important; background: #fffbe6; }
+.dpop.combo b { color: #b07a00; font-size: 1.7rem; }
+.d-kind { font-style: normal; font-weight: 700; padding: 0 5px; border-radius: 4px; background: #eee; color: #333; font-size: .78rem; }
+.d-kind.fee-t0 { background: #C9A576; } .d-kind.fee-t1 { background: #C7E29A; } .d-kind.fee-t2 { background: #F0B84A; }
+
+/* ===== 24. 건물별 배송 방식 (2026-10-16): 맨션 계단 연타 / 주택 초인종 ===== */
+.du-steps { position: absolute; top: -9px; left: -6px; z-index: 2; background: #263238; color: #fff; font-size: .72rem; font-weight: 800; border-radius: 999px; padding: 1px 6px; }
+.du-steps::before { content: "▲ "; font-size: .6rem; }
+.du-bell { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); z-index: 2; width: 22px; height: 22px; border-radius: 50%; background: #f0b84a; box-shadow: 0 0 0 3px rgba(240,184,74,.35); animation: duBell .7s ease-in-out infinite alternate; }
+.du-bell::after { content: "🔔"; font-size: 12px; position: absolute; inset: 0; display: grid; place-items: center; }
+@keyframes duBell { from { transform: translateX(-50%) rotate(-12deg); } to { transform: translateX(-50%) rotate(12deg); } }
+.du.bell-open { box-shadow: 0 0 0 4px #1f9a4c, 0 0 18px 4px rgba(31,154,76,.7) !important; }
+.du.bell-open .du-bell { background: #1f9a4c; box-shadow: 0 0 0 4px rgba(31,154,76,.45); animation: none; }
+.du.bell-open .du-bell::after { content: "문"; color: #fff; font-weight: 900; font-size: 11px; }
+.d-now .d-bell-open { display: none; color: #fff; font-weight: 900; }
+.d-now.bell-open { background: #1f9a4c !important; }
+.d-now.bell-open .d-bell-wait { display: none; }
+.d-now.bell-open .d-bell-open { display: inline; }
