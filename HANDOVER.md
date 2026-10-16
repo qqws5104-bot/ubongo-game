@@ -1366,3 +1366,17 @@ node test_minigames_live.js
   레일 화면·플레이어 화면은 배송 입력을 보내지 않는다(서버도 main 연결의 wall-press/release/elev만 받음).
 - 화면 역할 교체: 메인 = 벽 + 입력 + 팀 실적 띠 / 레일 = 두 팀 점수판 / 플레이어 = 내 송장 + 엘리베이터 층 표시(버튼 없음).
 - 엘리베이터가 움직이면(누를 때마다 DELIVERY_ELEV_MOVE_MS 600ms) 그동안 아파트 배송 시작 불가(elevmoving), 누르던 아파트 배송은 실패(elevleft).
+
+### 18.24 택배 수 = 택배 쌓기 조각 수로 + 첫 미니게임 복귀 (2026-10-16, 사용자 결정)
+- RACE_GRANT_BY_PIECES: 2조각 문제 = 택배 3개(1등 2개), 3조각 = 택배 5개(1등 3개). 4조각(후반 5라운드~)은 미정이라 3조각과 같게.
+  조각 수는 RACE_PIECES_BY_ROUND(전반 2,2,2,3 / 후반 3,3,3,3,4) 그대로라, 전반 1~3라운드 3개 / 4라운드부터 5개, 후반은 처음부터 5개.
+- "택배 쌓기 전에 무언가 하는" 기조 유지: RACE_GAME_POOL 5종 다시 켬(송장 붙이기·불량 검수·짝 찾기·무게 맞추기·테이프). 몫 계획 모드도 stage "sticker"부터.
+- 서버 환경변수 RACE_GAMES=none 이면 첫 게임 없음 (test_tutorial_e2e가 씀).
+
+### 18.25 조각마다 반응형 미니게임 (2026-10-16, 사용자 결정)
+- RACE_PIECE_GAMES = 1: 택배 쌓기 조각 하나당 3~5초짜리 반응형 게임 하나. 끝낼 때마다 "조각 획득 -- 자리 칸에서 조각 하나를 가져가 판에 놓기",
+  다 모으면 stage ubongo(완성 -> Space 투입). 레일 화면 문제는 라운드 시작부터 보인다. 첫 미니게임(RACE_GAME_POOL)은 이 모드에선 안 쓴다.
+- 서버: state.race.stage "pieces", race.need(조각 수), race.got{좌석}, race.pieceGames(두 사람 같은 순서, 연속 중복 없음). race-step "piece-done".
+- 게임 4종 (build_client.py micro_client 블록, #mx-layer): react(기다렸다 초록이면 Space, 먼저 누르면 다시) / pick(같은 그림 ← ↑ →) /
+  mash(Space 10번) / arrows(방향 4개 순서대로, 틀리면 처음부터). 터치도 됨. 테스트 훅 window.__mxFinish() (?mgtest=1).
+- 현장 운영: 조각은 자리 앞 칸에 미리 두고 화면 안내대로 스스로 가져간다(정직 전제).

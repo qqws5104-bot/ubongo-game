@@ -33,13 +33,13 @@ RACE_ENV=1
 RACE_GAMES_ENV=sticker,inspect,match,weigh,tape
 setsec "100 * 1000"; run test_race_e2e.js; run test_race_games.js
 
-RACE_GAMES_ENV=
+RACE_GAMES_ENV=none
 echo "######## 시작 전 튜토리얼 (실제 서버 기본값 = 켬, 2026-10-15)"
-setsec "3 * 60 * 1000"; pkill -x node; sleep 0.5; (RACE_MODE=1 nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5
+setsec "3 * 60 * 1000"; pkill -x node; sleep 0.5; (RACE_GAMES=none RACE_MODE=1 nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5
 run test_tutorial_e2e.js
 
 echo "######## 벽 배송 + 택배 쌓기 몫 (기본 모드, 2026-10-16)"
 export WALL=1
 run test_wall.js
-setsec "40 * 1000"; pkill -x node; sleep 0.5; (TUTORIAL=0 RACE_MODE=1 nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5
+setsec "90 * 1000"; pkill -x node; sleep 0.5; (TUTORIAL=0 RACE_MODE=1 nohup node server.js >/tmp/server.log 2>&1 &); sleep 1.5
 run test_wall_e2e.js

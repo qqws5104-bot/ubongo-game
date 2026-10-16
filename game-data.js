@@ -161,7 +161,13 @@ const RACE_STICKER_LEVEL = [1, 1];
 //   지도 배달은 길어서 뺐다. 한 종류로 고정하려면 ["sticker"]처럼 하나만 두면 된다. 난이도는 RACE_STICKER_LEVEL(전반/후반)을 같이 쓴다.
 // 2026-10-15 (사용자 결정, "공부하는 느낌" 줄이기): 첫 미니게임을 뺐다 -- 레이스는 바로 실물 택배 쌓기로 시작한다.
 //   다시 켜려면 ["sticker", "inspect", "match", "weigh", "tape"] (minigames.js에 5종 다 남아 있음).
-const RACE_GAME_POOL = [];
+// 2026-10-16 (사용자 결정): "택배 쌓기 전에 무언가 하는" 기조는 유지 -- 첫 미니게임 5종 다시 켬.
+const RACE_GAME_POOL = ["sticker", "inspect", "match", "weigh", "tape"];
+// 2026-10-16 (사용자 결정): 택배 쌓기 조각 하나당 짧은 반응형 미니게임 하나. 끝낼 때마다 조각 하나를 가져가 판에 놓고, 조각을 다 모으면 완성 -> 투입.
+//   1이면 위 첫 게임(RACE_GAME_POOL) 대신 이 방식. 종류(build_client.py MICRO_GAMES): react(불 들어오면 누르기) / pick(같은 그림 고르기) / mash(연타) / arrows(방향 따라 누르기).
+//   두 사람은 같은 순서의 게임을 한다 (서버가 라운드마다 정해 state.race.pieceGames에 둔다).
+const RACE_PIECE_GAMES = 1;
+const RACE_PIECE_GAME_KINDS = ["react", "pick", "mash", "arrows"];
 // 라운드마다 띄울 우봉고 문제(퍼즐 이미지가 있는 칸 id). 내용물(택배 종류)과는 무관 -- 라운드가 갈수록 조각이 늘게(2 -> 3 -> 4조각) 배치.
 // 현장에서는 이 순서대로 두 스테이션에 같은 실물 퍼즐을 준비한다. 끝까지 가면 처음부터 다시.
 // 2026-10-14 (사용자 결정): 위 고정 순서 대신 라운드별 조각(색) 수로 고른다. [전반, 후반] 각각 라운드 순서대로, 목록이 끝나면 마지막 값 반복.
@@ -204,11 +210,14 @@ const DELIVERY_WRONG_PENALTY = 500;     // 오배송(내 택배 없는 호실을
 // 2026-10-16 (사용자 결정): 택배 쌓기 라운드별 걸리는 택배 수와 먼저 끝낸 사람이 가져가는 수. 나머지는 늦은 사람(투입하거나 RACE_CONSOLATION_MS 뒤).
 //   목록이 끝나면 마지막 값 반복. 1~2라운드: 3개 중 2개 / 3라운드부터: 5개 중 3개. null이면 예전(한 사람 하나씩).
 const RACE_GRANT_PLAN = [{ parcels: 3, first: 2 }, { parcels: 3, first: 2 }, { parcels: 5, first: 3 }];
+// 2026-10-16 (사용자 결정): 라운드 번호 대신 그 라운드 택배 쌓기 조각 수로 정한다. 2조각 = 택배 3개(1등 2개), 3조각 = 택배 5개(1등 3개).
+//   4조각(후반 5라운드부터)은 따로 정해지지 않아 3조각과 같게 둔다. 이 표가 있으면 위 RACE_GRANT_PLAN(라운드별)보다 우선.
+const RACE_GRANT_BY_PIECES = { 2: { parcels: 3, first: 2 }, 3: { parcels: 5, first: 3 }, 4: { parcels: 5, first: 3 } };
 // 레이스 택배를 보드 칸 수와 상관없이 종류 비율(TYPES count)대로 계속 만든다 -- 라운드가 확보 시간 내내 이어진다.
 const RACE_UNLIMITED = 1;
 
 module.exports = {
-  WALL_MODE, UNITS, BUILDINGS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_UNLIMITED,
+  WALL_MODE, UNITS, BUILDINGS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,

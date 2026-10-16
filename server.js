@@ -33,7 +33,7 @@ function getOrCreateRoom(code) {
     // 2026-10-15 시작 전 튜토리얼: 실제 서버에선 켠다. TUTORIAL=0 이면 끔(예전 브라우저 테스트용 -- regress.sh)
     if (process.env.TUTORIAL !== "0") rules = Object.assign({}, rules || {}, { tutorial: true });
     // RACE_GAMES=sticker,tape 처럼 주면 레이스 첫 게임 후보를 그걸로 (테스트/현장 고정용)
-    if (process.env.RACE_GAMES) rules = Object.assign({}, rules || {}, { raceGamePool: process.env.RACE_GAMES.split(",").map((x) => x.trim()).filter(Boolean) });
+    if (process.env.RACE_GAMES) rules = Object.assign({}, rules || {}, { raceGamePool: process.env.RACE_GAMES === "none" ? [] : process.env.RACE_GAMES.split(",").map((x) => x.trim()).filter(Boolean) }); // none = 첫 게임 없음
     const room = new GameRoom(code, (state) => broadcast(code, state), rules);
     // busy: 레일 화면(/rail)이 열어 준 미니게임을 그 좌석 플레이어가 지금 하고 있는가 (레일 화면에 "플레이 중" 표시 + 중복 지시 방지).
     entry = { room, sockets: new Set(), busy: { "1": false, "2": false } };

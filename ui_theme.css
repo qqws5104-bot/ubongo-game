@@ -594,3 +594,37 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .d-elev.moving .d-elev-mv { display: inline-block; }
 .d-elev.moving .d-elev-f { color: #C98A00; }
 .mv-body.rv-dlv { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; }
+
+/* ---------- 18) 2026-10-16 조각마다 반응형 미니게임 ---------- */
+.mx-layer { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(20, 24, 40, 0.55); padding: 16px; }
+.mx-layer.on { display: flex; }
+.mx-card { background: #fffdf6; border-radius: 18px; padding: 20px 22px 24px; width: min(560px, 94vw); text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 16px; position: relative; }
+.mx-card.fail { animation: mxShake .3s; }
+@keyframes mxShake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+.mx-head { display: flex; justify-content: space-between; align-items: center; }
+.mx-piece { background: #2b1d12; color: #fff; border-radius: 999px; padding: 4px 12px; font-weight: 800; }
+.mx-name { font-size: 1.2rem; font-weight: 800; color: #2b1d12; }
+.mx-react { border: 0; border-radius: 16px; height: 200px; font: inherit; font-size: 2.4rem; font-weight: 900; color: #fff; cursor: pointer; }
+.mx-react.wait { background: #8a8fa3; }
+.mx-react.go { background: #1f9a4c; }
+.mx-react small { display: block; font-size: 1rem; opacity: .85; }
+.mx-target { width: 110px; height: 110px; margin: 0 auto; background: #f0e6cf; border-radius: 16px; padding: 14px; }
+.mx-target svg, .mx-opt svg { width: 100%; height: 100%; }
+.mx-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mx-opt { border: 0; background: #e9ecf5; border-radius: 14px; padding: 14px; height: 120px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font: inherit; }
+.mx-opt svg { height: 70px; }
+.mx-opt small { font-weight: 800; color: #555; }
+.mx-mash { position: relative; overflow: hidden; border: 0; border-radius: 16px; height: 160px; background: #e2691a; color: #fff; font: inherit; font-size: 2rem; font-weight: 900; cursor: pointer; }
+.mx-mash span { position: relative; z-index: 1; }
+.mx-mash i { position: absolute; left: 0; top: 0; bottom: 0; background: #a6470b; transition: width .08s; }
+.mx-seq { display: flex; justify-content: center; gap: 12px; }
+.mx-seq span { width: 72px; height: 72px; border-radius: 12px; background: #e9ecf5; display: flex; align-items: center; justify-content: center; font-size: 2.4rem; font-weight: 900; color: #2b1d12; }
+.mx-seq span.now { outline: 4px solid #e2691a; }
+.mx-seq span.ok { background: #1f9a4c; color: #fff; }
+.mx-pad { display: flex; justify-content: center; gap: 10px; }
+.mx-pad button { width: 64px; height: 56px; border: 0; border-radius: 10px; background: #3b4256; color: #fff; font-size: 1.6rem; cursor: pointer; }
+.mx-flash { position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); background: #C62828; color: #fff; font-weight: 800; padding: 6px 14px; border-radius: 999px; white-space: nowrap; }
+.mx-won { display: flex; flex-direction: column; gap: 8px; padding: 18px 0; }
+.mx-won b { font-size: 2.2rem; color: #1f8a4c; }
+.mx-won span { font-size: 1.1rem; color: #3a3f55; }
+.mx-won .mx-next { color: #7a5a2c; font-size: 1rem; }

@@ -11,32 +11,42 @@ const OUT = "/tmp/wall_e2e_";
   s.on("pageerror", e => errs.push("main " + e.message));
   const p1 = await mk(820, 1000), p2 = await mk(820, 1000), rail = await mk(1500, 950);
   [p1, p2, rail].forEach((p, i) => p.on("pageerror", e => errs.push(i + " " + e.message)));
-  await p1.goto("http://localhost:3000/?room=" + room); await p2.goto("http://localhost:3000/?room=" + room);
+  await p1.goto("http://localhost:3000/?mgtest=1&room=" + room); await p2.goto("http://localhost:3000/?mgtest=1&room=" + room);
   await rail.goto("http://localhost:3000/rail?room=" + room);
   await p1.waitForSelector("[data-courier]"); await p1.click('[data-courier="cookbang"]'); await p1.waitForTimeout(400);
   await p2.click('[data-courier="cheonil"]'); await p2.waitForTimeout(400);
   await p1.keyboard.press("Space"); await p2.keyboard.press("Space"); await p1.waitForTimeout(800);
-  const st = (p) => p.evaluate(() => window.__st || null);
-  // round 1: p1 first
-  await p1.keyboard.press("Space"); await p1.waitForTimeout(600);
-  await rail.screenshot({ path: OUT + "r1_rail_pick.png" }); await p1.screenshot({ path: OUT + "r1_p1.png" });
-  await rail.keyboard.press("KeyA"); await rail.waitForTimeout(300); await rail.keyboard.press("KeyD"); await rail.waitForTimeout(400);
-  assert.strictEqual(await rail.locator(".rp-owner.seat-1").count(), 2, "1등이 2개 골랐다");
-  await p2.keyboard.press("Space"); await p2.waitForTimeout(700);
-  await p2.screenshot({ path: OUT + "r1_p2_after.png" });
-  assert.strictEqual(await rail.locator(".rp-owner.seat-2").count(), 1, "늦은 사람이 나머지 1개");
-  await p1.waitForTimeout(3000);
-  // round 2: p2 first
-  await p2.keyboard.press("Space"); await p2.waitForTimeout(500); await rail.keyboard.press("KeyJ"); await rail.waitForTimeout(300); await rail.keyboard.press("KeyK");
-  await p1.keyboard.press("Space"); await p1.waitForTimeout(3300);
-  // round 3: 5 parcels
-  await p1.keyboard.press("Space"); await p1.waitForTimeout(600);
-  await rail.screenshot({ path: OUT + "r3_rail_pick5.png" });
-  assert.strictEqual(await rail.locator(".rail-pk").count(), 5, "3라운드는 5개");
-  await s.screenshot({ path: OUT + "r3_main.png" });
-  for (const k of ["KeyA", "KeyS", "KeyG"]) { await rail.keyboard.press(k); await rail.waitForTimeout(250); }
-  await p2.keyboard.press("Space"); await p2.waitForTimeout(800);
-  await p1.screenshot({ path: OUT + "r3_p1_slips.png" });
+  // 2026-10-16: 택배 쌓기 전에 첫 미니게임 (테스트 훅으로 바로 끝냄) -> 택배 수는 조각 수로 (2조각 3개 / 3조각 5개)
+  // 2026-10-16: 조각마다 반응형 미니게임 -- 조각을 다 모을 때까지 하나씩 끝낸다(테스트 훅). 다 모으면 투입 버튼.
+  let shotKinds = {};
+  const fin = async (p) => {
+    for (let k = 0; k < 6; k++) {
+      await p.waitForFunction(() => !!document.querySelector("#mx-layer.on .mx-card:not(.won)") || !!document.querySelector('.race-blank [data-action="race-done"]'), null, { timeout: 8000 });
+      if (await p.locator('.race-blank [data-action="race-done"]').count() && !(await p.locator("#mx-layer.on .mx-card:not(.won)").count())) return;
+      const name = await p.locator("#mx-layer .mx-name").textContent();
+      if (!shotKinds[name]) { shotKinds[name] = 1; await p.screenshot({ path: OUT + "mx_" + Object.keys(shotKinds).length + ".png" }); }
+      await p.evaluate(() => window.__mxFinish()); await p.waitForTimeout(1300);
+    }
+  };
+  const RAIL_KEYS = { "1": ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG"], "2": ["KeyH", "KeyJ", "KeyK", "KeyL", "Semicolon"] };
+  let saw5 = false;
+  for (let round = 1; round <= 4; round++) {
+    const first = round % 2 ? "1" : "2", late = first === "1" ? "2" : "1";
+    const P = { "1": p1, "2": p2 };
+    await fin(p1); await fin(p2);
+    await P[first].keyboard.press("Space"); await P[first].waitForTimeout(600);
+    const n = await rail.locator(".rail-pk").count();
+    assert(n === 3 || n === 5, "택배 3개 또는 5개: " + n);
+    if (n === 5) { saw5 = true; await rail.screenshot({ path: OUT + "r_rail_pick5.png" }); }
+    const take = n === 3 ? 2 : 3;
+    for (let k = 0; k < take; k++) { await rail.keyboard.press(RAIL_KEYS[first][k]); await rail.waitForTimeout(250); }
+    assert.strictEqual(await rail.locator(".rp-owner.seat-" + first).count(), take, "1등이 " + take + "개");
+    await P[late].keyboard.press("Space"); await P[late].waitForTimeout(700);
+    assert.strictEqual(await rail.locator(".rp-owner.seat-" + late).count(), n - take, "늦은 사람이 나머지");
+    await p1.waitForTimeout(2800);
+  }
+  assert(saw5, "3조각 라운드(전반 4라운드)에서 택배 5개");
+  console.log("micro games seen", Object.keys(shotKinds));
   // wait for delivery phase
   for (let i = 0; i < 60; i++) { const ph = await s.evaluate(() => document.querySelector(".rv-dlv") ? "d" : ""); if (ph) break; await rail.waitForTimeout(1000); }
   await rail.waitForTimeout(500);

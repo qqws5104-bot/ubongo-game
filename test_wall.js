@@ -6,14 +6,41 @@ const assert = require("assert");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function mk(rules) {
   const box = { st: null };
-  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceUnlimited: true }, rules));
+  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false }, rules));
   room.pickCourier("cookbang", "c1"); room.pickCourier("cheonil", "c2"); room.setReady("1"); room.setReady("2");
   return { room, box };
 }
 (async () => {
-  // 1) 몫: 1~2라운드 3개 중 2개, 3라운드부터 5개 중 3개. 나머지는 늦은 사람.
+  // 0) 택배 쌓기 전에 첫 미니게임 + 택배 수 = 조각 수로 (2조각 3개 / 3조각 이상 5개)
   {
-    const { room, box } = mk({ raceConsolationMs: 300, racePickMs: 400, raceRevealMs: 50 });
+    const { room, box } = mk({ raceGamePool: ["sticker"] });
+    const r = box.st.race;
+    assert.strictEqual(r.game, "sticker"); assert.deepStrictEqual(r.stage, { "1": "sticker", "2": "sticker" }, "첫 미니게임부터");
+    const t = D.TYPES.find((x) => r.puzzleId.indexOf(x.key + "-") === 0), pieces = Array.isArray(t.pieces) ? t.pieces[0] : t.pieces;
+    assert.strictEqual(r.pair.length, pieces === 2 ? 3 : 5, "조각 " + pieces + "개 -> 택배 수");
+    room.raceStep("1", "sticker-done", 1); assert.strictEqual(box.st.race.stage["1"], "ubongo");
+    // 3조각 문제로 직접 확인
+    assert.deepStrictEqual(room._planByPieces("fragile-1"), { parcels: 5, first: 3 });
+    assert.deepStrictEqual(room._planByPieces("normal-1"), { parcels: 3, first: 2 });
+    room.destroy();
+  }
+  // 0b) 조각마다 반응형 미니게임: stage pieces -> piece-done 조각 수만큼 -> ubongo
+  {
+    const { room, box } = mk({ racePieceGames: true });
+    const r = box.st.race;
+    assert.deepStrictEqual(r.stage, { "1": "pieces", "2": "pieces" });
+    assert.strictEqual(r.pieceGames.length, r.need); assert(r.need >= 2);
+    for (let k = 1; k < r.pieceGames.length; k++) assert.notStrictEqual(r.pieceGames[k], r.pieceGames[k - 1], "같은 게임 연속 없음");
+    room.raceStep("1", "ubongo-done", 1); assert.strictEqual(box.st.race.stage["1"], "pieces", "조각을 다 모으기 전엔 투입 불가");
+    for (let k = 0; k < r.need; k++) room.raceStep("1", "piece-done", 1);
+    assert.strictEqual(box.st.race.stage["1"], "ubongo"); assert.strictEqual(box.st.race.got["1"], r.need);
+    room.raceStep("1", "piece-done", 1); assert.strictEqual(box.st.race.got["1"], r.need, "더 안 늘어남");
+    room.raceStep("1", "ubongo-done", 1); assert.strictEqual(box.st.race.first, "1");
+    room.destroy();
+  }
+  // 1) 몫: 1~2라운드 3개 중 2개, 3라운드부터 5개 중 3개. 나머지는 늦은 사람. (조각 표를 끄고 라운드 표로)
+  {
+    const { room, box } = mk({ raceConsolationMs: 300, racePickMs: 400, raceRevealMs: 50, raceGrantByPieces: null });
     let r = box.st.race;
     assert.strictEqual(r.pair.length, 3); assert.strictEqual(r.plan.first, 2); assert(r.pair.every((p) => p.unit), "택배마다 배송지");
     room.raceStep("1", "ubongo-done", 1);

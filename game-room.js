@@ -13,7 +13,7 @@ const {
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
-  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_UNLIMITED,
+  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -46,7 +46,9 @@ const DEFAULT_RULES = {
   // 환경변수 WALL=0이면 예전 흐름(한 사람 하나씩 고르기 -> 엘리베이터 라운드). 예전 회귀 테스트(regress.sh)가 이걸로 돈다.
   wallMode: !!WALL_MODE && process.env.WALL !== "0",
   raceGrantPlan: process.env.WALL === "0" ? null : RACE_GRANT_PLAN,
+  raceGrantByPieces: process.env.WALL === "0" ? null : RACE_GRANT_BY_PIECES,
   raceUnlimited: !!RACE_UNLIMITED && process.env.WALL !== "0",
+  racePieceGames: !!RACE_PIECE_GAMES && process.env.WALL !== "0", // 2026-10-16 조각마다 반응형 미니게임 (몫 계획 모드에서만)
   deliveryMs: DELIVERY_MS,
   deliveryProgressMs: DELIVERY_PROGRESS_MS,
   deliveryHoldMs: DELIVERY_HOLD_MS,
@@ -69,7 +71,9 @@ const LEGACY_RULES = {
   setBonus: 0,
   wallMode: false,
   raceGrantPlan: null,
+  raceGrantByPieces: null,
   raceUnlimited: false,
+  racePieceGames: false,
 };
 
 // 2026-10-06: 보드는 두 플레이어가 "같이 쓰는" 하나다 (종류별 6칸 = 두 사람 합쳐서 6개). 한 사람이 확보하면
@@ -404,7 +408,7 @@ class GameRoom {
       this.state.board.forEach((c) => { if (!c.taken && this.rules.raceExcludeKinds.includes(TYPES[c.catIdx].key)) { c.taken = true; c.takenBy = null; c.excluded = true; } });
     }
     const plan = this._racePlanFor(roundNo);
-    if (plan) { this._planNewRound(roundNo, plan); return; }
+    if (plan) { const pz = this._racePuzzleFor(roundNo); this._planNewRound(roundNo, this._planByPieces(pz) || plan, pz); return; }
     const free = this.state.board.filter((c) => !c.taken);
     if (!free.length) { this.state.race = null; this._raceAt(null); return; }
     const pair = shuffled(free).slice(0, Math.max(1, this.rules.raceParcels || 3)).map((c) => {
@@ -433,12 +437,26 @@ class GameRoom {
     if (!plan || !plan.length) return null;
     return plan[Math.min(roundNo, plan.length) - 1];
   }
+  // 그 퍼즐(칸 id)의 조각 수
+  _piecesOf(puzzleId) {
+    if (!puzzleId) return null;
+    const t = TYPES.find((x) => puzzleId.indexOf(x.key + "-") === 0 && /^\d+$/.test(puzzleId.slice(x.key.length + 1)));
+    if (!t) return null;
+    return Array.isArray(t.pieces) ? t.pieces[(this.state.half || 1) - 1] : t.pieces;
+  }
+  // 조각 수 -> rules.raceGrantByPieces 표
+  _planByPieces(puzzleId) {
+    const tbl = this.rules.raceGrantByPieces;
+    const pieces = this._piecesOf(puzzleId);
+    if (!tbl || !pieces) return null;
+    return tbl[pieces] || null;
+  }
   _usedUnits() {
     const used = {};
     ["1", "2"].forEach((s) => this.state.players[s].invoices.forEach((v) => { if (v.unit) used[v.unit] = true; }));
     return used;
   }
-  _planNewRound(roundNo, plan) {
+  _planNewRound(roundNo, plan, puzzleId) {
     const n = Math.max(1, plan.parcels | 0);
     const excl = this.rules.raceExcludeKinds || [];
     let items = [];
@@ -461,8 +479,8 @@ class GameRoom {
       return out;
     });
     this.state.race = {
-      round: roundNo, pair, game: null, plan: { parcels: pair.length, first: Math.min(plan.first, pair.length) },
-      puzzleId: this._racePuzzleFor(roundNo),
+      round: roundNo, pair, game: this._raceNextGame(), plan: { parcels: pair.length, first: Math.min(plan.first, pair.length) },
+      puzzleId: puzzleId || this._racePuzzleFor(roundNo),
       stage: { "1": "ubongo", "2": "ubongo" },
       finishedAt: { "1": null, "2": null },
       first: null, status: "playing",
@@ -470,6 +488,16 @@ class GameRoom {
       picks: { "1": [], "2": [] }, invoiceIds: { "1": [], "2": [] }, discarded: [],
       randomPick: { "1": false, "2": false },
     };
+    if (this.rules.racePieceGames) {
+      // 조각마다 반응형 미니게임: stage "pieces", got = 모은 조각 수, need = 조각 수. 게임 순서는 두 사람 같게.
+      const r = this.state.race, need = this._piecesOf(r.puzzleId) || 2;
+      const kinds = (RACE_PIECE_GAME_KINDS || ["react"]).slice();
+      r.game = null; r.need = need; r.got = { "1": 0, "2": 0 }; r.pieceGames = [];
+      let last = this.lastPieceGame || null;
+      for (let k = 0; k < need; k++) { const opts = kinds.filter((x) => x !== last); last = opts[Math.floor(Math.random() * opts.length)]; r.pieceGames.push(last); }
+      this.lastPieceGame = last;
+      r.stage = { "1": "pieces", "2": "pieces" };
+    } else if (this.state.race.game) this.state.race.stage = { "1": "sticker", "2": "sticker" }; // 택배 쌓기 전에 첫 미니게임
     this._raceAt(null);
   }
   _planRest() {
@@ -560,6 +588,11 @@ class GameRoom {
     if (step === "sticker-done") {
       if (st !== "sticker") return;
       r.stage[seat] = "ubongo";
+    } else if (step === "piece-done") {
+      // 2026-10-16 조각 하나 획득 (반응형 미니게임 하나 끝냄). 다 모으면 택배 쌓기(완성 -> 투입)로
+      if (st !== "pieces") return;
+      r.got[seat] += 1;
+      if (r.got[seat] >= r.need) r.stage[seat] = "ubongo";
     } else if (step === "ubongo-done") {
       if (st !== "ubongo") return;
       const consol = this.rules.raceConsolationMs > 0;

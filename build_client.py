@@ -896,6 +896,7 @@ APP_JS_TEMPLATE = r"""
         }
         render();
         dEvents(state);
+        microSync();
         syncMiniGame();
       }
       else if (msg.type === "error") { handleWsError(msg); }
@@ -1066,8 +1067,9 @@ APP_JS_TEMPLATE = r"""
           + '<div class="tut-flow sub"><span class="t1">빨간 팀</span><i>vs</i><span class="t2">파란 팀</span><i>=</i><span><b>전반+후반 배송 실적</b></span></div>'; },
       l: function () { return ["택배 쌓기로 택배를 따고, 송장에 적힌 집의 버튼을 눌러 배송해요."]; } },
     { t: "① 택배 쌓기", v: function () {
-        return '<div class="tut-flow"><span class="tut-step">택배 쌓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>투입!</small></span></div>'; },
-      l: function () { return ["먼저 끝낸 사람이 <b>3개 중 2개</b>를 골라요 · 3라운드부터는 <b>5개 중 3개</b>.", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
+        return '<div class="tut-flow"><span class="tut-step">짧은 게임 = 조각 1개<small>불 들어오면 누르기 · 같은 그림 · 연타 · 방향</small></span><i>→</i>'
+          + '<span class="tut-step">판에 놓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>완성하면 투입!</small></span></div>'; },
+      l: function () { return ["조각 2개 문제는 택배 <b>3개</b>(먼저 끝낸 사람 2개), 조각 3개 이상은 택배 <b>5개</b>(먼저 끝낸 사람 3개).", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> + 호실 키 <b>' + Math.round(((state && state.wallRule && state.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르기</div>'; },
       l: function () { return ["송장의 집 키를 팀 키와 함께 누르고 있으면 띵동, 배송 완료!", "중간에 떼면 처음부터 · 내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
@@ -1161,7 +1163,7 @@ APP_JS_TEMPLATE = r"""
   // 택배 쌓기 문제는 레일 화면(관전)에 하나만 -- 누군가 첫 게임을 끝낸 순간부터 결과 공개 전까지
   function racePuzzleOpen(r) {
     if (r.status === "reveal") return false;
-    return !!r.first || ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "done"; });
+    return !!r.first || ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "done" || r.stage[s] === "pieces"; });
   }
   function raceCount(endsAt, prefix, suffix) {
     return '<b class="race-count" data-ends="' + endsAt + '" data-prefix="' + esc(prefix || '') + '" data-suffix="' + esc(suffix || '') + '">'
@@ -1250,7 +1252,8 @@ APP_JS_TEMPLATE = r"""
   function raceLane(st, r, s, isMe) {
     var stg = r.stage[s];
     // 2026-10-15: 첫 게임이 없으면(기본) 택배 쌓기 > 투입 두 단계
-    var steps = r.game ? [["sticker", raceGameName(r)], ["ubongo", "택배 쌓기"], ["done", "투입"]] : [["ubongo", "택배 쌓기"], ["done", "투입"]];
+    var steps = r.pieceGames ? [["pieces", "조각 " + (r.got ? r.got[s] : 0) + "/" + r.need], ["ubongo", "완성"], ["done", "투입"]]
+      : r.game ? [["sticker", raceGameName(r)], ["ubongo", "택배 쌓기"], ["done", "투입"]] : [["ubongo", "택배 쌓기"], ["done", "투입"]];
     var idx = -1; steps.forEach(function (sp, k) { if (sp[0] === stg) idx = k; });
     var last = steps.length - 1;
     var html = '<div class="race-lane' + (isMe ? ' me' : '') + (stg === "out" ? ' is-out' : '') + '"><span class="rl-name">' + (isMe ? '나 · ' : '') + esc(seatName(s, st))
@@ -1324,8 +1327,10 @@ APP_JS_TEMPLATE = r"""
     }
     if (r.status !== "picking") {
       if (seat && r.stage[seat] === "out") return '<div class="race-msg">이번 라운드는 포기했어요 · 상대가 고르고 남은 택배를 받아요</div>';
+      if (seat && r.stage[seat] === "pieces") return '<div class="race-msg">조각 ' + r.got[seat] + '/' + r.need + ' · 짧은 게임을 끝낼 때마다 조각 하나를 가져가 판에 놓으세요</div>';
+      if (seat && r.stage[seat] === "sticker") return '<div class="race-msg">' + esc(raceGameName(r)) + '! 끝나면 바로 택배 쌓기 · 택배 ' + r.pair.length + '개 걸림</div>';
       if (seat && r.stage[seat] === "ubongo") return '<div class="race-msg hot"><b>택배 쌓기</b> → <b>투입</b> (Space) · 먼저 끝내면 ' + r.pair.length + '개 중 ' + n + '개</div>';
-      return '<div class="race-msg">택배 쌓기 → 투입! 먼저 끝낸 사람이 ' + r.pair.length + '개 중 ' + n + '개, 나머지는 늦은 사람</div>';
+      return '<div class="race-msg">' + (r.pieceGames ? '조각 ' + r.need + '개 모으기 → 완성 → ' : (r.game ? esc(raceGameName(r)) + ' → ' : '')) + '투입! 먼저 끝낸 사람이 ' + r.pair.length + '개 중 ' + n + '개, 나머지는 늦은 사람</div>';
     }
     var o = raceOther(f), firstLeft = n - r.picks[f].length;
     if (!seat) {
@@ -1338,6 +1343,7 @@ APP_JS_TEMPLATE = r"""
     }
     if (f === seat) return '<div class="race-msg">고르기 끝! 남은 ' + rest + '개는 상대 몫이에요</div>';
     if (r.stage[seat] === "done") return '<div class="race-msg">상대가 고르는 중 · 남은 택배가 내 몫이에요</div>';
+    if (r.stage[seat] === "pieces") return '<div class="race-msg hot">상대가 먼저 끝냈어요! 조각 ' + r.got[seat] + '/' + r.need + ' · 끝까지 하면 바로, 아니어도 ' + (r.secondEndsAt ? raceCount(r.secondEndsAt, '', '초') + ' 뒤' : '상대가 고른 뒤') + ' 남은 택배를 받아요</div>';
     return '<div class="race-msg hot">상대가 먼저 끝냈어요! 투입하면 바로, 아니어도 ' + (r.secondEndsAt ? raceCount(r.secondEndsAt, '', '초') + ' 뒤' : '상대가 고른 뒤') + ' 남은 택배를 받아요</div>';
   }
   // seat가 null이면 관전용(레일 화면/메인 모니터): 고르기 버튼·내 우봉고 영역 없음
@@ -1397,7 +1403,7 @@ APP_JS_TEMPLATE = r"""
     // 2026-10-14 (사용자 요청): 첫 게임·택배 쌓기 중에는 플레이어 화면에 아무것도 없다 (문제는 레일 화면에만).
     //   택배 3개는 내가 택배 쌓기를 끝내고 투입한 뒤에야 나온다. 화면엔 지금 할 일 한 줄(늦은 사람은 투입 마감)과 작은 투입/포기 버튼만.
     var pickAtRail = r.status === "picking" && railPicks() && raceCanPick(r, seat);
-    if (r.status !== "reveal" && (me === "sticker" || me === "ubongo" || pickAtRail)) {
+    if (r.status !== "reveal" && (me === "sticker" || me === "ubongo" || me === "pieces" || pickAtRail)) {
       return '<main class="stage stage--race">' + cartOpen('cart--race') + '<div class="race-blank">'
         + '<div class="race-head"><span class="round-pill">레이스 ' + r.round + '</span>'
         + racePickClock(r, seat) + '</div>'
@@ -2352,6 +2358,135 @@ APP_JS_TEMPLATE = r"""
   document.addEventListener("pointercancel", dPtrUp);
   document.addEventListener("contextmenu", function (e) { if (e.target.closest && e.target.closest("[data-unit]")) e.preventDefault(); });
 
+  // ---------- 2026-10-16 조각마다 반응형 미니게임 (stage "pieces") ----------
+  // 규칙을 읽을 필요 없는 3~5초짜리. 키: Space / ← ↑ → ↓ (레일 앞 물리 버튼), 터치도 됨.
+  // 하나 끝내면 "조각 획득" -> 서버 race-step piece-done -> 다음 게임. 다 모으면 서버가 stage를 ubongo로(완성 -> 투입).
+  var MX_NAME = { react: "불 들어오면 누르기", pick: "같은 그림 고르기", mash: "연타!", arrows: "방향 따라 누르기" };
+  var MX_ARROW = { ArrowLeft: "←", ArrowUp: "↑", ArrowRight: "→", ArrowDown: "↓" };
+  var mx = null;
+  function mxLayer() {
+    var el = document.getElementById("mx-layer");
+    if (!el) { el = document.createElement("div"); el.id = "mx-layer"; el.className = "mx-layer"; document.body.appendChild(el); }
+    return el;
+  }
+  function mxClose() { if (mx && mx.timer) clearTimeout(mx.timer); mx = null; var el = document.getElementById("mx-layer"); if (el) { el.innerHTML = ""; el.classList.remove("on"); } }
+  function microSync() {
+    var r = state && state.phase === "secure" ? state.race : null, seat = mySeat();
+    var want = r && seat && r.pieceGames && r.stage[seat] === "pieces" && r.status !== "reveal";
+    if (!want) {
+      // 마지막 조각을 받은 직후엔 "조각 획득" 화면을 잠깐 더 보여 준다
+      if (mx && mx.won && mx.holdUntil > Date.now() && r && seat && r.stage[seat] === "ubongo") { setTimeout(microSync, mx.holdUntil - Date.now()); return; }
+      if (mx) mxClose();
+      return;
+    }
+    var idx = r.got[seat];
+    if (mx && mx.round === r.round && mx.idx === idx) return; // 진행 중 (또는 서버 응답 대기)
+    if (mx && mx.won && mx.holdUntil > Date.now()) { setTimeout(microSync, mx.holdUntil - Date.now()); return; }
+    mxStart(r, idx);
+  }
+  function mxStart(r, idx) {
+    if (mx && mx.timer) clearTimeout(mx.timer);
+    var kind = r.pieceGames[idx] || "react";
+    mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0 };
+    if (kind === "react") { mx.phase = "wait"; mxArmReact(); }
+    else if (kind === "pick") mxNewPick();
+    else if (kind === "mash") { mx.count = 0; mx.goal = 10; }
+    else if (kind === "arrows") { var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"]; mx.seq = []; for (var k = 0; k < 4; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); mx.pos = 0; }
+    mxLayer().classList.add("on");
+    mxRender();
+  }
+  function mxArmReact() {
+    if (mx.timer) clearTimeout(mx.timer);
+    mx.phase = "wait";
+    var my = mx;
+    mx.timer = setTimeout(function () { if (mx === my) { mx.phase = "go"; mxRender(); } }, 700 + Math.floor(Math.random() * 900));
+  }
+  function mxNewPick() {
+    var n = CAT_ICONS.length, target = Math.floor(Math.random() * n), others = [];
+    for (var i = 0; i < n; i++) if (i !== target) others.push(i);
+    others.sort(function () { return Math.random() - 0.5; });
+    var opts = [target, others[0], others[1]].sort(function () { return Math.random() - 0.5; });
+    mx.target = target; mx.opts = opts;
+  }
+  function mxFail(msg) {
+    mx.lockUntil = Date.now() + 700; mx.flash = msg;
+    var my = mx;
+    setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 700);
+    mxRender();
+  }
+  function mxWin() {
+    if (!mx || mx.won) return;
+    mx.won = true; mx.holdUntil = Date.now() + 1100;
+    if (mx.timer) clearTimeout(mx.timer);
+    try { DSND.done(); } catch (e) {}
+    mxRender();
+    send({ type: "race-step", seat: mySeat(), step: "piece-done", round: mx.round });
+  }
+  // 입력 하나 (key = "Space" | "ArrowLeft" ... | {opt: i} 터치)
+  function mxInput(key) {
+    if (!mx || mx.won) return;
+    if (mx.lockUntil > Date.now()) return;
+    if (mx.kind === "react") {
+      if (key !== "Space" && key !== "tap") return;
+      if (mx.phase === "go") mxWin();
+      else { mxFail("너무 빨라요!"); mxArmReact(); }
+    } else if (mx.kind === "pick") {
+      var i = key === "ArrowLeft" ? 0 : key === "ArrowUp" || key === "ArrowDown" ? 1 : key === "ArrowRight" ? 2 : (typeof key === "object" ? key.opt : -1);
+      if (i < 0) return;
+      if (mx.opts[i] === mx.target) mxWin();
+      else { mxFail("다른 그림이에요"); mxNewPick(); }
+    } else if (mx.kind === "mash") {
+      if (key !== "Space" && key !== "tap") return;
+      mx.count++;
+      if (mx.count >= mx.goal) mxWin(); else mxRender();
+    } else if (mx.kind === "arrows") {
+      var k = typeof key === "object" ? key.dir : key;
+      if (!MX_ARROW[k]) return;
+      if (mx.seq[mx.pos] === k) { mx.pos++; if (mx.pos >= mx.seq.length) mxWin(); else mxRender(); }
+      else { mx.pos = 0; mxFail("처음부터!"); }
+    }
+  }
+  function mxRender() {
+    var el = mxLayer();
+    if (!mx) { el.innerHTML = ""; return; }
+    var head = '<div class="mx-head"><span class="mx-piece">조각 ' + (mx.idx + 1) + ' / ' + mx.need + '</span><span class="mx-name">' + esc(MX_NAME[mx.kind] || "") + '</span></div>';
+    var body = '';
+    if (mx.won) {
+      body = '<div class="mx-won"><b>조각 획득!</b><span>내 자리 칸에서 조각 하나를 가져가 판에 놓으세요</span>'
+        + (mx.idx + 1 >= mx.need ? '<span class="mx-next">다 모았어요! 완성하면 <b>Space</b> 투입</span>' : '<span class="mx-next">곧 다음 조각 게임</span>') + '</div>';
+    } else if (mx.kind === "react") {
+      body = '<button class="mx-react ' + (mx.phase === "go" ? 'go' : 'wait') + '" data-mx="tap">' + (mx.phase === "go" ? '지금! <small>Space</small>' : '기다려…') + '</button>';
+    } else if (mx.kind === "pick") {
+      body = '<div class="mx-target">' + CAT_ICONS[mx.target] + '</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
+        return '<button class="mx-opt" data-mx-opt="' + i + '">' + CAT_ICONS[o] + '<small>' + ["←", "↑", "→"][i] + '</small></button>';
+      }).join('') + '</div>';
+    } else if (mx.kind === "mash") {
+      body = '<button class="mx-mash" data-mx="tap"><span>Space 연타!</span><i style="width:' + Math.round(mx.count / mx.goal * 100) + '%"></i></button>';
+    } else if (mx.kind === "arrows") {
+      body = '<div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + MX_ARROW[k] + '</span>'; }).join('') + '</div>'
+        + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
+    }
+    el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
+  }
+  document.addEventListener("keydown", function (e) {
+    if (!mx || MAIN || RAIL) return;
+    var k = e.code === "Space" ? "Space" : (MX_ARROW[e.code] ? e.code : null);
+    if (!k) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (e.repeat) return;
+    mxInput(k);
+  }, true);
+  document.addEventListener("pointerdown", function (e) {
+    if (!mx) return;
+    var t = e.target.closest && e.target.closest("[data-mx],[data-mx-opt],[data-mx-dir]");
+    if (!t) return;
+    e.preventDefault();
+    if (t.hasAttribute("data-mx-opt")) mxInput({ opt: parseInt(t.getAttribute("data-mx-opt"), 10) });
+    else if (t.hasAttribute("data-mx-dir")) mxInput({ dir: t.getAttribute("data-mx-dir") });
+    else mxInput("tap");
+  });
+  window.__mxFinish = function () { if (!/[?&]mgtest=1(&|$)/.test(location.search) || !mx || mx.won) return false; mxWin(); return true; };
+
   function renderBody() {
     if (RAIL && !ROOM) return renderRailJoin();
     if (!ROOM) return '<main class="stage"><div class="center-screen">' + cartWrap('<div class="lobby-box card"><h2>잘못된 링크예요</h2><p>방 코드가 없어요. 처음 받은 링크로 다시 들어와 주세요.</p></div>', 'cart--lobby') + '</div></main>';
@@ -2460,7 +2595,7 @@ APP_JS_TEMPLATE = r"""
   }
   // 2026-10-14 (사용자 요청): 레이스 중 레일 화면엔 택배 쌓기 문제만. 누군가 첫 게임을 끝내면 문제가 화면 가득,
   //   그 전엔 "곧 문제가 나와요" 대기 화면. 택배·진행 단계·송장은 그리지 않는다 (택배 고르기는 각자 플레이어 화면).
-  function railPuzzleOn(r) { return !!r.first || ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "done"; }); }
+  function railPuzzleOn(r) { return !!r.first || ["1", "2"].some(function (s) { return r.stage[s] === "ubongo" || r.stage[s] === "done" || r.stage[s] === "pieces"; }); }
   // 레일 화면 고르기 카드: 종류·금액·층 + 자리별 버튼(1번 A S D / 2번 J K L)
   function railParcel(st, r, it, i) {
     var owner = rOwner(r, i);

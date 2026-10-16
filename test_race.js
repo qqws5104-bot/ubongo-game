@@ -241,15 +241,15 @@ const finishBoth = (room, seat) => { room.raceStep(seat, "sticker-done"); room.r
   // 2026-10-15 기본: 첫 게임 없음 -> 라운드 시작부터 둘 다 택배 쌓기
   {
     const { RACE_GAME_POOL } = require("./game-data.js");
-    assert.deepStrictEqual(RACE_GAME_POOL, []);
-    const rm = new GameRoom("NOGAME", () => {});
+    assert.deepStrictEqual(RACE_GAME_POOL, ["sticker", "inspect", "match", "weigh", "tape"], "2026-10-16 기본: 첫 게임 5종");
+    const rm = new GameRoom("NOGAME", () => {}, { raceGamePool: [] }); // 2026-10-16: 기본은 다시 첫 게임 있음 -- 여기선 "없음" 설정을 검사
     rm.pickCourier("cookbang", "a"); rm.pickCourier("cheonil", "b"); rm.setReady("1"); rm.setReady("2");
     assert.strictEqual(rm.state.race.game, null);
     assert.deepStrictEqual(rm.state.race.stage, { "1": "ubongo", "2": "ubongo" }, "바로 택배 쌓기");
     rm.raceStep("1", "ubongo-done");
     assert.strictEqual(rm.state.race.first, "1");
     rm.destroy();
-    log("기본: 첫 미니게임 없이 바로 택배 쌓기");
+    log("첫 게임 없음 설정: 바로 택배 쌓기");
   }
 
   // 예전 방식 플래그
