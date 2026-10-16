@@ -1072,7 +1072,7 @@ APP_JS_TEMPLATE = r"""
       l: function () { return ["조각 2개 문제는 택배 <b>3개</b>(먼저 끝낸 사람 2개), 조각 3개 이상은 택배 <b>5개</b>(먼저 끝낸 사람 3개).", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> 누른 채 + 호실 키</div>'; },
-      l: function () { return ["띵동! " + Math.round(((state && state.wallRule && state.wallRule.progressMs) || 5000) / 1000) + "초 뒤 배송 완료 · 상대 배송은 그 호실 키를 <b>그냥 5번</b> 연타하면 막혀요(반송).", "내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
+      l: function () { return ["띵동! " + Math.round(((state && state.wallRule && state.wallRule.progressMs) || 5000) / 1000) + "초 뒤 배송 완료 · 상대 배송은 그 호실 키를 <b>그냥 5번</b> 연타하면 막혀요(반송 -- 다시 보낼 수는 있어요).", "내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · 팀 키 + <b>↑</b> / <b>↓</b> 로 엘리베이터 끌기</div>'; },
       l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
@@ -2163,9 +2163,11 @@ APP_JS_TEMPLATE = r"""
     var door = st.delivery.doors[u.id];
     var cls = 'du du-' + u.b + (door ? ' on-' + door.seat : '');
     var taps = door && door.taps ? '<span class="du-taps">막기 ' + door.taps + '/' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '</span>' : '';
-    return '<button class="' + cls + '" data-unit="' + u.id + '"' + (door ? ' data-dstart="' + door.start + '" data-dneed="' + dNeedMs(door) + '"' : '') + '>'
-      + '<span class="du-ring"></span>' + taps + '<span class="du-label">' + esc(u.b === "house" ? u.label.replace("성수로 ", "") : u.label) + '</span>'
-      + (keyHint ? '<kbd>' + esc(u.keyLabel) + '</kbd>' : '') + '</button>';
+    // 2026-10-16 (사용자: "너무 난잡"): 메인 화면에선 문마다 표 하나 -- [호수 | 키] 칩. 맨션은 그림 속 호수가 커서 키만.
+    var num = u.b === "house" ? u.label.replace("성수로 ", "") : u.label.replace("호", "");
+    var chip = keyHint ? '<span class="du-chip">' + (u.b === "mansion" ? '' : '<b>' + esc(num) + '</b>') + '<kbd>' + esc(u.keyLabel) + '</kbd></span>' : '<span class="du-label">' + esc(u.b === "house" ? u.label.replace("성수로 ", "") : u.label) + '</span>';
+    return '<button class="' + cls + '" data-unit="' + u.id + '"' + (door ? ' data-dstart="' + door.start + '" data-dneed="' + dNeedMs(door) + '"' : '') + ' aria-label="' + esc(unitAddr(u)) + '">'
+      + '<span class="du-ring"></span>' + taps + chip + '</button>';
   }
   function renderWalls(st, keyHint) {
     var d = st.delivery, ef = d.elev ? d.elev.floor : null;
@@ -2173,7 +2175,7 @@ APP_JS_TEMPLATE = r"""
     //   위치는 그림 기준 비율(%) -- 층 가운데 y(그림 510px 기준)와 문 x 범위. 엘리베이터 칸은 승강로 위에서 움직인다.
     var ROW_Y = { 7: 70, 6: 129, 5: 188, 4: 247, 3: 306, 2: 365, 1: 426 }, IH = 510, IW = 405;
     var pct = function (v, of) { return (v / of * 100).toFixed(2) + '%'; };
-    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트 <small>7층 · 엘리베이터</small></div><div class="dw-apt-pic">';
+    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트</div><div class="dw-apt-pic">';
     for (var f = 7; f >= 1; f--) {
       var top = pct(ROW_Y[f] - 27, IH), hh = pct(54, IH);
       apt += '<span class="dw-fl-hl' + (ef === f ? ' here' : '') + '" style="top:' + top + ';height:' + hh + '"></span>'
@@ -2184,15 +2186,15 @@ APP_JS_TEMPLATE = r"""
     apt += '</div></div>';
     // 2026-10-16 (사용자 제공 그림 2): 맨션 그림(ui_art/town_mansion.jpg, 2층 x 201~206 / 101~106 -- 우리 호실과 같음) 위 문 자리에 버튼.
     var MW = 740, MH = 300, MX = [117, 227, 332, 437, 535, 620], MY = { 2: 75, 1: 220 }; // 외벽만 잘라 낸 그림(740x300) 기준
-    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션 <small>2층</small></div><div class="dw-man-pic">';
+    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션</div><div class="dw-man-pic">';
     [2, 1].forEach(function (f) { for (var k = 1; k <= 6; k++) {
       man += '<span class="dw-slot dw-mslot" style="left:' + pct(MX[k - 1] - 44, MW) + ';top:' + pct(MY[f] - 58, MH) + ';width:' + pct(88, MW) + ';height:' + pct(116, MH) + '">' + unitBtn(st, unitById["m" + f + "0" + k], keyHint) + '</span>';
     } });
     man += '</div></div>';
-    var hs = '<div class="dw dw-house dw-img"><div class="dw-name">단독주택 <small>성수로</small></div><div class="dw-house-grid">';
+    var hs = '<div class="dw dw-house dw-img"><div class="dw-name">주택 <small>성수로</small></div><div class="dw-house-grid">';
     for (var h = 1; h <= 8; h++) hs += '<div class="dw-home dw-home-pic hp' + (((h - 1) % 4) + 1) + '">' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
     hs += '</div></div>';
-    return '<div class="dwalls">' + apt + man + hs + '</div>';
+    return keyHint ? '<div class="dwalls dwalls2">' + apt + '<div class="dw-right">' + man + hs + '</div></div>' : '<div class="dwalls">' + apt + man + hs + '</div>';
   }
   function elevCtl(st, withButtons) {
     var e = st.delivery.elev;
@@ -2244,7 +2246,7 @@ APP_JS_TEMPLATE = r"""
     return head("배송 · " + halfName) + '<div class="mv-body rv-dlv d-main">'
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + renderWalls(st, true)
-      + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 · Ctrl+↑↓ 엘리베이터</span><span>막기 = 켜진 호실 키를 <b>그냥 5번</b> 연타</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 · Shift+↑↓ 엘리베이터</span></div></div>';
+      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키로 배송 · 팀 키 + <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기</div></div>';
   }
   function renderRailDelivery(st, head, halfName) {
     return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
@@ -2294,7 +2296,7 @@ APP_JS_TEMPLATE = r"""
       if (e.k === "start") { if (mine || !me) DSND.start(); return; }
       if (e.k === "done") { DSND.done(); if (mine) dPop("ok", "배송 완료! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat); return; }
       if (e.k === "tap") { DSND.soft(); if (!me) dPop("warn", TEAM[e.seat] + " 배송 막는 중 " + (e.taps || 0) + "/" + ((st.wallRule && st.wallRule.returnTaps) || 5), addr, e.seat); return; }
-      if (e.k === "returned") { DSND.err(); dPop("bad", (me && e.seat === me ? "상대가 막았어요! 반송" : who + " 배송 막힘! 반송"), addr, e.seat); return; }
+      if (e.k === "returned") { DSND.err(); dPop("bad", (me && e.seat === me ? "상대가 막았어요! 반송" : who + " 배송 막힘! 반송"), addr + " · 다시 보낼 수 있어요", e.seat); return; }
       if (!mine) return;
       var pre = me ? "" : who + " · ";
       if (e.k === "wrong") { DSND.err(); dPop("bad", pre + "오배송! 내 택배가 없는 집", addr + " · -" + dWon((st.wallRule && st.wallRule.wrongPenalty) || 0), e.seat); }
@@ -2406,7 +2408,8 @@ APP_JS_TEMPLATE = r"""
     mxStart(r, idx);
   }
   // 2026-10-16 (사용자 피드백 2차 "아직 쉽다"): 게임마다 제한 시간(MX_LIMIT, 넘기면 같은 게임을 새 문제로 다시) + 각 게임 난이도 한 단계 더.
-  var MX_LIMIT = { react: [7000, 8000], pick: [5000, 4500], mash: [5500, 5500], arrows: [5000, 5000] };
+  // 2026-10-16 (사용자: "시간 압박이 너무 강하다"): 제한 시간을 크게 늘림 (예전 7/5/5.5/5초)
+  var MX_LIMIT = { react: [12000, 12000], pick: [9000, 8000], mash: [9000, 9000], arrows: [9000, 8000] };
   function mxStart(r, idx) {
     if (mx) { if (mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } if (mx.clock) clearInterval(mx.clock); }
     var kind = r.pieceGames[idx] || "react";
@@ -2437,7 +2440,7 @@ APP_JS_TEMPLATE = r"""
   // 방향 따라 누르기: 1.3초(후반 1초) 보여 주고 가린다 -- 외워서 누르기. 틀리면 새 순서로 다시 보여 줌.
   function mxNewArrows() {
     var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"], H = mxHard() ? 1 : 0;
-    mx.seq = []; for (var k = 0; k < [5, 6][H]; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]);
+    mx.seq = []; for (var k = 0; k < [3, 4][H]; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); // 2026-10-16 (사용자): 전반 3개 / 후반 4개
     mx.pos = 0; mx.showUntil = Date.now() + [1300, 1000][H];
     var my = mx;
     setTimeout(function () { if (mx === my) mxRender(); }, [1300, 1000][H] + 20);
@@ -2503,6 +2506,8 @@ APP_JS_TEMPLATE = r"""
   }
   function mxFail(msg) {
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
+    // 2026-10-16 (사용자): 틀리면 제한 시간도 처음부터 다시 (잠깐 멈춘 0.7초 뒤부터)
+    if (mx.limit) mx.deadline = Date.now() + 700 + mx.limit;
     var my = mx;
     setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 700);
     mxRender();

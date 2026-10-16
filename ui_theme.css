@@ -770,3 +770,25 @@ body:has(.d-main) .mv-chip { background: #fffdf6 !important; }
 .d-main .dw-mslot .du .du-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); padding: 0; }
 .dw-mslot .du { justify-content: flex-end !important; padding-bottom: 6px; }
 .mx-belt.scanned { box-shadow: inset 0 0 0 6px #1f9a4c; opacity: .85; }
+
+/* ---------- 22) 2026-10-16 메인 배송 화면 정리 ("너무 난잡"): 2열(아파트 | 맨션+주택), 문마다 칩 하나, 안내 한 줄 ---------- */
+.d-main .dwalls2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.d-main .dw-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.d-main .dw-right .dw { flex: 1 1 auto; }
+.d-main .dw-mansion .dw-man-pic { margin: 0; }
+.d-main .dw-house .dw-house-grid { grid-template-columns: repeat(4, 1fr); flex: 0 0 auto; }
+.d-main .dw-home-pic { aspect-ratio: 176 / 140; }
+.d-main .dw-name { font-size: 1.15rem; margin-bottom: 6px; }
+/* 칩: [701 | E] */
+.du-chip { position: relative; z-index: 1; display: inline-flex; align-items: stretch; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,.35); font-variant-numeric: tabular-nums; }
+.du-chip b { background: #1e2233; color: #fff; padding: 1px 6px; font-size: clamp(.8rem, 1.5vh, 1rem); }
+.du-chip kbd { background: #ffd23f; color: #1e2233; padding: 1px 6px; font-size: clamp(.8rem, 1.5vh, 1rem); font-weight: 900; border-radius: 0; box-shadow: none; font-family: ui-monospace, Menlo, monospace; }
+.d-main .du-chip kbd { margin: 0; position: static; transform: none; }
+.d-main .dw-slot .du, .d-main .dw-home-pic .du { justify-content: center; align-items: center; }
+.d-main .dw-mslot .du { justify-content: flex-end !important; }
+.d-main .dw-home-pic .du { justify-content: flex-end; padding-bottom: 6px; }
+/* 안내 한 줄 */
+.d-keys1 { align-self: center; background: #fffdf6; color: #333a50; border-radius: 999px; padding: 6px 18px; font-size: .95rem; display: flex; gap: 8px; align-items: center; }
+.d-keys1 .t1 b { color: var(--t1); } .d-keys1 .t2 b { color: var(--t2); }
+.d-keys1 { display: block; }
+.d-keys1 .t1, .d-keys1 .t2 { margin-right: 6px; }

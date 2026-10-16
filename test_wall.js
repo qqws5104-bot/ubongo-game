@@ -98,7 +98,7 @@ function mk(rules) {
     room._endSecurePhase();
     box.st.players["2"].invoices = [{ id: "y1", catIdx: 0, unit: "m205", reward: 2500, deliveredRound: null }];
     room.wallPress("2", "m205"); for (let i = 0; i < 5; i++) room.wallPress(null, "m205");
-    assert(box.st.players["2"].invoices[0].returned, "5번 누르면 반송");
+    assert(!box.st.delivery.doors.m205 && box.st.players["2"].invoices[0].bounces === 1, "5번 누르면 반송(다시 보낼 수 있음)");
     room.destroy();
   }
   // 4) 기본(2026-10-16): Ctrl/Shift+호실 = 시작, 5초 뒤 완료 / 팀 키로 남의 켜진 집 누름 = 안내만 / 보조키 없이 5번 = 반송 / 아파트는 엘리베이터 층
@@ -112,7 +112,9 @@ function mk(rules) {
     room.wallPress("2", "m101"); assert.strictEqual(last(), "taken"); assert.strictEqual(box.st.delivery.doors.m101.taps, 0, "팀 키로는 못 막음");
     for (let i = 0; i < 4; i++) room.wallPress(null, "m101");
     assert.strictEqual(box.st.delivery.doors.m101.taps, 4);
-    room.wallPress(null, "m101"); assert(box.st.players["1"].invoices[0].returned, "5번째에 반송");
+    room.wallPress(null, "m101"); assert(!box.st.delivery.doors.m101, "5번째에 반송(꺼짐)");
+    assert.strictEqual(box.st.players["1"].invoices[0].bounces, 1); assert(!box.st.players["1"].invoices[0].returned, "반송돼도 다시 보낼 수 있다");
+    room.wallPress("1", "m101"); assert(box.st.delivery.doors.m101, "다시 배송 시작");
     room.destroy();
   }
   console.log("test_wall OK");

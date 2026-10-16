@@ -58,7 +58,7 @@ const OUT = "/tmp/wall_e2e_";
   const keyFor = await s.evaluate((info) => {
     const btns = [...document.querySelectorAll("[data-unit]")];
     for (const sl of info) { const [b, a] = sl.split("|"); if (b === "아파트") continue;
-      const lab = a.replace("성수로 ", ""); const btn = btns.find(x => x.querySelector(".du-label").textContent === lab && (b === "맨션" ? x.classList.contains("du-mansion") : x.classList.contains("du-house")));
+      const addr = b === "주택" ? a : b + " " + a; const btn = btns.find(x => x.getAttribute("aria-label") === addr);
       if (btn) return btn.querySelector("kbd").textContent; }
     return null; }, info);
   console.log("key", keyFor);

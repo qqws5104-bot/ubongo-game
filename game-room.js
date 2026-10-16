@@ -934,8 +934,9 @@ class GameRoom {
     const door = d.doors[unitId];
     door.taps += 1;
     if (door.taps < this.rules.deliveryReturnTaps) { this._dEv("tap", unitId, door.seat, { taps: door.taps }); return; }
+    // 2026-10-16 (사용자 결정): 반송돼도 다시 보낼 수 있다 -- 택배는 미배송 상태로 돌아가고(반송 횟수만 셈), 처음부터 다시 배송.
     const inv = this.state.players[door.seat].invoices.find((v) => v.id === door.invId);
-    if (inv) inv.returned = true;
+    if (inv) inv.bounces = (inv.bounces || 0) + 1;
     delete d.doors[unitId];
     this._dEv("returned", unitId, door.seat);
   }
