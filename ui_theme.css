@@ -643,3 +643,22 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .mx-timebar i { display: block; height: 100%; background: #e2691a; transition: width .1s linear; }
 .mx-opts:has(> :nth-child(4)) { grid-template-columns: repeat(4, 1fr); }
 .mx-hint { font-weight: 800; color: #7a5a2c; }
+/* 2026-10-16 조각 게임 택배 테마 */
+.mx-belt { position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; color: #fff;
+  background: repeating-linear-gradient(90deg, #4a5068 0 18px, #3b4056 18px 36px) !important; border-bottom: 10px solid #2b2f40; }
+.mx-belt.go { box-shadow: inset 0 0 0 6px #1f9a4c; }
+.mx-belt.red { box-shadow: inset 0 0 0 6px #C62828; }
+.mx-belt .mx-box-svg { width: 130px; height: 100px; }
+.mx-belt b { font-size: 2rem; }
+.mx-belt-empty { font-size: 1.6rem; opacity: .8; }
+.mx-count span { margin-left: 8px; font-weight: 800; color: #555; font-size: .9rem; }
+.mx-waybill { background: #fff !important; border: 2px dashed #b9ab8a; border-radius: 6px; position: relative; padding-bottom: 22px !important; }
+.mx-barcode { position: absolute; left: 14px; right: 14px; bottom: 6px; height: 10px; background: repeating-linear-gradient(90deg, #222 0 2px, transparent 2px 4px, #222 4px 5px, transparent 5px 8px); }
+.mx-q { font-weight: 700; color: #555; }
+.mx-tape { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: #f3e7cf !important; color: #2b1d12 !important; height: 190px !important; }
+.mx-tape .mx-box-svg { width: 150px; height: 110px; }
+.mx-tape span { font-size: 1.3rem; }
+.mx-route { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.mx-stop { font-weight: 800; font-size: .85rem; background: #2b1d12; color: #fff; border-radius: 8px; padding: 6px 8px; }
+.mx-stop.home { background: #1f9a4c; }
+.mx-route .mx-seq span { width: 56px; height: 56px; font-size: 1.9rem; }

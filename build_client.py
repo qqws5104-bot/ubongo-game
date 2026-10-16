@@ -1067,7 +1067,7 @@ APP_JS_TEMPLATE = r"""
           + '<div class="tut-flow sub"><span class="t1">빨간 팀</span><i>vs</i><span class="t2">파란 팀</span><i>=</i><span><b>전반+후반 배송 실적</b></span></div>'; },
       l: function () { return ["택배 쌓기로 택배를 따고, 송장에 적힌 집의 버튼을 눌러 배송해요."]; } },
     { t: "① 택배 쌓기", v: function () {
-        return '<div class="tut-flow"><span class="tut-step">짧은 게임 = 조각 1개<small>초록불 · 송장 주소 · 게이지 · 방향</small></span><i>→</i>'
+        return '<div class="tut-flow"><span class="tut-step">짧은 게임 = 조각 1개<small>바코드 스캔 · 송장 주소 · 테이프 · 배달 길</small></span><i>→</i>'
           + '<span class="tut-step">판에 놓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>완성하면 투입!</small></span></div>'; },
       l: function () { return ["조각 2개 문제는 택배 <b>3개</b>(먼저 끝낸 사람 2개), 조각 3개 이상은 택배 <b>5개</b>(먼저 끝낸 사람 3개).", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
@@ -2365,7 +2365,13 @@ APP_JS_TEMPLATE = r"""
   // 규칙을 읽을 필요 없는 3~5초짜리. 키: Space / ← ↑ → ↓ (레일 앞 물리 버튼), 터치도 됨.
   // 하나 끝내면 "조각 획득" -> 서버 race-step piece-done -> 다음 게임. 다 모으면 서버가 stage를 ubongo로(완성 -> 투입).
   // 2026-10-16 (사용자 피드백 "너무 쉽다"): 각 게임에 실패할 수 있는 요소를 넣었다. 후반은 한 단계 더 어렵게(mxHard).
-  var MX_NAME = { react: "초록불에만 누르기", pick: "송장 주소 맞추기", mash: "게이지 채우기!", arrows: "방향 따라 누르기" };
+  // 2026-10-16 (사용자 요청): 네 게임 모두 택배 일로 바꿈 -- 규칙(난이도)은 그대로, 모양과 말만.
+  //   react = 바코드 스캔(정상 택배만 스캔, 반품 박스는 스캔 금지) / pick = 송장 주소 확인 / mash = 테이프 붙이기 / arrows = 배달 길 외우기
+  var MX_NAME = { react: "바코드 스캔", pick: "송장 주소 확인", mash: "테이프 붙이기", arrows: "배달 길 외우기" };
+  function mxBoxSvg(extra) {
+    return '<svg viewBox="0 0 120 90" class="mx-box-svg" aria-hidden="true"><path d="M10 28 L60 10 L110 28 L110 78 L60 88 L10 78 Z" fill="#c99a5b" stroke="#7a5428" stroke-width="3"/>'
+      + '<path d="M10 28 L60 44 L110 28 M60 44 L60 88" fill="none" stroke="#7a5428" stroke-width="3"/>' + (extra || '') + '</svg>';
+  }
   function mxHard() { return !!(state && state.half === 2); }
   var MX_ARROW = { ArrowLeft: "←", ArrowUp: "↑", ArrowRight: "→", ArrowDown: "↓" };
   var mx = null;
@@ -2410,7 +2416,7 @@ APP_JS_TEMPLATE = r"""
       if (bar) bar.style.width = Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + "%";
       if (Date.now() > mx.deadline) { // 시간 초과 -> 같은 조각 게임을 새 문제로 다시
         clearInterval(mx.clock);
-        mx.flash = "시간 초과! 다시"; mx.lockUntil = Date.now() + 900; mxRender();
+        mx.flash = "배송 지연! 다시"; mx.lockUntil = Date.now() + 900; mxRender();
         try { DSND.err(); } catch (e) {}
         setTimeout(function () { if (mx === my && state && state.race) mxStart(state.race, my.idx); }, 900);
       }
@@ -2439,7 +2445,7 @@ APP_JS_TEMPLATE = r"""
         return;
       }
       mx.phase = "go"; mxRender();
-      mx.timer = setTimeout(function () { if (mx === my && !mx.won && mx.phase === "go") { mx.flash = "놓쳤어요!"; mxArmReact(); mxRender(); setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 600); } }, mxHard() ? 380 : 480);
+      mx.timer = setTimeout(function () { if (mx === my && !mx.won && mx.phase === "go") { mx.flash = "택배가 지나갔어요!"; mxArmReact(); mxRender(); setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 600); } }, mxHard() ? 380 : 480);
     }, 500 + Math.floor(Math.random() * 800));
   }
   // 게이지 채우기: 가만히 있으면 줄어든다
@@ -2483,12 +2489,12 @@ APP_JS_TEMPLATE = r"""
     if (mx.kind === "react") {
       if (key !== "Space" && key !== "tap") return;
       if (mx.phase === "go") { mx.hits++; if (mx.hits >= mx.needHits) mxWin(); else mxArmReact(); mxRender(); }
-      else { mx.hits = 0; mxFail(mx.phase === "red" ? "빨간불! 처음부터" : "너무 빨라요! 처음부터"); mxArmReact(); }
+      else { mx.hits = 0; mxFail(mx.phase === "red" ? "반품 박스를 스캔했어요! 처음부터" : "아직 택배가 안 왔어요! 처음부터"); mxArmReact(); }
     } else if (mx.kind === "pick") {
       var i = key === "ArrowLeft" ? 0 : key === "ArrowUp" ? 1 : key === "ArrowDown" ? 2 : key === "ArrowRight" ? 3 : (typeof key === "object" ? key.opt : -1);
       if (i < 0) return;
       if (mx.opts[i] === mx.target) { mx.streak++; if (mx.streak >= mx.needStreak) mxWin(); else { mxNewPick(); mxRender(); } }
-      else { mx.streak = 0; mxFail("다른 주소예요 · 처음부터"); mxNewPick(); }
+      else { mx.streak = 0; mxFail("다른 집 주소예요 · 처음부터"); mxNewPick(); }
     } else if (mx.kind === "mash") {
       if (key !== "Space" && key !== "tap") return;
       mx.count++;
@@ -2498,7 +2504,7 @@ APP_JS_TEMPLATE = r"""
       if (!MX_ARROW[k]) return;
       if (Date.now() < mx.showUntil) return; // 외우는 중엔 입력 안 받음
       if (mx.seq[mx.pos] === k) { mx.pos++; if (mx.pos >= mx.seq.length) mxWin(); else mxRender(); }
-      else { mxNewArrows(); mxFail("틀렸어요! 새 순서"); }
+      else { mxNewArrows(); mxFail("길을 잘못 들었어요! 새 길"); }
     }
   }
   function mxDots(n, of) { var h = ''; for (var i = 0; i < of; i++) h += '<i class="' + (i < n ? 'on' : '') + '"></i>'; return h; }
@@ -2511,18 +2517,23 @@ APP_JS_TEMPLATE = r"""
       body = '<div class="mx-won"><b>조각 획득!</b><span>내 자리 칸에서 조각 하나를 가져가 판에 놓으세요</span>'
         + (mx.idx + 1 >= mx.need ? '<span class="mx-next">다 모았어요! 완성하면 <b>Space</b> 투입</span>' : '<span class="mx-next">곧 다음 조각 게임</span>') + '</div>';
     } else if (mx.kind === "react") {
-      body = '<button class="mx-react ' + mx.phase + '" data-mx="tap">' + (mx.phase === "go" ? '지금! <small>Space</small>' : (mx.phase === "red" ? '누르지 마!' : '기다려…')) + '</button>'
-        + '<div class="mx-count">' + mxDots(mx.hits, mx.needHits) + '</div>';
+      var inner = mx.phase === "go" ? mxBoxSvg('<g transform="translate(30 52)"><rect width="60" height="22" fill="#fff"/>' + [3, 7, 9, 14, 17, 22, 25, 30, 34, 37, 42, 46, 49, 54].map(function (x, i) { return '<rect x="' + x + '" y="3" width="' + (i % 3 ? 2 : 3) + '" height="16" fill="#111"/>'; }).join('') + '</g>') + '<b>스캔! <small>Space</small></b>'
+        : mx.phase === "red" ? mxBoxSvg('<g transform="translate(34 50) rotate(-8)"><rect width="54" height="24" rx="3" fill="none" stroke="#C62828" stroke-width="4"/><text x="27" y="18" text-anchor="middle" font-size="15" font-weight="900" fill="#C62828">반품</text></g>') + '<b>스캔 금지!</b>'
+        : '<span class="mx-belt-empty">택배가 오는 중…</span>';
+      body = '<button class="mx-react mx-belt ' + mx.phase + '" data-mx="tap">' + inner + '</button>'
+        + '<div class="mx-count">' + mxDots(mx.hits, mx.needHits) + '<span>스캔 ' + mx.hits + '/' + mx.needHits + '</span></div>';
     } else if (mx.kind === "pick") {
-      body = '<div class="mx-target mx-addr"><small>송장</small>' + esc(mx.target) + '</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
+      body = '<div class="mx-target mx-addr mx-waybill"><small>받는 분 주소</small>' + esc(mx.target) + '<i class="mx-barcode"></i></div><div class="mx-q">이 택배는 어느 집 문 앞으로?</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
         return '<button class="mx-opt mx-addr-opt" data-mx-opt="' + i + '"><b>' + esc(o) + '</b><small>' + ["←", "↑", "↓", "→"][i] + '</small></button>';
       }).join('') + '</div><div class="mx-count">' + mxDots(mx.streak, mx.needStreak) + '</div>';
     } else if (mx.kind === "mash") {
-      body = '<button class="mx-mash" data-mx="tap"><span>Space 연타! <small>멈추면 줄어요</small></span><i style="width:' + Math.round(mx.count / mx.goal * 100) + '%"></i></button>';
+      var pct = Math.round(mx.count / mx.goal * 100);
+      body = '<button class="mx-mash mx-tape" data-mx="tap">' + mxBoxSvg('<rect x="10" y="' + 38 + '" width="' + Math.round(pct) + '" height="10" fill="#d8c27a" stroke="#a88c3a" stroke-width="1.5" transform="skewY(-6)"/>')
+        + '<span>Space 연타로 테이프 붙이기 <small>멈추면 떨어져요 · ' + pct + '%</small></span></button>';
     } else if (mx.kind === "arrows") {
       var hide = Date.now() >= mx.showUntil;
-      body = '<div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + (i < mx.pos || !hide ? MX_ARROW[k] : '?') + '</span>'; }).join('') + '</div>'
-        + '<div class="mx-hint">' + (hide ? '외운 순서대로!' : '외우세요…') + '</div>'
+      body = '<div class="mx-route"><span class="mx-stop">물류센터</span><div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + (i < mx.pos || !hide ? MX_ARROW[k] : '?') + '</span>'; }).join('') + '</div><span class="mx-stop home">고객 집</span></div>'
+        + '<div class="mx-hint">' + (hide ? '외운 길 순서대로 운전!' : '골목 길을 외우세요…') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
     }
     var tbar = mx.won ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + '%"></i></div>';
