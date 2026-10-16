@@ -638,3 +638,8 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .mx-addr-opt { height: 96px; justify-content: center; }
 .mx-addr-opt b { font-size: 1.8rem; color: #2b1d12; font-variant-numeric: tabular-nums; }
 .mx-mash small { display: block; font-size: .9rem; opacity: .85; }
+.du-taps { position: absolute; top: -9px; right: -6px; z-index: 2; background: #C62828; color: #fff; font-size: .7rem; font-weight: 800; border-radius: 999px; padding: 1px 6px; }
+.mx-timebar { height: 8px; border-radius: 4px; background: #e6dfcd; overflow: hidden; }
+.mx-timebar i { display: block; height: 100%; background: #e2691a; transition: width .1s linear; }
+.mx-opts:has(> :nth-child(4)) { grid-template-columns: repeat(4, 1fr); }
+.mx-hint { font-weight: 800; color: #7a5a2c; }

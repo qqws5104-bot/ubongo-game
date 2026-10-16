@@ -65,9 +65,10 @@ const OUT = "/tmp/wall_e2e_";
   assert(keyFor, "p1에게 아파트 아닌 택배가 있어야 테스트 가능 (무작위라 드물게 실패할 수 있음)");
   const codeOf = (k) => ({ ",": "Comma", ".": "Period", "/": "Slash", ";": "Semicolon", "'": "Quote", "[": "BracketLeft", "]": "BracketRight", "\\": "Backslash", "-": "Minus", "=": "Equal", "`": "Backquote", "↵": "Enter" }[k] || ("Key" + k));
   if (keyFor) {
-    await s.keyboard.down("Control"); await s.keyboard.down(codeOf(keyFor)); await s.waitForTimeout(900);
+    // 2026-10-16: Ctrl 누른 채 호실 키를 한 번 누르면 시작 -> 5초 뒤 완료
+    await s.keyboard.down("Control"); await s.keyboard.press(codeOf(keyFor)); await s.keyboard.up("Control"); await s.waitForTimeout(900);
     await s.screenshot({ path: OUT + "d_main_holding.png" }); await p1.screenshot({ path: OUT + "d_p1_holding.png" });
-    await s.waitForTimeout(1400); await s.keyboard.up(codeOf(keyFor)); await s.keyboard.up("Control");
+    await s.waitForTimeout(4400);
     await p1.waitForTimeout(300); await p1.screenshot({ path: OUT + "d_p1_done.png" });
     assert((await p1.locator("#dpop").textContent()).includes("배송 완료"), "배송 완료 팝업"); await s.screenshot({ path: OUT + "d_main_done.png" });
   }

@@ -1590,6 +1590,11 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .mx-addr-opt { height: 96px; justify-content: center; }
 .mx-addr-opt b { font-size: 1.8rem; color: #2b1d12; font-variant-numeric: tabular-nums; }
 .mx-mash small { display: block; font-size: .9rem; opacity: .85; }
+.du-taps { position: absolute; top: -9px; right: -6px; z-index: 2; background: #C62828; color: #fff; font-size: .7rem; font-weight: 800; border-radius: 999px; padding: 1px 6px; }
+.mx-timebar { height: 8px; border-radius: 4px; background: #e6dfcd; overflow: hidden; }
+.mx-timebar i { display: block; height: 100%; background: #e2691a; transition: width .1s linear; }
+.mx-opts:has(> :nth-child(4)) { grid-template-columns: repeat(4, 1fr); }
+.mx-hint { font-weight: 800; color: #7a5a2c; }
 
 </style>
 </head><body>
@@ -2867,7 +2872,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
   var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1016-1014"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1016-1112"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -3231,8 +3236,8 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
           + '<span class="tut-step">판에 놓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>완성하면 투입!</small></span></div>'; },
       l: function () { return ["조각 2개 문제는 택배 <b>3개</b>(먼저 끝낸 사람 2개), 조각 3개 이상은 택배 <b>5개</b>(먼저 끝낸 사람 3개).", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
-        return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> + 호실 키 <b>' + Math.round(((state && state.wallRule && state.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르기</div>'; },
-      l: function () { return ["송장의 집 키를 팀 키와 함께 누르고 있으면 띵동, 배송 완료!", "중간에 떼면 처음부터 · 내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
+        return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> 누른 채 + 호실 키</div>'; },
+      l: function () { return ["띵동! " + Math.round(((state && state.wallRule && state.wallRule.progressMs) || 5000) / 1000) + "초 뒤 배송 완료 · 상대 배송은 그 호실 키를 <b>그냥 5번</b> 연타하면 막혀요(반송).", "내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · 팀 키 + <b>↑</b> / <b>↓</b> 로 엘리베이터 끌기</div>'; },
       l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
@@ -4322,8 +4327,9 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
   function unitBtn(st, u, keyHint) {
     var door = st.delivery.doors[u.id];
     var cls = 'du du-' + u.b + (door ? ' on-' + door.seat : '');
+    var taps = door && door.taps ? '<span class="du-taps">막기 ' + door.taps + '/' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '</span>' : '';
     return '<button class="' + cls + '" data-unit="' + u.id + '"' + (door ? ' data-dstart="' + door.start + '" data-dneed="' + dNeedMs(door) + '"' : '') + '>'
-      + '<span class="du-ring"></span><span class="du-label">' + esc(u.b === "house" ? u.label.replace("성수로 ", "") : u.label) + '</span>'
+      + '<span class="du-ring"></span>' + taps + '<span class="du-label">' + esc(u.b === "house" ? u.label.replace("성수로 ", "") : u.label) + '</span>'
       + (keyHint ? '<kbd>' + esc(u.keyLabel) + '</kbd>' : '') + '</button>';
   }
   function renderWalls(st, keyHint) {
@@ -4355,9 +4361,10 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     var now = '';
     if (act) {
       var u = unitById[act.unit];
-      now = '<div class="d-now is-on t' + seat + '" data-dstart="' + act.door.start + '" data-dneed="' + dNeedMs(act.door) + '"><b>' + esc(unitAddr(u)) + '</b> 배송 중 · 손 떼지 마세요<i class="d-now-bar"><i></i></i></div>';
+      now = '<div class="d-now is-on t' + seat + '" data-dstart="' + act.door.start + '" data-dneed="' + dNeedMs(act.door) + '"><b>' + esc(unitAddr(u)) + '</b> 배송 중' + (act.door.hold ? ' · 손 떼지 마세요' : (act.door.taps ? ' · 상대가 막는 중 ' + act.door.taps + '/' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '!' : '')) + '<i class="d-now-bar"><i></i></i></div>';
     } else if (s.pending.length) {
-      now = '<div class="d-now">메인 컴퓨터에서 <b>' + TEAM_KEY[seat] + '</b> + 호실 키를 <b>' + Math.round(((st.wallRule && st.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르고 있으면 배송 완료</div>';
+      now = '<div class="d-now">' + (st.wallRule && st.wallRule.holdMs ? '메인 컴퓨터에서 <b>' + TEAM_KEY[seat] + '</b> + 호실 키를 <b>' + Math.round(st.wallRule.holdMs / 1000) + '초</b> 누르고 있으면 배송 완료'
+        : '메인 컴퓨터에서 <b>' + TEAM_KEY[seat] + '</b> 누른 채 호실 키 → <b>' + Math.round(((st.wallRule && st.wallRule.progressMs) || 5000) / 1000) + '초</b> 뒤 배송 완료 · 상대 배송은 그 호실 키 <b>' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '번</b> 연타로 막기') + '</div>';
     } else now = '<div class="d-now is-clear">내 택배를 모두 처리했어요</div>';
     var slips = s.pending.map(function (v) {
       var u = unitById[v.unit];
@@ -4392,7 +4399,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     return head("배송 · " + halfName) + '<div class="mv-body rv-dlv">'
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + renderWalls(st, true)
-      + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 2초 · Ctrl+↑↓ 엘리베이터</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 2초 · Shift+↑↓ 엘리베이터</span></div></div>';
+      + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 · Ctrl+↑↓ 엘리베이터</span><span>막기 = 켜진 호실 키를 <b>그냥 5번</b> 연타</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 · Shift+↑↓ 엘리베이터</span></div></div>';
   }
   function renderRailDelivery(st, head, halfName) {
     return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
@@ -4441,7 +4448,8 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
       var mine = !me || e.seat === me, u = unitById[e.unit], addr = u ? unitAddr(u) : "", who = e.seat ? TEAM[e.seat] : "";
       if (e.k === "start") { if (mine || !me) DSND.start(); return; }
       if (e.k === "done") { DSND.done(); if (mine) dPop("ok", "배송 완료! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat); return; }
-      if (e.k === "returned") { DSND.err(); dPop("bad", (me && e.seat === me ? "반송됐어요" : who + " 택배 반송"), addr, e.seat); return; }
+      if (e.k === "tap") { DSND.soft(); if (!me) dPop("warn", TEAM[e.seat] + " 배송 막는 중 " + (e.taps || 0) + "/" + ((st.wallRule && st.wallRule.returnTaps) || 5), addr, e.seat); return; }
+      if (e.k === "returned") { DSND.err(); dPop("bad", (me && e.seat === me ? "상대가 막았어요! 반송" : who + " 배송 막힘! 반송"), addr, e.seat); return; }
       if (!mine) return;
       var pre = me ? "" : who + " · ";
       if (e.k === "wrong") { DSND.err(); dPop("bad", pre + "오배송! 내 택배가 없는 집", addr + " · -" + dWon((st.wallRule && st.wallRule.wrongPenalty) || 0), e.seat); }
@@ -4450,7 +4458,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
       else if (e.k === "elevleft") { DSND.err(); dPop("bad", pre + "엘리베이터가 떠났어요", addr + " 배송 실패 · 다시 누르세요", e.seat); }
       else if (e.k === "released") { DSND.soft(); dPop("warn", pre + "손을 뗐어요", addr + " · 처음부터 다시", e.seat); }
       else if (e.k === "busy") { DSND.soft(); dPop("warn", pre + "한 번에 한 집만", "누르고 있는 집을 먼저 끝내세요", e.seat); }
-      else if (e.k === "taken") { DSND.soft(); dPop("warn", pre + "상대 팀이 배송 중인 집", addr, e.seat); }
+      else if (e.k === "taken") { DSND.soft(); dPop("warn", pre + "상대 팀이 배송 중인 집", "막으려면 Ctrl/Shift 없이 그 키를 5번 연타", e.seat); }
     });
   }
   // 진행 링·시계·마감 경고 (render 사이에도 계속)
@@ -4531,7 +4539,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     if (!el) { el = document.createElement("div"); el.id = "mx-layer"; el.className = "mx-layer"; document.body.appendChild(el); }
     return el;
   }
-  function mxClose() { if (mx && mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } mx = null; var el = document.getElementById("mx-layer"); if (el) { el.innerHTML = ""; el.classList.remove("on"); } }
+  function mxClose() { if (mx && mx.clock) clearInterval(mx.clock); if (mx && mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } mx = null; var el = document.getElementById("mx-layer"); if (el) { el.innerHTML = ""; el.classList.remove("on"); } }
   function microSync() {
     var r = state && state.phase === "secure" ? state.race : null, seat = mySeat();
     var want = r && seat && r.pieceGames && r.stage[seat] === "pieces" && r.status !== "reveal";
@@ -4546,16 +4554,42 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     if (mx && mx.won && mx.holdUntil > Date.now()) { setTimeout(microSync, mx.holdUntil - Date.now()); return; }
     mxStart(r, idx);
   }
+  // 2026-10-16 (사용자 피드백 2차 "아직 쉽다"): 게임마다 제한 시간(MX_LIMIT, 넘기면 같은 게임을 새 문제로 다시) + 각 게임 난이도 한 단계 더.
+  var MX_LIMIT = { react: [7000, 8000], pick: [5000, 4500], mash: [5500, 5500], arrows: [5000, 5000] };
   function mxStart(r, idx) {
-    if (mx && mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); }
+    if (mx) { if (mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } if (mx.clock) clearInterval(mx.clock); }
     var kind = r.pieceGames[idx] || "react";
-    mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0 };
-    if (kind === "react") { mx.hits = 0; mx.needHits = mxHard() ? 3 : 2; mxArmReact(); }
-    else if (kind === "pick") { mx.streak = 0; mx.needStreak = mxHard() ? 4 : 3; mxNewPick(); }
-    else if (kind === "mash") { mx.count = 0; mx.goal = mxHard() ? 18 : 14; mxMashDecay(); }
-    else if (kind === "arrows") { var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"]; mx.seq = []; for (var k = 0; k < (mxHard() ? 7 : 5); k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); mx.pos = 0; }
+    var H = mxHard() ? 1 : 0;
+    mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0, tries: (mx && mx.round === r.round && mx.idx === idx ? (mx.tries || 0) + 1 : 0) };
+    if (kind === "react") { mx.hits = 0; mx.needHits = [2, 3][H]; mxArmReact(); }
+    else if (kind === "pick") { mx.streak = 0; mx.needStreak = [3, 4][H]; mxNewPick(); }
+    else if (kind === "mash") { mx.count = 0; mx.goal = [14, 17][H]; mxMashDecay(); }
+    else if (kind === "arrows") { mxNewArrows(); }
+    var limit = MX_LIMIT[kind][H];
+    mx.startAt = Date.now(); mx.deadline = mx.startAt + limit; mx.limit = limit;
+    var my = mx;
+    mx.clock = setInterval(function () {
+      if (mx !== my) { clearInterval(my.clock); return; }
+      if (mx.won) { clearInterval(mx.clock); return; }
+      var bar = document.getElementById("mx-time");
+      if (bar) bar.style.width = Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + "%";
+      if (Date.now() > mx.deadline) { // 시간 초과 -> 같은 조각 게임을 새 문제로 다시
+        clearInterval(mx.clock);
+        mx.flash = "시간 초과! 다시"; mx.lockUntil = Date.now() + 900; mxRender();
+        try { DSND.err(); } catch (e) {}
+        setTimeout(function () { if (mx === my && state && state.race) mxStart(state.race, my.idx); }, 900);
+      }
+    }, 100);
     mxLayer().classList.add("on");
     mxRender();
+  }
+  // 방향 따라 누르기: 1.3초(후반 1초) 보여 주고 가린다 -- 외워서 누르기. 틀리면 새 순서로 다시 보여 줌.
+  function mxNewArrows() {
+    var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"], H = mxHard() ? 1 : 0;
+    mx.seq = []; for (var k = 0; k < [5, 6][H]; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]);
+    mx.pos = 0; mx.showUntil = Date.now() + [1300, 1000][H];
+    var my = mx;
+    setTimeout(function () { if (mx === my) mxRender(); }, [1300, 1000][H] + 20);
   }
   // 초록불에만 누르기: 기다리다 빨강(누르면 실패) 또는 초록이 뜬다. 초록은 짧게만 켜진다(놓치면 다시). 성공 needHits번.
   function mxArmReact() {
@@ -4564,13 +4598,13 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     var my = mx;
     mx.timer = setTimeout(function () {
       if (mx !== my || mx.won) return;
-      if (Math.random() < 0.45) { // 가짜 빨간불
+      if (Math.random() < 0.35) { // 가짜 빨간불
         mx.phase = "red"; mxRender();
         mx.timer = setTimeout(function () { if (mx === my && !mx.won) mxArmReact(); mxRender(); }, 650);
         return;
       }
       mx.phase = "go"; mxRender();
-      mx.timer = setTimeout(function () { if (mx === my && !mx.won && mx.phase === "go") { mx.flash = "놓쳤어요!"; mxArmReact(); mxRender(); setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 600); } }, mxHard() ? 450 : 600);
+      mx.timer = setTimeout(function () { if (mx === my && !mx.won && mx.phase === "go") { mx.flash = "놓쳤어요!"; mxArmReact(); mxRender(); setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 600); } }, mxHard() ? 380 : 480);
     }, 500 + Math.floor(Math.random() * 800));
   }
   // 게이지 채우기: 가만히 있으면 줄어든다
@@ -4590,7 +4624,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     var target = lab(f, u), pool = [lab(u, f), lab(f, u % 9 + 1), lab(f % 9 + 1, u), lab(f, (u + 7) % 9 + 1)];
     if (mxHard()) pool.push(f + "" + u + "0호", f + "00" + u + "호");
     pool = pool.filter(function (x, i) { return x !== target && pool.indexOf(x) === i; }).sort(function () { return Math.random() - 0.5; });
-    mx.target = target; mx.opts = [target, pool[0], pool[1]].sort(function () { return Math.random() - 0.5; });
+    mx.target = target; mx.opts = [target, pool[0], pool[1], pool[2]].sort(function () { return Math.random() - 0.5; });
   }
   function mxFail(msg) {
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
@@ -4602,6 +4636,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     if (!mx || mx.won) return;
     mx.won = true; mx.holdUntil = Date.now() + 1100;
     if (mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); }
+    if (mx.clock) clearInterval(mx.clock);
     try { DSND.done(); } catch (e) {}
     mxRender();
     send({ type: "race-step", seat: mySeat(), step: "piece-done", round: mx.round });
@@ -4615,7 +4650,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
       if (mx.phase === "go") { mx.hits++; if (mx.hits >= mx.needHits) mxWin(); else mxArmReact(); mxRender(); }
       else { mx.hits = 0; mxFail(mx.phase === "red" ? "빨간불! 처음부터" : "너무 빨라요! 처음부터"); mxArmReact(); }
     } else if (mx.kind === "pick") {
-      var i = key === "ArrowLeft" ? 0 : key === "ArrowUp" || key === "ArrowDown" ? 1 : key === "ArrowRight" ? 2 : (typeof key === "object" ? key.opt : -1);
+      var i = key === "ArrowLeft" ? 0 : key === "ArrowUp" ? 1 : key === "ArrowDown" ? 2 : key === "ArrowRight" ? 3 : (typeof key === "object" ? key.opt : -1);
       if (i < 0) return;
       if (mx.opts[i] === mx.target) { mx.streak++; if (mx.streak >= mx.needStreak) mxWin(); else { mxNewPick(); mxRender(); } }
       else { mx.streak = 0; mxFail("다른 주소예요 · 처음부터"); mxNewPick(); }
@@ -4626,8 +4661,9 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     } else if (mx.kind === "arrows") {
       var k = typeof key === "object" ? key.dir : key;
       if (!MX_ARROW[k]) return;
+      if (Date.now() < mx.showUntil) return; // 외우는 중엔 입력 안 받음
       if (mx.seq[mx.pos] === k) { mx.pos++; if (mx.pos >= mx.seq.length) mxWin(); else mxRender(); }
-      else { mx.pos = 0; mxFail("처음부터!"); }
+      else { mxNewArrows(); mxFail("틀렸어요! 새 순서"); }
     }
   }
   function mxDots(n, of) { var h = ''; for (var i = 0; i < of; i++) h += '<i class="' + (i < n ? 'on' : '') + '"></i>'; return h; }
@@ -4644,15 +4680,18 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
         + '<div class="mx-count">' + mxDots(mx.hits, mx.needHits) + '</div>';
     } else if (mx.kind === "pick") {
       body = '<div class="mx-target mx-addr"><small>송장</small>' + esc(mx.target) + '</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
-        return '<button class="mx-opt mx-addr-opt" data-mx-opt="' + i + '"><b>' + esc(o) + '</b><small>' + ["←", "↑", "→"][i] + '</small></button>';
+        return '<button class="mx-opt mx-addr-opt" data-mx-opt="' + i + '"><b>' + esc(o) + '</b><small>' + ["←", "↑", "↓", "→"][i] + '</small></button>';
       }).join('') + '</div><div class="mx-count">' + mxDots(mx.streak, mx.needStreak) + '</div>';
     } else if (mx.kind === "mash") {
       body = '<button class="mx-mash" data-mx="tap"><span>Space 연타! <small>멈추면 줄어요</small></span><i style="width:' + Math.round(mx.count / mx.goal * 100) + '%"></i></button>';
     } else if (mx.kind === "arrows") {
-      body = '<div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + MX_ARROW[k] + '</span>'; }).join('') + '</div>'
+      var hide = Date.now() >= mx.showUntil;
+      body = '<div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + (i < mx.pos || !hide ? MX_ARROW[k] : '?') + '</span>'; }).join('') + '</div>'
+        + '<div class="mx-hint">' + (hide ? '외운 순서대로!' : '외우세요…') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
     }
-    el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
+    var tbar = mx.won ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + '%"></i></div>';
+    el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + tbar + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
   }
   document.addEventListener("keydown", function (e) {
     if (!mx || MAIN || RAIL) return;

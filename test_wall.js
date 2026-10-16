@@ -101,6 +101,20 @@ function mk(rules) {
     assert(box.st.players["2"].invoices[0].returned, "5번 누르면 반송");
     room.destroy();
   }
+  // 4) 기본(2026-10-16): Ctrl/Shift+호실 = 시작, 5초 뒤 완료 / 팀 키로 남의 켜진 집 누름 = 안내만 / 보조키 없이 5번 = 반송 / 아파트는 엘리베이터 층
+  {
+    const { room, box } = mk({ deliveryMs: 3000, deliveryProgressMs: 400, deliveryElevMoveMs: 0 });
+    room._endSecurePhase();
+    box.st.players["1"].invoices = [{ id: "q1", catIdx: 0, unit: "m101", reward: 2500, deliveredRound: null }, { id: "q2", catIdx: 0, unit: "a201", reward: 2500, deliveredRound: null }];
+    const last = () => box.st.delivery.ev[box.st.delivery.ev.length - 1].k;
+    room.wallPress("1", "a201"); assert.strictEqual(last(), "noelev");
+    room.wallPress("1", "m101"); assert(box.st.delivery.doors.m101);
+    room.wallPress("2", "m101"); assert.strictEqual(last(), "taken"); assert.strictEqual(box.st.delivery.doors.m101.taps, 0, "팀 키로는 못 막음");
+    for (let i = 0; i < 4; i++) room.wallPress(null, "m101");
+    assert.strictEqual(box.st.delivery.doors.m101.taps, 4);
+    room.wallPress(null, "m101"); assert(box.st.players["1"].invoices[0].returned, "5번째에 반송");
+    room.destroy();
+  }
   console.log("test_wall OK");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

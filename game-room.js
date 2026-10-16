@@ -851,7 +851,9 @@ class GameRoom {
     this.touch();
     if (this.rules.deliveryHoldMs > 0) { this._holdDown(seat, unitId); return; }
     if (door) {
+      // 2026-10-16 (사용자 결정): 막기는 Ctrl/Shift 없이 그 호실 버튼 연타만. 팀 키를 누른 채 남의 켜진 버튼을 누르면 안내만.
       if (seat && door.seat === seat) { this._dEv("own", unitId, seat); this.emit(); return; }
+      if (seat) { this._dEv("taken", unitId, seat); this.emit(); return; }
       this._wallTap(unitId);
       this.emit();
       return;
@@ -864,6 +866,9 @@ class GameRoom {
       this.emit();
       return;
     }
+    const u0 = this._unitOf(unitId);
+    if (d.elev && u0.b === "apt" && d.elev.movingUntil > Date.now()) { this._dEv("elevmoving", unitId, seat, { floor: d.elev.floor }); this.emit(); return; }
+    if (d.elev && u0.b === "apt" && d.elev.floor !== u0.floor) { this._dEv("noelev", unitId, seat, { floor: d.elev.floor }); this.emit(); return; }
     const active = Object.values(d.doors).filter((x) => x.seat === seat).length;
     if (active >= Math.max(1, this.rules.deliveryMaxActive || 1)) { this._dEv("busy", unitId, seat); this.emit(); return; }
     d.doors[unitId] = { seat, invId: inv.id, start: Date.now(), taps: 0 };

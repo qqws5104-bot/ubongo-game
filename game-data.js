@@ -197,7 +197,9 @@ const DELIVERY_MS = 90 * 1000;          // 배송 단계 길이 (하프마다)
 const DELIVERY_PROGRESS_MS = 5000;      // (유지 방식이 꺼졌을 때만) 버튼을 켠 뒤 배송 완료까지
 // 2026-10-16 (사용자 제안, 첫 테스트): 팀 보조키 + 호실 버튼을 이 시간 동안 "누르고 있어야" 배송 완료. 중간에 떼면 처음부터.
 //   0이면 위 DELIVERY_PROGRESS_MS 방식(한 번 누르면 켜지고 시간이 지나면 완료, 상대가 Ctrl/Shift 없이 5번 누르면 반송).
-const DELIVERY_HOLD_MS = 2000;
+// 2026-10-16 (사용자 결정): 유지 방식은 끔 -- Ctrl/Shift 누른 채 호실 버튼을 누르면 배송이 시작되고 DELIVERY_PROGRESS_MS 뒤 완료.
+//   막기: 그 사이 같은 호실 버튼을 Ctrl/Shift 없이 DELIVERY_RETURN_TAPS(5)번 연타하면 반송.
+const DELIVERY_HOLD_MS = 0;
 // 엘리베이터(위·아래 줄다리기)는 배송 단계 내내 움직인다. 아파트 호실은 엘리베이터가 그 층에 있을 때만 배송이 시작되고,
 //   누르고 있는 동안 엘리베이터가 떠나면 실패. 맨션(2층)·주택은 엘리베이터와 상관없이 배송.
 const DELIVERY_ELEVATOR = 1;
