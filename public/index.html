@@ -1580,6 +1580,16 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .mx-won b { font-size: 2.2rem; color: #1f8a4c; }
 .mx-won span { font-size: 1.1rem; color: #3a3f55; }
 .mx-won .mx-next { color: #7a5a2c; font-size: 1rem; }
+/* 2026-10-16 반응형 게임 난이도 업 */
+.mx-react.red { background: #C62828; }
+.mx-count { display: flex; justify-content: center; gap: 8px; }
+.mx-count i { width: 14px; height: 14px; border-radius: 50%; background: #d9d4c4; }
+.mx-count i.on { background: #1f9a4c; }
+.mx-addr { width: auto; height: auto; display: inline-flex; flex-direction: column; align-items: center; padding: 10px 28px; font-size: 2.6rem; font-weight: 900; color: #2b1d12; font-variant-numeric: tabular-nums; margin: 0 auto; }
+.mx-addr small { font-size: .9rem; font-weight: 700; color: #7a5a2c; }
+.mx-addr-opt { height: 96px; justify-content: center; }
+.mx-addr-opt b { font-size: 1.8rem; color: #2b1d12; font-variant-numeric: tabular-nums; }
+.mx-mash small { display: block; font-size: .9rem; opacity: .85; }
 
 </style>
 </head><body>
@@ -2857,7 +2867,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
   var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1016-1006"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1016-1014"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -3217,7 +3227,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
           + '<div class="tut-flow sub"><span class="t1">빨간 팀</span><i>vs</i><span class="t2">파란 팀</span><i>=</i><span><b>전반+후반 배송 실적</b></span></div>'; },
       l: function () { return ["택배 쌓기로 택배를 따고, 송장에 적힌 집의 버튼을 눌러 배송해요."]; } },
     { t: "① 택배 쌓기", v: function () {
-        return '<div class="tut-flow"><span class="tut-step">짧은 게임 = 조각 1개<small>불 들어오면 누르기 · 같은 그림 · 연타 · 방향</small></span><i>→</i>'
+        return '<div class="tut-flow"><span class="tut-step">짧은 게임 = 조각 1개<small>초록불 · 송장 주소 · 게이지 · 방향</small></span><i>→</i>'
           + '<span class="tut-step">판에 놓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>완성하면 투입!</small></span></div>'; },
       l: function () { return ["조각 2개 문제는 택배 <b>3개</b>(먼저 끝낸 사람 2개), 조각 3개 이상은 택배 <b>5개</b>(먼저 끝낸 사람 3개).", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
@@ -4511,7 +4521,9 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
   // ---------- 2026-10-16 조각마다 반응형 미니게임 (stage "pieces") ----------
   // 규칙을 읽을 필요 없는 3~5초짜리. 키: Space / ← ↑ → ↓ (레일 앞 물리 버튼), 터치도 됨.
   // 하나 끝내면 "조각 획득" -> 서버 race-step piece-done -> 다음 게임. 다 모으면 서버가 stage를 ubongo로(완성 -> 투입).
-  var MX_NAME = { react: "불 들어오면 누르기", pick: "같은 그림 고르기", mash: "연타!", arrows: "방향 따라 누르기" };
+  // 2026-10-16 (사용자 피드백 "너무 쉽다"): 각 게임에 실패할 수 있는 요소를 넣었다. 후반은 한 단계 더 어렵게(mxHard).
+  var MX_NAME = { react: "초록불에만 누르기", pick: "송장 주소 맞추기", mash: "게이지 채우기!", arrows: "방향 따라 누르기" };
+  function mxHard() { return !!(state && state.half === 2); }
   var MX_ARROW = { ArrowLeft: "←", ArrowUp: "↑", ArrowRight: "→", ArrowDown: "↓" };
   var mx = null;
   function mxLayer() {
@@ -4519,7 +4531,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     if (!el) { el = document.createElement("div"); el.id = "mx-layer"; el.className = "mx-layer"; document.body.appendChild(el); }
     return el;
   }
-  function mxClose() { if (mx && mx.timer) clearTimeout(mx.timer); mx = null; var el = document.getElementById("mx-layer"); if (el) { el.innerHTML = ""; el.classList.remove("on"); } }
+  function mxClose() { if (mx && mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } mx = null; var el = document.getElementById("mx-layer"); if (el) { el.innerHTML = ""; el.classList.remove("on"); } }
   function microSync() {
     var r = state && state.phase === "secure" ? state.race : null, seat = mySeat();
     var want = r && seat && r.pieceGames && r.stage[seat] === "pieces" && r.status !== "reveal";
@@ -4535,28 +4547,50 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     mxStart(r, idx);
   }
   function mxStart(r, idx) {
-    if (mx && mx.timer) clearTimeout(mx.timer);
+    if (mx && mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); }
     var kind = r.pieceGames[idx] || "react";
     mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0 };
-    if (kind === "react") { mx.phase = "wait"; mxArmReact(); }
-    else if (kind === "pick") mxNewPick();
-    else if (kind === "mash") { mx.count = 0; mx.goal = 10; }
-    else if (kind === "arrows") { var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"]; mx.seq = []; for (var k = 0; k < 4; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); mx.pos = 0; }
+    if (kind === "react") { mx.hits = 0; mx.needHits = mxHard() ? 3 : 2; mxArmReact(); }
+    else if (kind === "pick") { mx.streak = 0; mx.needStreak = mxHard() ? 4 : 3; mxNewPick(); }
+    else if (kind === "mash") { mx.count = 0; mx.goal = mxHard() ? 18 : 14; mxMashDecay(); }
+    else if (kind === "arrows") { var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"]; mx.seq = []; for (var k = 0; k < (mxHard() ? 7 : 5); k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); mx.pos = 0; }
     mxLayer().classList.add("on");
     mxRender();
   }
+  // 초록불에만 누르기: 기다리다 빨강(누르면 실패) 또는 초록이 뜬다. 초록은 짧게만 켜진다(놓치면 다시). 성공 needHits번.
   function mxArmReact() {
     if (mx.timer) clearTimeout(mx.timer);
     mx.phase = "wait";
     var my = mx;
-    mx.timer = setTimeout(function () { if (mx === my) { mx.phase = "go"; mxRender(); } }, 700 + Math.floor(Math.random() * 900));
+    mx.timer = setTimeout(function () {
+      if (mx !== my || mx.won) return;
+      if (Math.random() < 0.45) { // 가짜 빨간불
+        mx.phase = "red"; mxRender();
+        mx.timer = setTimeout(function () { if (mx === my && !mx.won) mxArmReact(); mxRender(); }, 650);
+        return;
+      }
+      mx.phase = "go"; mxRender();
+      mx.timer = setTimeout(function () { if (mx === my && !mx.won && mx.phase === "go") { mx.flash = "놓쳤어요!"; mxArmReact(); mxRender(); setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 600); } }, mxHard() ? 450 : 600);
+    }, 500 + Math.floor(Math.random() * 800));
   }
+  // 게이지 채우기: 가만히 있으면 줄어든다
+  function mxMashDecay() {
+    var my = mx;
+    mx.timer = setInterval(function () {
+      if (mx !== my || mx.won) { clearInterval(my.timer); return; }
+      if (mx.count > 0) { mx.count = Math.max(0, mx.count - 1); mxRender(); }
+    }, mxHard() ? 180 : 230);
+  }
+  // 송장 주소 맞추기: 위 송장의 호수와 같은 것을 고른다. 보기는 숫자를 뒤집거나 하나 바꾼 비슷한 호수들. needStreak번 연속.
   function mxNewPick() {
-    var n = CAT_ICONS.length, target = Math.floor(Math.random() * n), others = [];
-    for (var i = 0; i < n; i++) if (i !== target) others.push(i);
-    others.sort(function () { return Math.random() - 0.5; });
-    var opts = [target, others[0], others[1]].sort(function () { return Math.random() - 0.5; });
-    mx.target = target; mx.opts = opts;
+    var r9 = function () { return 1 + Math.floor(Math.random() * 9); };
+    var f = r9(), u = r9();
+    while (u === f) u = r9();
+    var lab = function (a, b) { return a + "0" + b + "호"; };
+    var target = lab(f, u), pool = [lab(u, f), lab(f, u % 9 + 1), lab(f % 9 + 1, u), lab(f, (u + 7) % 9 + 1)];
+    if (mxHard()) pool.push(f + "" + u + "0호", f + "00" + u + "호");
+    pool = pool.filter(function (x, i) { return x !== target && pool.indexOf(x) === i; }).sort(function () { return Math.random() - 0.5; });
+    mx.target = target; mx.opts = [target, pool[0], pool[1]].sort(function () { return Math.random() - 0.5; });
   }
   function mxFail(msg) {
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
@@ -4567,7 +4601,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
   function mxWin() {
     if (!mx || mx.won) return;
     mx.won = true; mx.holdUntil = Date.now() + 1100;
-    if (mx.timer) clearTimeout(mx.timer);
+    if (mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); }
     try { DSND.done(); } catch (e) {}
     mxRender();
     send({ type: "race-step", seat: mySeat(), step: "piece-done", round: mx.round });
@@ -4578,13 +4612,13 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
     if (mx.lockUntil > Date.now()) return;
     if (mx.kind === "react") {
       if (key !== "Space" && key !== "tap") return;
-      if (mx.phase === "go") mxWin();
-      else { mxFail("너무 빨라요!"); mxArmReact(); }
+      if (mx.phase === "go") { mx.hits++; if (mx.hits >= mx.needHits) mxWin(); else mxArmReact(); mxRender(); }
+      else { mx.hits = 0; mxFail(mx.phase === "red" ? "빨간불! 처음부터" : "너무 빨라요! 처음부터"); mxArmReact(); }
     } else if (mx.kind === "pick") {
       var i = key === "ArrowLeft" ? 0 : key === "ArrowUp" || key === "ArrowDown" ? 1 : key === "ArrowRight" ? 2 : (typeof key === "object" ? key.opt : -1);
       if (i < 0) return;
-      if (mx.opts[i] === mx.target) mxWin();
-      else { mxFail("다른 그림이에요"); mxNewPick(); }
+      if (mx.opts[i] === mx.target) { mx.streak++; if (mx.streak >= mx.needStreak) mxWin(); else { mxNewPick(); mxRender(); } }
+      else { mx.streak = 0; mxFail("다른 주소예요 · 처음부터"); mxNewPick(); }
     } else if (mx.kind === "mash") {
       if (key !== "Space" && key !== "tap") return;
       mx.count++;
@@ -4596,6 +4630,7 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
       else { mx.pos = 0; mxFail("처음부터!"); }
     }
   }
+  function mxDots(n, of) { var h = ''; for (var i = 0; i < of; i++) h += '<i class="' + (i < n ? 'on' : '') + '"></i>'; return h; }
   function mxRender() {
     var el = mxLayer();
     if (!mx) { el.innerHTML = ""; return; }
@@ -4605,13 +4640,14 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
       body = '<div class="mx-won"><b>조각 획득!</b><span>내 자리 칸에서 조각 하나를 가져가 판에 놓으세요</span>'
         + (mx.idx + 1 >= mx.need ? '<span class="mx-next">다 모았어요! 완성하면 <b>Space</b> 투입</span>' : '<span class="mx-next">곧 다음 조각 게임</span>') + '</div>';
     } else if (mx.kind === "react") {
-      body = '<button class="mx-react ' + (mx.phase === "go" ? 'go' : 'wait') + '" data-mx="tap">' + (mx.phase === "go" ? '지금! <small>Space</small>' : '기다려…') + '</button>';
+      body = '<button class="mx-react ' + mx.phase + '" data-mx="tap">' + (mx.phase === "go" ? '지금! <small>Space</small>' : (mx.phase === "red" ? '누르지 마!' : '기다려…')) + '</button>'
+        + '<div class="mx-count">' + mxDots(mx.hits, mx.needHits) + '</div>';
     } else if (mx.kind === "pick") {
-      body = '<div class="mx-target">' + CAT_ICONS[mx.target] + '</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
-        return '<button class="mx-opt" data-mx-opt="' + i + '">' + CAT_ICONS[o] + '<small>' + ["←", "↑", "→"][i] + '</small></button>';
-      }).join('') + '</div>';
+      body = '<div class="mx-target mx-addr"><small>송장</small>' + esc(mx.target) + '</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
+        return '<button class="mx-opt mx-addr-opt" data-mx-opt="' + i + '"><b>' + esc(o) + '</b><small>' + ["←", "↑", "→"][i] + '</small></button>';
+      }).join('') + '</div><div class="mx-count">' + mxDots(mx.streak, mx.needStreak) + '</div>';
     } else if (mx.kind === "mash") {
-      body = '<button class="mx-mash" data-mx="tap"><span>Space 연타!</span><i style="width:' + Math.round(mx.count / mx.goal * 100) + '%"></i></button>';
+      body = '<button class="mx-mash" data-mx="tap"><span>Space 연타! <small>멈추면 줄어요</small></span><i style="width:' + Math.round(mx.count / mx.goal * 100) + '%"></i></button>';
     } else if (mx.kind === "arrows") {
       body = '<div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + MX_ARROW[k] + '</span>'; }).join('') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
