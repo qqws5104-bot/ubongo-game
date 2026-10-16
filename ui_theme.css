@@ -589,3 +589,8 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .race-rail:has(> :nth-child(6)) .rp-name { font-size: clamp(0.85rem, 2vh, 1.15rem); }
 .race-rail:has(> :nth-child(6)) .rp-amt { font-size: clamp(0.8rem, 1.8vh, 1.05rem); }
 .race-rail:has(> :nth-child(6)) .rail-pk-btn { padding: 4px 8px; font-size: 0.85rem; }
+/* 2026-10-16 엘리베이터 이동 중 표시 (메인 컴퓨터에서만 조작) */
+.d-elev-mv { display: none; font-size: .8rem; font-weight: 800; color: #fff; background: #E0A100; border-radius: 999px; padding: 2px 8px; }
+.d-elev.moving .d-elev-mv { display: inline-block; }
+.d-elev.moving .d-elev-f { color: #C98A00; }
+.mv-body.rv-dlv { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; }

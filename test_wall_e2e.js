@@ -1,5 +1,5 @@
 const { chromium } = require("playwright");
-// 2026-10-16 벽 배송 e2e: 택배 쌓기 몫(3개 중 2개 / 5개 중 3개, 레일에서 고르기) -> 배송(레일 키보드 Ctrl+호실 2초 유지) -> 오배송.
+// 2026-10-16 벽 배송 e2e: 택배 쌓기 몫(3개 중 2개 / 5개 중 3개, 레일에서 고르기) -> 배송(메인 컴퓨터 키보드 Ctrl+호실 2초 유지) -> 오배송.
 // 서버: SECURE_PHASE_MS 40초, TUTORIAL=0, WALL 기본(regress.sh 마지막 섹션).
 const assert = require("assert");
 const OUT = "/tmp/wall_e2e_";
@@ -38,14 +38,14 @@ const OUT = "/tmp/wall_e2e_";
   await p2.keyboard.press("Space"); await p2.waitForTimeout(800);
   await p1.screenshot({ path: OUT + "r3_p1_slips.png" });
   // wait for delivery phase
-  for (let i = 0; i < 60; i++) { const ph = await rail.evaluate(() => document.querySelector(".rv-dlv") ? "d" : ""); if (ph) break; await rail.waitForTimeout(1000); }
+  for (let i = 0; i < 60; i++) { const ph = await s.evaluate(() => document.querySelector(".rv-dlv") ? "d" : ""); if (ph) break; await rail.waitForTimeout(1000); }
   await rail.waitForTimeout(500);
   await rail.screenshot({ path: OUT + "d_rail.png" }); await p1.screenshot({ path: OUT + "d_p1.png" }); await s.screenshot({ path: OUT + "d_main.png" });
   // pending units of p1 from p1 screen slips -> map to unit ids via rail
   const info = await p1.evaluate(() => [...document.querySelectorAll(".d-slip")].map(e => e.querySelector(".d-slip-b").textContent + "|" + e.querySelector(".d-slip-a").textContent));
   console.log("p1 slips", info);
   // pick a non-apt slip if possible
-  const keyFor = await rail.evaluate((info) => {
+  const keyFor = await s.evaluate((info) => {
     const btns = [...document.querySelectorAll("[data-unit]")];
     for (const sl of info) { const [b, a] = sl.split("|"); if (b === "아파트") continue;
       const lab = a.replace("성수로 ", ""); const btn = btns.find(x => x.querySelector(".du-label").textContent === lab && (b === "맨션" ? x.classList.contains("du-mansion") : x.classList.contains("du-house")));
@@ -55,18 +55,22 @@ const OUT = "/tmp/wall_e2e_";
   assert(keyFor, "p1에게 아파트 아닌 택배가 있어야 테스트 가능 (무작위라 드물게 실패할 수 있음)");
   const codeOf = (k) => ({ ",": "Comma", ".": "Period", "/": "Slash", ";": "Semicolon", "'": "Quote", "[": "BracketLeft", "]": "BracketRight", "\\": "Backslash", "-": "Minus", "=": "Equal", "`": "Backquote", "↵": "Enter" }[k] || ("Key" + k));
   if (keyFor) {
-    await rail.keyboard.down("Control"); await rail.keyboard.down(codeOf(keyFor)); await rail.waitForTimeout(900);
-    await rail.screenshot({ path: OUT + "d_rail_holding.png" }); await p1.screenshot({ path: OUT + "d_p1_holding.png" });
-    await rail.waitForTimeout(1400); await rail.keyboard.up(codeOf(keyFor)); await rail.keyboard.up("Control");
+    await s.keyboard.down("Control"); await s.keyboard.down(codeOf(keyFor)); await s.waitForTimeout(900);
+    await s.screenshot({ path: OUT + "d_main_holding.png" }); await p1.screenshot({ path: OUT + "d_p1_holding.png" });
+    await s.waitForTimeout(1400); await s.keyboard.up(codeOf(keyFor)); await s.keyboard.up("Control");
     await p1.waitForTimeout(300); await p1.screenshot({ path: OUT + "d_p1_done.png" });
     assert((await p1.locator("#dpop").textContent()).includes("배송 완료"), "배송 완료 팝업"); await s.screenshot({ path: OUT + "d_main_done.png" });
   }
   // wrong press by blue: Shift + key of some unit
-  await rail.keyboard.down("Shift"); await rail.keyboard.press("KeyE"); await rail.keyboard.up("Shift"); await rail.waitForTimeout(300);
-  await rail.screenshot({ path: OUT + "d_rail_wrong.png" });
-  const wtxt = await rail.locator("#dpop").textContent();
+  await s.keyboard.down("Shift"); await s.keyboard.press("KeyE"); await s.keyboard.up("Shift"); await s.waitForTimeout(300);
+  await s.screenshot({ path: OUT + "d_main_wrong.png" });
+  const wtxt = await s.locator("#dpop").textContent();
   assert(wtxt.includes("오배송") || wtxt.includes("엘리베이터"), "파란 팀 잘못 누름 안내: " + wtxt);
-  assert.strictEqual(await s.locator(".d-team.big").count(), 2, "메인 모니터 점수판");
+  assert.strictEqual(await rail.locator(".d-team.big").count(), 2, "레일 화면 점수판");
+  // 엘리베이터: 메인 컴퓨터 Shift+↑ -> 2층, 플레이어 화면엔 ▲▼ 버튼 없음
+  await s.keyboard.down("Shift"); await s.keyboard.press("ArrowUp"); await s.keyboard.up("Shift"); await s.waitForTimeout(300);
+  assert((await s.locator(".d-elev-f").first().textContent()).includes("2층"), "엘리베이터 2층");
+  assert.strictEqual(await p1.locator("[data-action=\"wall-elev\"]").count(), 0, "플레이어 화면엔 엘리베이터 버튼 없음");
   console.log("errs", errs);
   assert.deepStrictEqual(errs, []);
   console.log("test_wall_e2e OK");

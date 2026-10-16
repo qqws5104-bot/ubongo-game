@@ -13,7 +13,7 @@ const {
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
-  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_UNLIMITED,
+  WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, RACE_GRANT_PLAN, RACE_UNLIMITED,
 } = require("./game-data");
 
 // 2026-10-13 개선 1단계(P1+P2) 규칙 묶음. 기본값은 game-data.js. GameRoom 생성자의 세 번째 인자로 일부를 덮어쓸 수 있다
@@ -52,6 +52,7 @@ const DEFAULT_RULES = {
   deliveryHoldMs: DELIVERY_HOLD_MS,
   deliveryElevator: !!DELIVERY_ELEVATOR,
   deliveryElevStart: DELIVERY_ELEV_START,
+  deliveryElevMoveMs: DELIVERY_ELEV_MOVE_MS,
   deliveryReturnTaps: DELIVERY_RETURN_TAPS,
   deliveryMaxActive: DELIVERY_MAX_ACTIVE,
   deliveryWrongPenalty: DELIVERY_WRONG_PENALTY,
@@ -796,7 +797,7 @@ class GameRoom {
   _startDelivery() {
     this.state.phase = "delivery";
     this.state.delivery = { endsAt: Date.now() + this.rules.deliveryMs, doors: {}, ev: [], evN: 0,
-      elev: this.rules.deliveryElevator ? { floor: this.rules.deliveryElevStart || 1, top: 7, presses: { "1": { up: 0, down: 0 }, "2": { up: 0, down: 0 } } } : null };
+      elev: this.rules.deliveryElevator ? { floor: this.rules.deliveryElevStart || 1, top: 7, movingUntil: 0, presses: { "1": { up: 0, down: 0 }, "2": { up: 0, down: 0 } } } : null };
     if (this.deliveryTimer) clearInterval(this.deliveryTimer);
     this.deliveryTimer = setInterval(() => this._deliveryTick(), 100);
     this.emit();
@@ -851,6 +852,7 @@ class GameRoom {
       this._dEv("wrong", unitId, seat); this.emit(); return;
     }
     const u = this._unitOf(unitId);
+    if (d.elev && u.b === "apt" && d.elev.movingUntil > Date.now()) { this._dEv("elevmoving", unitId, seat, { floor: d.elev.floor }); this.emit(); return; }
     if (d.elev && u.b === "apt" && d.elev.floor !== u.floor) { this._dEv("noelev", unitId, seat, { floor: d.elev.floor }); this.emit(); return; }
     const active = Object.values(d.doors).filter((x) => x.seat === seat).length;
     if (active >= Math.max(1, this.rules.deliveryMaxActive || 1)) { this._dEv("busy", unitId, seat); this.emit(); return; }
@@ -875,7 +877,9 @@ class GameRoom {
     const e = this.state.delivery.elev;
     this.touch();
     e.presses[seat][dir] += 1;
+    const before = e.floor;
     e.floor = Math.max(1, Math.min(e.top, e.floor + (dir === "up" ? 1 : -1)));
+    if (e.floor !== before) e.movingUntil = Date.now() + (this.rules.deliveryElevMoveMs || 0); // 움직이는 동안 아파트 배송 시작 불가
     // 아파트를 누르고 있던 배송은 엘리베이터가 떠나면 실패
     const d = this.state.delivery;
     Object.keys(d.doors).forEach((id) => {

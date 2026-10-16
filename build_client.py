@@ -864,7 +864,7 @@ APP_JS_TEMPLATE = r"""
   var ws = null;
   function wsUrl() {
     var proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return proto + "//" + window.location.host + "/ws?room=" + encodeURIComponent(ROOM) + (RAIL ? "&role=rail" : "");
+    return proto + "//" + window.location.host + "/ws?room=" + encodeURIComponent(ROOM) + (RAIL ? "&role=rail" : (MAIN ? "&role=main" : ""));
   }
   function connectWS() {
     if (!ROOM) return;
@@ -1069,11 +1069,11 @@ APP_JS_TEMPLATE = r"""
         return '<div class="tut-flow"><span class="tut-step">택배 쌓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>투입!</small></span></div>'; },
       l: function () { return ["먼저 끝낸 사람이 <b>3개 중 2개</b>를 골라요 · 3라운드부터는 <b>5개 중 3개</b>.", "나머지는 늦은 사람 몫. 택배마다 <b>주소</b>가 보여요 · 갈 집을 보고 고르세요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
-        return '<div class="tut-keys big"><span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> + 호실 버튼 <b>' + Math.round(((state && state.wallRule && state.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르기</div>'; },
-      l: function () { return ["송장의 집 버튼을 누르고 있으면 띵동, 배송 완료!", "중간에 떼면 처음부터 · 내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
+        return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> + 호실 키 <b>' + Math.round(((state && state.wallRule && state.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르기</div>'; },
+      l: function () { return ["송장의 집 키를 팀 키와 함께 누르고 있으면 띵동, 배송 완료!", "중간에 떼면 처음부터 · 내 택배가 없는 집을 누르면 <b>오배송 감점</b>."]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
-        return '<div class="tut-keys big"><b>▲</b> / <b>▼</b> 로 엘리베이터 끌기</div>'; },
-      l: function () { return ["아파트 집은 엘리베이터가 <b>그 층</b>에 있어야 배송돼요. 누르는 동안 떠나면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
+        return '<div class="tut-keys big">메인 컴퓨터 · 팀 키 + <b>↑</b> / <b>↓</b> 로 엘리베이터 끌기</div>'; },
+      l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
   ];
   function tutPages(st) { return (st && st.wallRule) ? TUT_PAGES_WALL : TUT_PAGES; }
   function tutPageHtml(st, pg) {
@@ -2180,9 +2180,7 @@ APP_JS_TEMPLATE = r"""
   function elevCtl(st, withButtons) {
     var e = st.delivery.elev;
     if (!e) return '';
-    return '<div class="d-elev"><span class="d-elev-l">엘리베이터</span><b class="d-elev-f">' + e.floor + '층</b>'
-      + (withButtons ? '<button class="btn d-elev-b" data-action="wall-elev" data-dir="up">▲</button><button class="btn d-elev-b" data-action="wall-elev" data-dir="down">▼</button>' : '')
-      + '</div>';
+    return '<div class="d-elev" data-moving="' + (e.movingUntil || 0) + '"><span class="d-elev-l">엘리베이터</span><b class="d-elev-f">' + e.floor + '층</b><span class="d-elev-mv">이동 중</span></div>';
   }
 
   // 플레이어 화면: 내 송장(주소)과 지금 할 일만 크게
@@ -2193,7 +2191,7 @@ APP_JS_TEMPLATE = r"""
       var u = unitById[act.unit];
       now = '<div class="d-now is-on t' + seat + '" data-dstart="' + act.door.start + '" data-dneed="' + dNeedMs(act.door) + '"><b>' + esc(unitAddr(u)) + '</b> 배송 중 · 손 떼지 마세요<i class="d-now-bar"><i></i></i></div>';
     } else if (s.pending.length) {
-      now = '<div class="d-now">' + (rail ? '<b>' + TEAM_KEY[seat] + '</b> + 호실 버튼을 ' : '호실을 ') + '<b>' + Math.round(((st.wallRule && st.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르고 있으면 배송 완료</div>';
+      now = '<div class="d-now">메인 컴퓨터에서 <b>' + TEAM_KEY[seat] + '</b> + 호실 키를 <b>' + Math.round(((st.wallRule && st.wallRule.holdMs) || 2000) / 1000) + '초</b> 누르고 있으면 배송 완료</div>';
     } else now = '<div class="d-now is-clear">내 택배를 모두 처리했어요</div>';
     var slips = s.pending.map(function (v) {
       var u = unitById[v.unit];
@@ -2205,8 +2203,7 @@ APP_JS_TEMPLATE = r"""
       + '<span class="dlv-earn">실적 <b>' + dWon(s.doneSum) + '</b><small>배송 ' + s.done + '건</small></span></div>'
       + now
       + '<div class="d-slips">' + (slips || '') + '</div>'
-      + elevCtl(st, true)
-      + (rail ? '' : renderWalls(st, false))
+      + elevCtl(st, false)
       + '</div>' + cartClose() + '</main>';
     return html;
   }
@@ -2224,16 +2221,15 @@ APP_JS_TEMPLATE = r"""
       + (x.returned || x.wrong ? '<div class="d-team-neg"><span>반송 · 오배송</span><b>' + x.returned + ' · ' + x.wrong + '</b></div>' : '')
       + '</div>' + (act ? '<i class="d-team-bar" data-dstart="' + act.door.start + '" data-dneed="' + dNeedMs(act.door) + '"><i></i></i>' : '') + '</div>';
   }
-  // 레일 화면 = 벽
-  function renderRailDelivery(st, head, halfName) {
-    return '<div class="rv rv-dlv">' + head("배송 · " + halfName)
+  // 2026-10-16 (사용자 결정): 메인 컴퓨터 = 벽 + 입력(Ctrl/Shift + 호실 키 2초, Ctrl/Shift+↑↓ 엘리베이터). 레일 화면 = 두 팀 점수판.
+  function renderMainDelivery(st, head, halfName) {
+    return head("배송 · " + halfName) + '<div class="mv-body rv-dlv">'
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + renderWalls(st, true)
-      + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 · Ctrl+↑↓ 엘리베이터</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 · Shift+↑↓ 엘리베이터</span></div></div>';
+      + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 2초 · Ctrl+↑↓ 엘리베이터</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 2초 · Shift+↑↓ 엘리베이터</span></div></div>';
   }
-  // 메인 모니터 = 점수판
-  function renderMainDelivery(st, head, halfName) {
-    return head("배송 · " + halfName) + '<div class="mv-body"><div class="d-board">'
+  function renderRailDelivery(st, head, halfName) {
+    return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
       + teamCard(st, "1", true)
       + '<div class="d-board-mid">' + dClock(st) + elevCtl(st, false) + '</div>'
       + teamCard(st, "2", true) + '</div></div>';
@@ -2283,6 +2279,7 @@ APP_JS_TEMPLATE = r"""
       if (!mine) return;
       var pre = me ? "" : who + " · ";
       if (e.k === "wrong") { DSND.err(); dPop("bad", pre + "오배송! 내 택배가 없는 집", addr + " · -" + dWon((st.wallRule && st.wallRule.wrongPenalty) || 0), e.seat); }
+      else if (e.k === "elevmoving") { DSND.err(); dPop("warn", pre + "엘리베이터가 움직이는 중", "멈춘 뒤에 아파트 배송을 시작하세요", e.seat); }
       else if (e.k === "noelev") { DSND.err(); dPop("warn", pre + "엘리베이터가 " + (e.floor || "?") + "층에 있어요", addr + "는 엘리베이터가 와야 배송돼요", e.seat); }
       else if (e.k === "elevleft") { DSND.err(); dPop("bad", pre + "엘리베이터가 떠났어요", addr + " 배송 실패 · 다시 누르세요", e.seat); }
       else if (e.k === "released") { DSND.soft(); dPop("warn", pre + "손을 뗐어요", addr + " · 처음부터 다시", e.seat); }
@@ -2299,6 +2296,7 @@ APP_JS_TEMPLATE = r"""
       el.style.setProperty("--p", p.toFixed(3));
       el.classList.toggle("near", p > 0.7);
     });
+    Array.prototype.forEach.call(document.querySelectorAll(".d-elev[data-moving]"), function (el) { el.classList.toggle("moving", parseInt(el.getAttribute("data-moving"), 10) > n); });
     var ends = state.delivery.endsAt, left = ends ? ends - n : 0;
     Array.prototype.forEach.call(document.querySelectorAll(".d-clock[data-ends]"), function (el) { el.textContent = fmtClock(Math.max(0, left)); });
     document.body.classList.toggle("d-warn", left <= 10000 && left > 5000);
@@ -2311,24 +2309,18 @@ APP_JS_TEMPLATE = r"""
 
   // ---- 입력 ----
   function dTeamOf(e) { if (e.ctrlKey && !e.shiftKey) return "1"; if (e.shiftKey && !e.ctrlKey) return "2"; if (e.ctrlKey && e.shiftKey) return "both"; return null; }
-  function dPress(unit, team) {
-    if (RAIL) send({ type: "wall-press", unit: unit, team: team });
-    else send({ type: "wall-press", seat: mySeat(), unit: unit });
-  }
-  function dRelease(unit, team) {
-    if (RAIL) send({ type: "wall-release", unit: unit, team: team });
-    else send({ type: "wall-release", seat: mySeat(), unit: unit });
-  }
+  function dPress(unit, team) { if (MAIN) send({ type: "wall-press", unit: unit, team: team }); }
+  function dRelease(unit, team) { if (MAIN) send({ type: "wall-release", unit: unit, team: team }); }
   function dKeyDown(e) {
     if (!state || state.phase !== "delivery") return false;
     var team = dTeamOf(e);
+    if (!MAIN) return false; // 배송 입력은 메인 컴퓨터에서만
     if (e.code === "ArrowUp" || e.code === "ArrowDown") {
-      if (e.repeat) { e.preventDefault(); return true; }
-      if (RAIL && (team === "1" || team === "2")) { e.preventDefault(); send({ type: "wall-elev", team: team, dir: e.code === "ArrowUp" ? "up" : "down" }); return true; }
-      if (!RAIL && mySeat()) { e.preventDefault(); send({ type: "wall-elev", seat: mySeat(), dir: e.code === "ArrowUp" ? "up" : "down" }); return true; }
-      return false;
+      e.preventDefault();
+      if (e.repeat) return true;
+      if (team === "1" || team === "2") send({ type: "wall-elev", team: team, dir: e.code === "ArrowUp" ? "up" : "down" });
+      return true;
     }
-    if (!RAIL) return false;
     var u = unitByKey[e.code];
     if (!u) return false;
     e.preventDefault();
@@ -2348,10 +2340,10 @@ APP_JS_TEMPLATE = r"""
   window.addEventListener("blur", function () { Object.keys(dLocal.keyHold).forEach(function (c) { dKeyUp({ code: c }); }); if (dLocal.ptrHold) { dRelease(dLocal.ptrHold.unit, dLocal.ptrHold.team); dLocal.ptrHold = null; } });
   document.addEventListener("pointerdown", function (e) {
     var b = e.target.closest && e.target.closest("[data-unit]");
-    if (!b || MAIN || !state || state.phase !== "delivery") return;
+    if (!b || !MAIN || !state || state.phase !== "delivery") return;
     e.preventDefault();
-    var team = RAIL ? dTeamOf(e) : mySeat();
-    if (RAIL && team === "both") return;
+    var team = dTeamOf(e);
+    if (team !== "1" && team !== "2") return;
     dLocal.ptrHold = { unit: b.getAttribute("data-unit"), team: team };
     dPress(dLocal.ptrHold.unit, team);
   });
@@ -2851,7 +2843,7 @@ APP_JS_TEMPLATE = r"""
   });
 
   document.addEventListener("keydown", function (e) {
-    if (MAIN) return;
+    if (MAIN) { dKeyDown(e); return; } // 메인 컴퓨터: 배송 입력만 (2026-10-16)
     if (dKeyDown(e)) return; // 2026-10-16 벽 배송 (레일 화면 Ctrl/Shift + 호실 키, 엘리베이터 ↑↓)
     // 2026-10-15 레일 화면: 자리별 고르기 키 (1번 A S D / 2번 J K L)
     if (RAIL) {

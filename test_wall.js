@@ -37,7 +37,7 @@ function mk(rules) {
   }
   // 2) 유지 방식 배송 + 엘리베이터 + 오배송
   {
-    const { room, box } = mk({ deliveryMs: 4000, deliveryHoldMs: 300 });
+    const { room, box } = mk({ deliveryMs: 4000, deliveryHoldMs: 300, deliveryElevMoveMs: 0 });
     room._endSecurePhase(); assert.strictEqual(box.st.phase, "delivery"); assert.strictEqual(box.st.delivery.elev.floor, 1);
     box.st.players["1"].invoices = [{ id: "x1", catIdx: 0, unit: "a301", reward: 2500, deliveredRound: null }, { id: "x2", catIdx: 1, unit: "h3", reward: 5000, deliveredRound: null }];
     const last = () => box.st.delivery.ev[box.st.delivery.ev.length - 1].k;
@@ -53,6 +53,16 @@ function mk(rules) {
     await sleep(3700); assert.strictEqual(box.st.phase, "halftime");
     const sc = box.st.halfHistory[0].scores["1"];
     assert.strictEqual(sc, 5000 - 1000 - D.DELIVERY_WRONG_PENALTY, "점수 = 배송 - 미배송 감점 - 오배송");
+    room.destroy();
+  }
+  // 2b) 엘리베이터가 움직이는 동안(deliveryElevMoveMs)은 아파트 배송 시작 불가
+  {
+    const { room, box } = mk({ deliveryMs: 3000, deliveryHoldMs: 300, deliveryElevMoveMs: 300 });
+    room._endSecurePhase();
+    box.st.players["1"].invoices = [{ id: "z1", catIdx: 0, unit: "a201", reward: 2500, deliveredRound: null }];
+    room.wallElevator("2", "up"); assert.strictEqual(box.st.delivery.elev.floor, 2);
+    room.wallPress("1", "a201"); assert(!box.st.delivery.doors.a201); assert.strictEqual(box.st.delivery.ev[box.st.delivery.ev.length - 1].k, "elevmoving");
+    await sleep(350); room.wallPress("1", "a201"); assert(box.st.delivery.doors.a201, "멈춘 뒤엔 가능");
     room.destroy();
   }
   // 3) 시간 방식(유지 끔): 켜진 버튼을 보조키 없이 5번 -> 반송
