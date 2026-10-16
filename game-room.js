@@ -491,10 +491,12 @@ class GameRoom {
     if (this.rules.racePieceGames) {
       // 조각마다 반응형 미니게임: stage "pieces", got = 모은 조각 수, need = 조각 수. 게임 순서는 두 사람 같게.
       const r = this.state.race, need = this._piecesOf(r.puzzleId) || 2;
-      const kinds = (RACE_PIECE_GAME_KINDS || ["react"]).slice();
+      const kinds = (this.rules.racePieceKinds || RACE_PIECE_GAME_KINDS || ["react"]).slice();
       r.game = null; r.need = need; r.got = { "1": 0, "2": 0 }; r.pieceGames = [];
+      // 2026-10-16 (사용자 요청): 바코드 스캔(react)은 두 좌석이 같은 시각에 같은 불을 본다 -- 클라이언트가 이 씨앗과 시작 시각(서버 시계)으로 같은 시간표를 만든다.
+      r.seed = Math.floor(Math.random() * 2147483647); r.startedAt = Date.now();
       let last = this.lastPieceGame || null;
-      for (let k = 0; k < need; k++) { const opts = kinds.filter((x) => x !== last); last = opts[Math.floor(Math.random() * opts.length)]; r.pieceGames.push(last); }
+      for (let k = 0; k < need; k++) { let opts = kinds.filter((x) => x !== last); if (!opts.length) opts = kinds; last = opts[Math.floor(Math.random() * opts.length)]; r.pieceGames.push(last); }
       this.lastPieceGame = last;
       r.stage = { "1": "pieces", "2": "pieces" };
     } else if (this.state.race.game) this.state.race.stage = { "1": "sticker", "2": "sticker" }; // 택배 쌓기 전에 첫 미니게임

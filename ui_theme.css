@@ -662,3 +662,111 @@ body.d-crit .dw { outline: 3px solid var(--t1); }
 .mx-stop { font-weight: 800; font-size: .85rem; background: #2b1d12; color: #fff; border-radius: 8px; padding: 6px 8px; }
 .mx-stop.home { background: #1f9a4c; }
 .mx-route .mx-seq span { width: 56px; height: 56px; font-size: 1.9rem; }
+
+/* ---------- 19) 2026-10-16 배송 벽 그림 (사용자 제공 그림: 아파트 1동 7층, 맨션, 주택) ---------- */
+.dw-apt-pic { position: relative; width: 100%; aspect-ratio: 405 / 510; max-width: 100%; background: url("@@TOWN_APT@@") center / 100% 100% no-repeat; border-radius: 8px; overflow: hidden; }
+.dw-slot { position: absolute; display: block; }
+.dw-slot .du { width: 100%; height: 100%; min-height: 0; padding: 0; background: transparent; border-radius: 6px; justify-content: flex-end; align-items: flex-end; }
+.dw-slot .du .du-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.dw-slot .du kbd { margin: 0 3px 3px 0; background: rgba(20, 24, 40, .82); color: #fff; font-size: .72rem; }
+.dw-slot .du:hover { box-shadow: inset 0 0 0 2px rgba(255,255,255,.8); }
+.dw-slot .du-ring { opacity: .55; }
+.dw-slot .du.on-1, .dw-slot .du.on-2 { background: rgba(255,255,255,.08); }
+.dw-fl-hl { position: absolute; left: 1.2%; width: 12.8%; border-radius: 6px; pointer-events: none; }
+.dw-fl-hl.here { box-shadow: 0 0 0 3px #fff, 0 0 14px 4px #ffd23f; }
+.dw-car-img { position: absolute; left: 47%; width: 9.6%; background: rgba(255, 210, 63, .9); border: 2px solid #fff; border-radius: 4px; box-shadow: 0 0 12px #ffd23f; transition: top .45s ease; pointer-events: none; }
+.d-elev.moving ~ * .dw-car-img { filter: brightness(1.2); }
+.dw-mansion.dw-img .dw-man-grid { min-height: 150px; align-content: center; }
+.dw-mansion.dw-img .du { background: rgba(70, 60, 140, .88); }
+.dw-home-pic { background: center top / cover no-repeat; border-radius: 6px; aspect-ratio: 176 / 164; position: relative; justify-content: flex-end; }
+.dw-home-pic.hp1 { background-image: url("@@TOWN_HOUSE1@@"); }
+.dw-home-pic.hp2 { background-image: url("@@TOWN_HOUSE2@@"); }
+.dw-home-pic.hp3 { background-image: url("@@TOWN_HOUSE3@@"); }
+.dw-home-pic.hp4 { background-image: url("@@TOWN_HOUSE4@@"); }
+.dw-home-pic .du { position: absolute; inset: 0; min-height: 0; background: transparent; justify-content: flex-end; padding-bottom: 4px; border-radius: 6px; }
+.dw-home-pic .du .du-label { background: rgba(255,253,246,.95); color: #1e2233; border-radius: 4px; padding: 0 6px; font-size: .8rem; }
+.dw-home-pic .du kbd { background: rgba(20, 24, 40, .82); }
+
+/* ---------- 20) 2026-10-16 메인 배송 화면 가독성 ---------- */
+/* 배경 창고 그림을 어둡게 눌러 벽 패널이 먼저 보이게 */
+.d-main { position: relative; }
+body:has(.d-main) { background-color: #20263a; }
+body:has(.d-main)::before { content: ""; position: fixed; inset: 0; background: rgba(20, 26, 44, .72); pointer-events: none; z-index: 0; }
+body:has(.d-main) .mv { position: relative; z-index: 1; }
+body:has(.d-main) .mv-head h1, body:has(.d-main) .mv-eyebrow { color: #fff; }
+/* 패널: 불투명 + 크게 */
+.d-main .dwalls { grid-template-columns: 1.15fr 1.45fr 1.1fr; gap: 16px; align-items: stretch; }
+.d-main .dw { background: #fffdf6; padding: 12px; display: flex; flex-direction: column; }
+.d-main .dw-name { font-size: 1.35rem; }
+.d-main .dw-name small { font-size: .9rem; }
+/* 아파트 그림을 세로로 꽉: 화면 높이 기준 */
+.d-main .dw-apt-pic { height: min(66vh, 640px); width: auto; aspect-ratio: 405 / 510; margin: 0 auto; }
+/* 문 버튼: 우리 호수 표시를 크게(그림 속 작은 숫자를 덮음), 키는 오른쪽 노란 키캡 */
+.d-main .dw-slot .du { align-items: center; justify-content: center; }
+.d-main .dw-slot .du .du-label { position: relative; width: auto; height: auto; overflow: visible; clip: auto; background: rgba(20, 24, 40, .88); color: #fff;
+  font-size: clamp(.8rem, 1.6vh, 1.05rem); padding: 1px 6px; border-radius: 5px; }
+.d-main .du kbd, .d-main .dw-slot .du kbd { background: #ffd23f; color: #1e2233; font-size: clamp(.8rem, 1.6vh, 1rem); font-weight: 900; padding: 1px 7px; border-radius: 5px; box-shadow: 0 2px 0 #b58f00; }
+.d-main .dw-slot .du kbd { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); margin: 0; }
+/* 맨션: 배경 그림은 더 흐리게, 버튼은 크게 */
+.d-main .dw-mansion.dw-img .dw-man-grid { flex: 1; gap: 10px; padding: 12px; }
+.d-main .dw-mansion .du { min-height: 86px; background: #4b3f8f; }
+.d-main .dw-mansion .du-label { font-size: 1.3rem; }
+/* 주택: 번지판 크게 */
+.d-main .dw-house-grid { flex: 1; align-content: start; gap: 10px; grid-template-columns: repeat(2, 1fr); }
+.d-main .dw-home-pic .du .du-label { font-size: 1.05rem; padding: 2px 8px; }
+/* 위 띠 */
+.d-main .d-team { padding: 10px 18px; }
+.d-main .d-team b { font-size: 1.8rem; }
+.d-main .d-bar-mid .d-clock { font-size: 3rem; }
+.d-main .d-keys span { font-size: .95rem; background: #fffdf6; }
+/* 켜진 문: 더 진하게 */
+.d-main .du.on-1 .du-ring, .d-main .du.on-2 .du-ring { opacity: .8; }
+/* 20-b 보정: 배경 누르기는 .mv 자체에, 머리글 글자색 원래대로, 맨션 그림은 잘리지 않게, 열 비율 */
+body:has(.d-main)::before { content: none; }
+body:has(.d-main) .mv { background: linear-gradient(180deg, #2a3150, #1e2438) !important; }
+body:has(.d-main) .mv-head h1 { color: #fff; }
+body:has(.d-main) .mv-eyebrow { color: #ffd23f; }
+.d-main .dwalls { grid-template-columns: 1.1fr 1.25fr 1.1fr; }
+.d-main .dw-mansion .du { min-height: 0; aspect-ratio: 1 / 1.2; }
+.d-main .dw-mansion .du-label { font-size: 1.15rem; }
+.d-main .dw-house-grid { grid-template-columns: repeat(2, 1fr); }
+.d-main .dw-name { white-space: nowrap; }
+.d-main .d-keys span { box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+/* 20-c: 배경을 확실히 어둡게(창고 그림 제거), 맨션은 그림 대신 깔끔한 외벽 */
+html:has(.d-main), body:has(.d-main) { background: #1e2438 !important; }
+.d-main .dw-mansion.dw-img .dw-man-grid { background: #e9e5f5; border: 3px solid #4b3f8f; border-radius: 10px; align-content: center; }
+/* 20-d: 맨션 버튼을 패널 높이만큼 크게, 머리 칩·시계 칸 대비 */
+.d-main .dw-mansion.dw-img .dw-man-grid { grid-auto-rows: 1fr; align-content: stretch; gap: 12px; padding: 14px; }
+.d-main .dw-mansion .du { aspect-ratio: auto; height: 100%; font-size: 1rem; }
+.d-main .dw-mansion .du-label { font-size: 1.5rem; }
+.d-main .dw-mansion .du kbd { font-size: 1.1rem; }
+body:has(.d-main) .mv-chip { background: #fffdf6 !important; }
+.d-main .d-bar-mid { background: #fffdf6; }
+.d-main .dwalls { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1fr); }
+.d-main .dw-mansion .du-label { font-size: clamp(1rem, 1.4vw, 1.5rem); }
+.d-main .dw-mansion .du { max-height: 220px; }
+/* 20-e: 아파트 열은 그림 비율대로 자동 폭, 문 버튼은 호수 위·키 아래, 맨션 넘침 방지, 주택 칸 높이 */
+.d-main .dwalls { grid-template-columns: auto minmax(0, 1.25fr) minmax(0, 1fr); }
+.d-main .dw-apt-pic { height: 60vh; max-height: 600px; width: auto; aspect-ratio: 405 / 510; }
+.d-main .dw-slot .du { flex-direction: column; gap: 2px; }
+.d-main .dw-slot .du kbd { position: static; transform: none; }
+.d-main .dw-mansion .dw-man-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.d-main .dw-mansion .du { min-width: 0; max-height: 200px; }
+.d-main .dw-home-pic { aspect-ratio: 176 / 132; }
+.d-main .dwalls { grid-template-columns: auto minmax(0, 1.5fr) minmax(0, .85fr); }
+.d-main .dw-mansion .du { max-height: 150px; align-self: center; height: 100%; }
+.d-main .dw-mansion .du-label { font-size: clamp(.95rem, 1.25vw, 1.4rem); white-space: nowrap; letter-spacing: -.02em; }
+.d-main .dw-mansion.dw-img .dw-man-grid { gap: 8px; padding: 12px 10px; }
+/* 21) 2026-10-16 맨션 그림 (사용자 제공 그림 2): 문 위 큰 호수는 그림 그대로, 우리 버튼은 키만 */
+.dw-man-pic { position: relative; width: 100%; aspect-ratio: 740 / 300; background: url("@@TOWN_MANSION@@") center / 100% 100% no-repeat; border-radius: 8px; overflow: hidden; }
+.d-main .dw-mansion .dw-man-pic { margin: auto 0; }
+.dw-mslot .du { flex-direction: column; justify-content: flex-end !important; align-items: center !important; padding-bottom: 4px; }
+.dw-mslot .du kbd { position: static !important; transform: none !important; }
+.d-main .dw-mansion .dw-mslot .du, .dw-mslot .du { background: transparent !important; max-height: none; height: 100%; aspect-ratio: auto; min-height: 0; }
+.dw-mslot .du.on-1, .dw-mslot .du.on-2 { background: rgba(255,255,255,.1) !important; }
+.dw-mslot .du { justify-content: center !important; gap: 2px; }
+.d-main .dwalls { grid-template-columns: auto minmax(0, 1.7fr) minmax(0, .8fr); }
+/* 맨션: 그림 속 호수가 충분히 커서 우리 호수 표는 숨기고 키만 */
+.d-main .dw-mslot .du .du-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); padding: 0; }
+.dw-mslot .du { justify-content: flex-end !important; padding-bottom: 6px; }
+.mx-belt.scanned { box-shadow: inset 0 0 0 6px #1f9a4c; opacity: .85; }

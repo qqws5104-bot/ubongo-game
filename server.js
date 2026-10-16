@@ -34,6 +34,8 @@ function getOrCreateRoom(code) {
     if (process.env.TUTORIAL !== "0") rules = Object.assign({}, rules || {}, { tutorial: true });
     // RACE_GAMES=sticker,tape 처럼 주면 레이스 첫 게임 후보를 그걸로 (테스트/현장 고정용)
     if (process.env.RACE_GAMES) rules = Object.assign({}, rules || {}, { raceGamePool: process.env.RACE_GAMES === "none" ? [] : process.env.RACE_GAMES.split(",").map((x) => x.trim()).filter(Boolean) }); // none = 첫 게임 없음
+    // RACE_PIECE_KINDS=react 처럼 주면 조각 게임 종류를 그걸로 (테스트용)
+    if (process.env.RACE_PIECE_KINDS) rules = Object.assign({}, rules || {}, { racePieceKinds: process.env.RACE_PIECE_KINDS.split(",").map((x) => x.trim()).filter(Boolean) });
     const room = new GameRoom(code, (state) => broadcast(code, state), rules);
     // busy: 레일 화면(/rail)이 열어 준 미니게임을 그 좌석 플레이어가 지금 하고 있는가 (레일 화면에 "플레이 중" 표시 + 중복 지시 방지).
     entry = { room, sockets: new Set(), busy: { "1": false, "2": false } };

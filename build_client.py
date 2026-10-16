@@ -2169,18 +2169,28 @@ APP_JS_TEMPLATE = r"""
   }
   function renderWalls(st, keyHint) {
     var d = st.delivery, ef = d.elev ? d.elev.floor : null;
-    var apt = '<div class="dw dw-apt"><div class="dw-name">아파트 <small>7층 · 엘리베이터</small></div><div class="dw-apt-grid">';
+    // 2026-10-16 (사용자 제공 그림): 아파트는 그림(ui_art/town_apt.jpg, 7층 x 701·702) 위 각 문 자리에 버튼을 겹친다.
+    //   위치는 그림 기준 비율(%) -- 층 가운데 y(그림 510px 기준)와 문 x 범위. 엘리베이터 칸은 승강로 위에서 움직인다.
+    var ROW_Y = { 7: 70, 6: 129, 5: 188, 4: 247, 3: 306, 2: 365, 1: 426 }, IH = 510, IW = 405;
+    var pct = function (v, of) { return (v / of * 100).toFixed(2) + '%'; };
+    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트 <small>7층 · 엘리베이터</small></div><div class="dw-apt-pic">';
     for (var f = 7; f >= 1; f--) {
-      apt += '<span class="dw-fl' + (ef === f ? ' here' : '') + '">' + f + 'F</span>'
-        + unitBtn(st, unitById["a" + f + "01"], keyHint) + unitBtn(st, unitById["a" + f + "02"], keyHint)
-        + '<span class="dw-shaft' + (ef === f ? ' here' : '') + '">' + (ef === f ? '<i class="dw-car"></i>' : '') + '</span>';
+      var top = pct(ROW_Y[f] - 27, IH), hh = pct(54, IH);
+      apt += '<span class="dw-fl-hl' + (ef === f ? ' here' : '') + '" style="top:' + top + ';height:' + hh + '"></span>'
+        + '<span class="dw-slot" style="left:' + pct(104, IW) + ';top:' + top + ';width:' + pct(84, IW) + ';height:' + hh + '">' + unitBtn(st, unitById["a" + f + "01"], keyHint) + '</span>'
+        + '<span class="dw-slot" style="left:' + pct(234, IW) + ';top:' + top + ';width:' + pct(84, IW) + ';height:' + hh + '">' + unitBtn(st, unitById["a" + f + "02"], keyHint) + '</span>';
     }
+    if (ef) apt += '<i class="dw-car-img" style="top:' + pct(ROW_Y[ef] - 26, IH) + ';height:' + pct(52, IH) + '"></i>';
     apt += '</div></div>';
-    var man = '<div class="dw dw-mansion"><div class="dw-name">맨션 <small>2층</small></div><div class="dw-man-grid">';
-    [2, 1].forEach(function (f) { for (var k = 1; k <= 6; k++) man += unitBtn(st, unitById["m" + f + "0" + k], keyHint); });
+    // 2026-10-16 (사용자 제공 그림 2): 맨션 그림(ui_art/town_mansion.jpg, 2층 x 201~206 / 101~106 -- 우리 호실과 같음) 위 문 자리에 버튼.
+    var MW = 740, MH = 300, MX = [117, 227, 332, 437, 535, 620], MY = { 2: 75, 1: 220 }; // 외벽만 잘라 낸 그림(740x300) 기준
+    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션 <small>2층</small></div><div class="dw-man-pic">';
+    [2, 1].forEach(function (f) { for (var k = 1; k <= 6; k++) {
+      man += '<span class="dw-slot dw-mslot" style="left:' + pct(MX[k - 1] - 44, MW) + ';top:' + pct(MY[f] - 58, MH) + ';width:' + pct(88, MW) + ';height:' + pct(116, MH) + '">' + unitBtn(st, unitById["m" + f + "0" + k], keyHint) + '</span>';
+    } });
     man += '</div></div>';
-    var hs = '<div class="dw dw-house"><div class="dw-name">단독주택 <small>성수로</small></div><div class="dw-house-grid">';
-    for (var h = 1; h <= 8; h++) hs += '<div class="dw-home"><i class="dw-roof"></i>' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
+    var hs = '<div class="dw dw-house dw-img"><div class="dw-name">단독주택 <small>성수로</small></div><div class="dw-house-grid">';
+    for (var h = 1; h <= 8; h++) hs += '<div class="dw-home dw-home-pic hp' + (((h - 1) % 4) + 1) + '">' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
     hs += '</div></div>';
     return '<div class="dwalls">' + apt + man + hs + '</div>';
   }
@@ -2231,7 +2241,7 @@ APP_JS_TEMPLATE = r"""
   }
   // 2026-10-16 (사용자 결정): 메인 컴퓨터 = 벽 + 입력(Ctrl/Shift + 호실 키 2초, Ctrl/Shift+↑↓ 엘리베이터). 레일 화면 = 두 팀 점수판.
   function renderMainDelivery(st, head, halfName) {
-    return head("배송 · " + halfName) + '<div class="mv-body rv-dlv">'
+    return head("배송 · " + halfName) + '<div class="mv-body rv-dlv d-main">'
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + renderWalls(st, true)
       + '<div class="d-keys"><span class="t1">빨간 팀 = <b>Ctrl</b> + 호실 키 · Ctrl+↑↓ 엘리베이터</span><span>막기 = 켜진 호실 키를 <b>그냥 5번</b> 연타</span><span class="t2">파란 팀 = <b>Shift</b> + 호실 키 · Shift+↑↓ 엘리베이터</span></div></div>';
@@ -2402,7 +2412,7 @@ APP_JS_TEMPLATE = r"""
     var kind = r.pieceGames[idx] || "react";
     var H = mxHard() ? 1 : 0;
     mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0, tries: (mx && mx.round === r.round && mx.idx === idx ? (mx.tries || 0) + 1 : 0) };
-    if (kind === "react") { mx.hits = 0; mx.needHits = [2, 3][H]; mxArmReact(); }
+    if (kind === "react") { mx.hits = 0; mx.needHits = [2, 3][H]; mx.sched = mxReactSched((r.seed || 1) + idx * 7919, H); mx.t0 = r.startedAt || nowMs(); mx.lastHitSeg = -1; mx.seenSeg = -1; mxArmReact(); }
     else if (kind === "pick") { mx.streak = 0; mx.needStreak = [3, 4][H]; mxNewPick(); }
     else if (kind === "mash") { mx.count = 0; mx.goal = [14, 17][H]; mxMashDecay(); }
     else if (kind === "arrows") { mxNewArrows(); }
@@ -2433,20 +2443,44 @@ APP_JS_TEMPLATE = r"""
     setTimeout(function () { if (mx === my) mxRender(); }, [1300, 1000][H] + 20);
   }
   // 초록불에만 누르기: 기다리다 빨강(누르면 실패) 또는 초록이 뜬다. 초록은 짧게만 켜진다(놓치면 다시). 성공 needHits번.
+  // 2026-10-16 (사용자 요청): 두 좌석이 같은 시각에 같은 불 -- 서버가 준 씨앗(race.seed)과 시작 시각(race.startedAt, 서버 시계)으로
+  //   같은 시간표(대기 / 반품 빨간불 / 정상 초록불)를 만들고, 서버 시계(nowMs) 기준으로 지금 어느 칸인지 본다.
+  function mxRng(seed) { var a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function mxReactSched(seed, H) {
+    var rng = mxRng(seed), segs = [], t = 0;
+    while (t < 240000) {
+      var w = 500 + Math.floor(rng() * 800);
+      segs.push({ s: t, e: t + w, ph: "wait" }); t += w;
+      if (rng() < 0.35) { segs.push({ s: t, e: t + 650, ph: "red" }); t += 650; }
+      else { var g = H ? 380 : 480; segs.push({ s: t, e: t + g, ph: "go" }); t += g; }
+    }
+    return segs;
+  }
+  function mxReactSeg() {
+    var el = nowMs() - mx.t0, sc = mx.sched;
+    if (el < 0) return { i: -1, ph: "wait" };
+    var lo = 0, hi = sc.length - 1;
+    while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (sc[mid].s <= el) lo = mid; else hi = mid - 1; }
+    return { i: lo, ph: sc[lo].ph };
+  }
   function mxArmReact() {
-    if (mx.timer) clearTimeout(mx.timer);
-    mx.phase = "wait";
+    if (mx.timer) clearInterval(mx.timer);
     var my = mx;
-    mx.timer = setTimeout(function () {
-      if (mx !== my || mx.won) return;
-      if (Math.random() < 0.35) { // 가짜 빨간불
-        mx.phase = "red"; mxRender();
-        mx.timer = setTimeout(function () { if (mx === my && !mx.won) mxArmReact(); mxRender(); }, 650);
-        return;
+    var tick = function () {
+      if (mx !== my || mx.won) { clearInterval(my.timer); return; }
+      var seg = mxReactSeg();
+      if (seg.i !== mx.seenSeg) {
+        // 방금 끝난 칸이 초록불이었는데 못 눌렀으면 "지나갔어요"
+        var prev = mx.seenSeg >= 0 ? mx.sched[mx.seenSeg] : null;
+        if (prev && prev.ph === "go" && mx.lastHitSeg !== mx.seenSeg && mx.lockUntil < Date.now()) {
+          mx.flash = "택배가 지나갔어요!";
+          setTimeout(function () { if (mx === my && mx.flash === "택배가 지나갔어요!") { mx.flash = null; mxRender(); } }, 600);
+        }
+        mx.seenSeg = seg.i; mx.phase = seg.ph; mxRender();
       }
-      mx.phase = "go"; mxRender();
-      mx.timer = setTimeout(function () { if (mx === my && !mx.won && mx.phase === "go") { mx.flash = "택배가 지나갔어요!"; mxArmReact(); mxRender(); setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 600); } }, mxHard() ? 380 : 480);
-    }, 500 + Math.floor(Math.random() * 800));
+    };
+    mx.phase = "wait"; mx.seenSeg = -2; tick();
+    mx.timer = setInterval(tick, 25);
   }
   // 게이지 채우기: 가만히 있으면 줄어든다
   function mxMashDecay() {
@@ -2488,8 +2522,9 @@ APP_JS_TEMPLATE = r"""
     if (mx.lockUntil > Date.now()) return;
     if (mx.kind === "react") {
       if (key !== "Space" && key !== "tap") return;
-      if (mx.phase === "go") { mx.hits++; if (mx.hits >= mx.needHits) mxWin(); else mxArmReact(); mxRender(); }
-      else { mx.hits = 0; mxFail(mx.phase === "red" ? "반품 박스를 스캔했어요! 처음부터" : "아직 택배가 안 왔어요! 처음부터"); mxArmReact(); }
+      var sg = mxReactSeg();
+      if (sg.ph === "go") { if (sg.i === mx.lastHitSeg) return; mx.lastHitSeg = sg.i; mx.hits++; if (mx.hits >= mx.needHits) mxWin(); else { mx.phase = "scanned"; mxRender(); } }
+      else { mx.hits = 0; mxFail(sg.ph === "red" ? "반품 박스를 스캔했어요! 처음부터" : "아직 택배가 안 왔어요! 처음부터"); }
     } else if (mx.kind === "pick") {
       var i = key === "ArrowLeft" ? 0 : key === "ArrowUp" ? 1 : key === "ArrowDown" ? 2 : key === "ArrowRight" ? 3 : (typeof key === "object" ? key.opt : -1);
       if (i < 0) return;
@@ -2517,7 +2552,7 @@ APP_JS_TEMPLATE = r"""
       body = '<div class="mx-won"><b>조각 획득!</b><span>내 자리 칸에서 조각 하나를 가져가 판에 놓으세요</span>'
         + (mx.idx + 1 >= mx.need ? '<span class="mx-next">다 모았어요! 완성하면 <b>Space</b> 투입</span>' : '<span class="mx-next">곧 다음 조각 게임</span>') + '</div>';
     } else if (mx.kind === "react") {
-      var inner = mx.phase === "go" ? mxBoxSvg('<g transform="translate(30 52)"><rect width="60" height="22" fill="#fff"/>' + [3, 7, 9, 14, 17, 22, 25, 30, 34, 37, 42, 46, 49, 54].map(function (x, i) { return '<rect x="' + x + '" y="3" width="' + (i % 3 ? 2 : 3) + '" height="16" fill="#111"/>'; }).join('') + '</g>') + '<b>스캔! <small>Space</small></b>'
+      var inner = mx.phase === "scanned" ? mxBoxSvg() + '<b>삑! 스캔됨</b>' : mx.phase === "go" ? mxBoxSvg('<g transform="translate(30 52)"><rect width="60" height="22" fill="#fff"/>' + [3, 7, 9, 14, 17, 22, 25, 30, 34, 37, 42, 46, 49, 54].map(function (x, i) { return '<rect x="' + x + '" y="3" width="' + (i % 3 ? 2 : 3) + '" height="16" fill="#111"/>'; }).join('') + '</g>') + '<b>스캔! <small>Space</small></b>'
         : mx.phase === "red" ? mxBoxSvg('<g transform="translate(34 50) rotate(-8)"><rect width="54" height="24" rx="3" fill="none" stroke="#C62828" stroke-width="4"/><text x="27" y="18" text-anchor="middle" font-size="15" font-weight="900" fill="#C62828">반품</text></g>') + '<b>스캔 금지!</b>'
         : '<span class="mx-belt-empty">택배가 오는 중…</span>';
       body = '<button class="mx-react mx-belt ' + mx.phase + '" data-mx="tap">' + inner + '</button>'
@@ -3217,6 +3252,9 @@ with open(os.path.join(_here, "ui_art", "warehouse.jpg"), "rb") as _f:
     UI_THEME_CSS = UI_THEME_CSS.replace("@@WAREHOUSE_BG@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
 with open(os.path.join(_here, "ui_art", "elevator.jpg"), "rb") as _f:   # 2026-10-14 엘리베이터 단계 일러스트
     UI_THEME_CSS = UI_THEME_CSS.replace("@@ELEVATOR_BG@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
+for _n in ["apt", "mansion", "house1", "house2", "house3", "house4"]:   # 2026-10-16 배송 벽 그림 (사용자 제공 그림에서 잘라 냄)
+    with open(os.path.join(_here, "ui_art", "town_" + _n + ".jpg"), "rb") as _f:
+        UI_THEME_CSS = UI_THEME_CSS.replace("@@TOWN_" + _n.upper() + "@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
 with open(os.path.join(_here, "ui_art", "building.jpg"), "rb") as _f:   # 2026-10-14 엘리베이터 이동 표시(건물 단면도)
     UI_THEME_CSS = UI_THEME_CSS.replace("@@BUILDING_BG@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
 assert "@@" not in UI_THEME_CSS and "</style" not in UI_THEME_CSS
