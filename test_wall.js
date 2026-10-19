@@ -6,7 +6,7 @@ const assert = require("assert");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function mk(rules) {
   const box = { st: null };
-  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" }, contestRate: 0 }, rules));
+  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" }, contestRate: 0, feverMs: 0 }, rules));
   room.pickCourier("cookbang", "c1"); room.pickCourier("cheonil", "c2"); room.setReady("1"); room.setReady("2");
   return { room, box };
 }
@@ -189,6 +189,22 @@ function mk(rules) {
     room._planNewRound(9, { parcels: 3, first: 2 }, box.st.race.puzzleId);
     assert(box.st.race.pair.some((p) => p.unit === "a301"), "들고 있는 집이 주소로 나옴");
     assert.strictEqual(new Set(box.st.race.pair.map((p) => p.unit)).size, 3, "한 라운드 안에선 안 겹침");
+    room.destroy();
+  }
+  // 9) 피버: 마지막 feverMs 동안 배송 금액 x2, 연속 배송 수
+  {
+    const { room, box } = mk({ deliveryMs: 1500, deliveryProgressMs: 100, deliveryElevMoveMs: 0, feverMs: 1000, feverMult: 2 });
+    room._endSecurePhase();
+    box.st.players["1"].invoices = [{ id: "a", catIdx: 0, unit: "h1", reward: 1000, deliveredRound: null }, { id: "b", catIdx: 0, unit: "h2", reward: 1000, deliveredRound: null }];
+    room.wallPress("1", "h1"); await sleep(200);
+    let ev = box.st.delivery.ev.filter((e) => e.k === "done").pop();
+    assert.strictEqual(ev.fever, false); assert.strictEqual(ev.reward, 1000); assert.strictEqual(ev.streak, 1);
+    await sleep(300); room.wallPress("1", "h2"); await sleep(350);
+    ev = box.st.delivery.ev.filter((e) => e.k === "done").pop();
+    assert.strictEqual(ev.fever, true); assert.strictEqual(ev.reward, 2000, "피버 2배"); assert.strictEqual(ev.streak, 2);
+    room.wallPress("1", "m101"); assert.strictEqual(box.st.players["1"].streak, 0, "오배송이면 연속 끊김");
+    await sleep(1200);
+    assert.strictEqual(box.st.halfHistory[0].scores["1"], 3000 - 500);
     room.destroy();
   }
   console.log("test_wall OK");

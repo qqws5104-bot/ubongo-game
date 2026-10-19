@@ -1085,7 +1085,7 @@ APP_JS_TEMPLATE = r"""
       l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송 + <b>막은 팀 보너스</b> · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!"]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · 팀 키 + <b>↑</b> / <b>↓</b> 로 엘리베이터 끌기</div>'; },
-      l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · 마감 10초 전에 신호가 울려요."]; } },
+      l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · <b>마지막 15초는 FEVER</b> -- 배송 금액 2배!"]; } },
   ];
   function tutPages(st) { return (st && st.wallRule) ? TUT_PAGES_WALL : TUT_PAGES; }
   function tutPageHtml(st, pg) {
@@ -2270,7 +2270,7 @@ APP_JS_TEMPLATE = r"""
     }).join('');
     var html = '<main class="stage stage--dlv">' + cartOpen('cart--dlv') + '<div class="dlv t' + seat + '">'
       + '<div class="dlv-top"><span class="dlv-team t' + seat + '">' + TEAM[seat] + '</span>' + dClock(st)
-      + '<span class="dlv-earn">실적 <b>' + dWon(s.live) + '</b><small>배송 ' + s.done + '건' + (s.blocks ? ' · 막기 ' + s.blocks : '') + '</small></span></div>'
+      + '<span class="dlv-earn">실적 ' + dCount("p" + seat, s.live) + '<small>배송 ' + s.done + '건' + (s.blocks ? ' · 막기 ' + s.blocks : '') + '</small></span></div>'
       + dTug(st)
       + comboChips(s)
       + now
@@ -2290,8 +2290,8 @@ APP_JS_TEMPLATE = r"""
   function teamCard(st, s, big) {
     var x = dStats(st, s), act = dActive(st, s);
     var combN = (x.kindsAmt > 0 && x.kinds >= x.kindsNeed ? 1 : 0) + (x.bldAmt > 0 && x.blds >= 3 ? 1 : 0);
-    if (!big) return '<div class="d-team t' + s + '"><span>' + TEAM[s] + '</span><b>' + dWon(x.live) + '</b><small>' + x.done + '건' + (combN ? ' · 콤보 ' + combN : '') + '</small></div>';
-    return '<div class="d-team big t' + s + '"><div class="d-team-h">' + TEAM[s] + ' · 배송 실적</div><div class="d-team-v">' + dWon(x.live) + '</div>'
+    if (!big) return '<div class="d-team t' + s + '"><span>' + TEAM[s] + '</span>' + dCount("s" + s, x.live) + '<small>' + x.done + '건' + (combN ? ' · 콤보 ' + combN : '') + '</small></div>';
+    return '<div class="d-team big t' + s + '"><div class="d-team-h">' + TEAM[s] + ' · 배송 실적</div><div class="d-team-v">' + dCount("b" + s, x.live) + '</div>'
       + '<div class="d-team-rows">'
       + '<div><span>획득</span><b>' + x.got + '개 · ' + dWon(x.gotSum) + '</b></div>'
       + '<div><span>배송 완료</span><b>' + x.done + '개 · ' + dWon(x.doneSum) + '</b></div>'
@@ -2335,12 +2335,15 @@ APP_JS_TEMPLATE = r"""
     soft: function () { dTone(330, 0, 0.18, "triangle", 0.12); },
     beep: function () { dTone(880, 0, 0.14, "square", 0.08); },
     step: function (n) { dTone(392 + n * 45, 0, 0.09, "triangle", 0.14); },
+    coin: function () { dTone(988, 0.05, 0.08, "square", 0.1); dTone(1319, 0.13, 0.35, "square", 0.1); },
+    pulse: function (hi) { dTone(hi ? 110 : 82, 0, 0.16, "sawtooth", 0.13); },
+    fever: function () { [523, 659, 784, 1046, 784, 1046, 1318].forEach(function (f, i) { dTone(f, i * 0.08, 0.12, "square", 0.12); }); },
     lead: function () { dTone(523, 0, 0.12, "square", 0.12); dTone(659, 0.12, 0.12, "square", 0.12); dTone(784, 0.24, 0.12, "square", 0.12); dTone(1046, 0.36, 0.35, "square", 0.14); },
     open: function () { dTone(784, 0, 0.12, "sine", 0.25); dTone(988, 0.08, 0.2, "sine", 0.25); },
   };
 
   // ---- 이벤트 → 소리·팝업 (진행 중 표시와 겹치지 않게 결과만 팝업) ----
-  var dLocal = { lastEv: -1, keyHold: {}, ptrHold: null, beeped: {} };
+  var dLocal = { lastEv: -1, keyHold: {}, ptrHold: null, beeped: {}, shown: {} };
   function dPop(kind, title, sub, team) {
     var el = document.getElementById("dpop");
     if (!el) { el = document.createElement("div"); el.id = "dpop"; document.body.appendChild(el); }
@@ -2350,7 +2353,7 @@ APP_JS_TEMPLATE = r"""
     clearTimeout(dLocal.popT); dLocal.popT = setTimeout(function () { el.classList.remove("show"); }, kind === "ok" ? 2200 : 1600);
   }
   function dEvents(st) {
-    if (!st || st.phase !== "delivery" || !st.delivery) { dLocal.lastEv = -1; dLocal.beeped = {}; return; }
+    if (!st || st.phase !== "delivery" || !st.delivery) { dLocal.lastEv = -1; dLocal.beeped = {}; dLocal.shown = {}; return; }
     var evs = st.delivery.ev || [];
     if (dLocal.lastEv < 0) { dLocal.lastEv = evs.length ? evs[evs.length - 1].n : 0; return; }
     var me = (RAIL || MAIN) ? null : mySeat();
@@ -2361,20 +2364,25 @@ APP_JS_TEMPLATE = r"""
       if (e.k === "start") { if (mine || !me) DSND.start(); return; }
       if (e.k === "step") { if (mine) DSND.step(e.steps || 0); return; }
       if (e.k === "done") {
-        DSND.done();
+        DSND.done(); DSND.coin();
+        dJuice(e);
+        var stk = e.streak >= 2 ? " · " + e.streak + "연속!" : "", fv = e.fever ? "FEVER " : "";
+        if (e.streak >= 3) dSay(e.streak + "연속!");
+        if (e.snatched) dSay("선점!");
         if (mine) {
           if (e.combos && e.combos.length) {
             var cTitle = e.combos.map(function (c) { return c.k === "bld" ? "모든 건물 배송" : "모든 종류 배송"; }).join(" + ");
             var cAmt = e.combos.reduce(function (a, c) { return a + c.amount; }, 0);
             setTimeout(function () { DSND.done(); dPop("ok combo", "콤보! " + cTitle + " +" + dWon(cAmt), (me ? "" : who + " · ") + "배송 +" + dWon(e.reward || 0) + " · " + addr, e.seat); }, 50);
           } else if (e.snatched) dPop("ok vs", "선점! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 상대 택배 무효 (−" + dWon(e.snatched) + ")", e.seat);
-          else dPop("ok", "배송 완료! +" + dWon(e.reward || 0), (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat);
+          else dPop("ok" + (e.fever ? " fever" : ""), fv + "배송 완료! +" + dWon(e.reward || 0) + stk, (me ? "" : who + " · ") + addr + " · 누적 배송 " + (e.count || 0) + "건", e.seat);
         } else if (e.snatched) { DSND.err(); dPop("bad", "선점당했어요!", addr + " · 상대가 먼저 배송 -- 이 택배는 무효", me); }
         return;
       }
       if (e.k === "tap") { DSND.soft(); if (!me) dPop("warn", TEAM[e.seat] + " 배송 막는 중 " + (e.taps || 0) + "/" + ((st.wallRule && st.wallRule.returnTaps) || 5), addr, e.seat); return; }
       if (e.k === "returned") {
         var gain = e.gain ? " · " + TEAM[e.blocker] + " +" + dWon(e.gain) : "";
+        dSay("막았다!"); dShake();
         if (me && e.blocker === me) { DSND.done(); dPop("ok vs", "막기 성공! +" + dWon(e.gain || 0), addr + " · 상대 택배 반송", me); }
         else { DSND.err(); dPop("bad", (me && e.seat === me ? "상대가 막았어요! 반송" : who + " 배송 막힘! 반송"), addr + gain + " · 다시 보낼 수 있어요", e.seat); }
         return;
@@ -2392,16 +2400,40 @@ APP_JS_TEMPLATE = r"""
       else if (e.k === "taken") { DSND.soft(); dPop("warn", pre + "상대 팀이 배송 중인 집", dHeld(st, e.seat, e.unit) ? "내 택배도 있는 집! 그냥 5번 연타로 막고 내가 먼저 보내세요" : "막으려면 Ctrl/Shift 없이 그 키를 5번 연타", e.seat); }
     });
   }
+  // ---- 2026-10-16 아케이드 연출: 아나운서 / 흔들림 / 떠오르는 점수 / 숫자 올라가기 / 피버 ----
+  // 음성은 메인 컴퓨터에서만 (화면 여러 대가 같이 말하지 않게). 한국어 음성이 없는 기기면 조용히 넘어간다.
+  function dSay(t) {
+    if (!MAIN || !window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); var u = new SpeechSynthesisUtterance(t); u.lang = "ko-KR"; u.rate = 1.2; u.pitch = 1.15; u.volume = 1; speechSynthesis.speak(u); } catch (e) {}
+  }
+  function dShake() { if (!MAIN && !RAIL) return; document.body.classList.remove("d-shake"); void document.body.offsetWidth; document.body.classList.add("d-shake"); clearTimeout(dLocal.shT); dLocal.shT = setTimeout(function () { document.body.classList.remove("d-shake"); }, 450); }
+  function dJuice(e) {
+    if (!MAIN && !RAIL) return;
+    if (e.fever || e.snatched || e.streak >= 3) dShake();
+    var el = document.querySelector('[data-unit="' + e.unit + '"]') || document.querySelector('.d-team.t' + e.seat);
+    if (!el) return;
+    var r = el.getBoundingClientRect(), f = document.createElement("div");
+    f.className = "d-float t" + e.seat + (e.fever ? " fever" : "");
+    f.innerHTML = '+' + dWon(e.reward || 0) + (e.streak >= 2 ? '<small>' + e.streak + '연속</small>' : '');
+    f.style.left = (r.left + r.width / 2) + "px"; f.style.top = (r.top + r.height / 2) + "px";
+    document.body.appendChild(f);
+    setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, 1400);
+  }
+  // 점수 숫자: 렌더 때는 직전에 보이던 값, dTick에서 목표값까지 촤라락
+  function dCount(key, val) {
+    var shown = dLocal.shown[key]; if (shown == null) shown = dLocal.shown[key] = val;
+    return '<b class="d-cnt" data-ck="' + key + '" data-cv="' + val + '">' + dWon(shown) + '</b>';
+  }
   // 2026-10-16 역전 알림: 실적 1등이 바뀌면 (동점은 무시)
   function dLeadCheck(st) {
     if (!st || st.phase !== "delivery" || !st.delivery) { dLocal.leader = null; return; }
     var a = dStats(st, "1").live, b = dStats(st, "2").live, ld = a === b ? null : (a > b ? "1" : "2");
-    if (ld && dLocal.leader && ld !== dLocal.leader) { setTimeout(function () { DSND.lead(); dPop("lead", "역전! " + TEAM[ld], "+" + dWon(Math.abs(a - b)) + " 앞서요", ld); }, 900); }
+    if (ld && dLocal.leader && ld !== dLocal.leader) { setTimeout(function () { DSND.lead(); dSay("역전! " + TEAM[ld]); dShake(); dPop("lead", "역전! " + TEAM[ld], "+" + dWon(Math.abs(a - b)) + " 앞서요", ld); }, 900); }
     if (ld) dLocal.leader = ld;
   }
   // 진행 링·시계·마감 경고 (render 사이에도 계속)
   function dTick() {
-    if (!state || state.phase !== "delivery" || !state.delivery) { document.body.classList.remove("d-warn", "d-crit"); return; }
+    if (!state || state.phase !== "delivery" || !state.delivery) { document.body.classList.remove("d-warn", "d-crit", "d-fever"); var fb0 = document.getElementById("dfever"); if (fb0) fb0.parentNode.removeChild(fb0); return; }
     var n = nowMs();
     Array.prototype.forEach.call(document.querySelectorAll("[data-dstart]"), function (el) {
       var p = Math.max(0, Math.min(1, (n - parseInt(el.getAttribute("data-dstart"), 10)) / parseInt(el.getAttribute("data-dneed"), 10)));
@@ -2415,7 +2447,24 @@ APP_JS_TEMPLATE = r"""
       if (open && el.hasAttribute("data-unit") && !dLocal.beeped["bell" + at]) { dLocal.beeped["bell" + at] = 1; DSND.open(); }
     });
     Array.prototype.forEach.call(document.querySelectorAll(".d-elev[data-moving]"), function (el) { el.classList.toggle("moving", parseInt(el.getAttribute("data-moving"), 10) > n); });
+    Array.prototype.forEach.call(document.querySelectorAll(".d-cnt[data-ck]"), function (el) {
+      var k = el.getAttribute("data-ck"), tv = parseInt(el.getAttribute("data-cv"), 10), cur = dLocal.shown[k];
+      if (cur == null || cur === tv) return;
+      var diff = tv - cur, step = Math.sign(diff) * Math.max(50, Math.round(Math.abs(diff) * 0.12 / 50) * 50);
+      cur = Math.abs(step) >= Math.abs(diff) ? tv : cur + step;
+      dLocal.shown[k] = cur; el.textContent = dWon(cur); el.classList.toggle("up", cur !== tv);
+    });
     var ends = state.delivery.endsAt, left = ends ? ends - n : 0;
+    var fms = (state.wallRule && state.wallRule.feverMs) || 0, inFever = fms > 0 && left > 0 && left <= fms;
+    document.body.classList.toggle("d-fever", inFever);
+    var fb = document.getElementById("dfever");
+    if (inFever) {
+      if (!fb) { fb = document.createElement("div"); fb.id = "dfever"; document.body.appendChild(fb); }
+      fb.innerHTML = '<b>FEVER</b><span>배송 금액 x' + ((state.wallRule && state.wallRule.feverMult) || 2) + '</span>';
+      if (!dLocal.beeped.fever) { dLocal.beeped.fever = 1; DSND.fever(); dSay("피버 타임! 점수 두 배!"); dShake(); }
+      var hb = Math.floor(left / 500);
+      if (!dLocal.beeped["fp" + hb] && (MAIN || RAIL)) { dLocal.beeped["fp" + hb] = 1; DSND.pulse(hb % 2 === 0); }
+    } else if (fb) fb.parentNode.removeChild(fb);
     Array.prototype.forEach.call(document.querySelectorAll(".d-clock[data-ends]"), function (el) { el.textContent = fmtClock(Math.max(0, left)); });
     document.body.classList.toggle("d-warn", left <= 10000 && left > 5000);
     document.body.classList.toggle("d-crit", left <= 5000 && left > 0);

@@ -1430,3 +1430,11 @@ node test_minigames_live.js
 - 줄다리기 막대(`dTug`): 메인(벽 위), 레일 점수판 가운데, 플레이어 화면. 기준 = 실적(`dStats().live` = 배송 + 콤보 + 막기).
 - 역전 알림(`dLeadCheck`): 1등이 바뀌면 "역전! ○○ 팀" 팝업 + 팡파르.
 - 2026-10-16 테이프 붙이기(mash) 완화: 목표 9/10번(전반/후반), 게이지 줄어드는 간격 550/480ms, 제한 시간 없음(`MX_LIMIT.mash = [0,0]` -- 0이면 타이머 막대와 시간 초과 재시작을 건너뜀).
+
+### 18.30 아케이드 연출 (2026-10-16)
+- 피버: 배송 단계 마지막 `FEVER_MS`(15초) 동안 완료한 배송은 금액 x`FEVER_MULT`(2). 서버가 송장 `reward`를 올리고 `inv.fever = true` (점수 계산식은 그대로). done 이벤트 `fever`. 환경변수 `FEVER=0` 이면 끔.
+  - 화면: 위쪽 FEVER 배너, 테두리 번쩍임, 0.5초마다 베이스 펄스(메인/레일), 시작 팡파르 + 음성.
+- 연속 배송 `players[s].streak` (점수 없음, 연출용): 완료마다 +1, wrong/elevleft/missed/returned이면 0. done 이벤트 `streak`.
+- 연출: 배송 완료 시 문 위로 "+금액" 떠오름(`dJuice`), 동전 소리, 피버·선점·3연속·막기·역전 때 화면 흔들림(`dShake`). 점수 숫자는 촤라락 올라감(`dCount` + dTick).
+- 아나운서 음성(`dSay`, speechSynthesis ko-KR): 메인 컴퓨터에서만 -- 피버, 역전, 선점, 막았다, N연속. 한국어 음성이 없는 PC면 소리 없이 넘어감.
+- 확인용: `FEVERSHOT=1` 로 test_wall_e2e를 돌리면 피버 화면 스크린샷(/tmp/wall_e2e_d_main_fever.png).

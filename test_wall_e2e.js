@@ -93,6 +93,13 @@ const OUT = "/tmp/wall_e2e_";
   assert((await s.locator(".d-elev-f").first().textContent()).includes("2층"), "엘리베이터 2층");
   assert.strictEqual(await p1.locator("[data-action=\"wall-elev\"]").count(), 0, "플레이어 화면엔 엘리베이터 버튼 없음");
   console.log("errs", errs);
+  if (process.env.FEVERSHOT) {
+    await s.waitForSelector("body.d-fever", { timeout: 120000 });
+    await s.waitForTimeout(400); await s.screenshot({ path: OUT + "d_main_fever.png" });
+    // 피버 중 배송 하나 (주택/맨션이면) -- 떠오르는 점수 확인
+    const k2 = await s.evaluate(() => { const st = window.__st || null; return null; });
+    void k2;
+  }
   assert.deepStrictEqual(errs, []);
   console.log("test_wall_e2e OK");
   await b.close();

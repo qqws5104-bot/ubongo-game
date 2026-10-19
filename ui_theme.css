@@ -839,3 +839,26 @@ body:has(.d-main) .mv-chip { background: #fffdf6 !important; }
 .dpop.vs { border-top-color: #ffd23f !important; }
 .dpop.lead { border-top-color: #ffd23f !important; background: #1d1d1d; color: #fff; }
 .dpop.lead b { font-size: 2rem; color: #ffd23f; }
+
+/* ===== 26. 아케이드 연출 (2026-10-16): 피버 / 흔들림 / 떠오르는 점수 / 숫자 ===== */
+body.d-shake .mv, body.d-shake .rv { animation: dShake .42s cubic-bezier(.36,.07,.19,.97); }
+@keyframes dShake { 10%,90% { transform: translate(-2px,0); } 20%,80% { transform: translate(4px,1px); } 30%,50%,70% { transform: translate(-7px,-1px); } 40%,60% { transform: translate(7px,1px); } }
+.d-float { position: fixed; z-index: 9999; transform: translate(-50%,-50%); pointer-events: none; font-weight: 900; font-size: 2rem; color: #fff;
+  -webkit-text-stroke: 2px #222; paint-order: stroke fill; text-shadow: 0 4px 0 rgba(0,0,0,.35); animation: dFloat 1.35s ease-out forwards; white-space: nowrap; text-align: center; }
+.d-float.t1 { color: #ff5a52; } .d-float.t2 { color: #5b9bff; }
+.d-float.fever { color: #ffd23f; font-size: 2.8rem; }
+.d-float small { display: block; font-size: .55em; color: #fff; }
+@keyframes dFloat { 0% { opacity: 0; transform: translate(-50%,-30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%,-60%) scale(1.25); } 30% { transform: translate(-50%,-70%) scale(1); } 100% { opacity: 0; transform: translate(-50%,-190%) scale(1); } }
+.d-cnt { display: inline-block; transition: transform .1s; }
+.d-cnt.up { transform: scale(1.15); color: #ffd23f; }
+#dfever { position: fixed; z-index: 9998; left: 50%; top: 12px; transform: translateX(-50%); pointer-events: none; display: flex; align-items: center; gap: 12px;
+  padding: 6px 22px; border-radius: 999px; background: linear-gradient(90deg,#ff3d00,#ffd23f,#ff3d00); background-size: 200% 100%; animation: dFevBg .6s linear infinite, dFevPop .5s ease-in-out infinite alternate;
+  box-shadow: 0 0 24px rgba(255,140,0,.8); color: #2a1300; }
+#dfever b { font-size: 2.2rem; font-weight: 900; letter-spacing: .12em; font-style: italic; }
+#dfever span { font-weight: 800; font-size: 1.1rem; }
+@keyframes dFevBg { to { background-position: 200% 0; } }
+@keyframes dFevPop { from { transform: translateX(-50%) scale(1); } to { transform: translateX(-50%) scale(1.08); } }
+body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; pointer-events: none; border: 10px solid #ffb300; animation: dFevEdge .5s steps(2) infinite; box-shadow: inset 0 0 60px rgba(255,120,0,.55); }
+@keyframes dFevEdge { 50% { border-color: #ff3d00; } }
+.dpop.fever { border-top-color: #ffb300 !important; background: #fff4d6; }
+.dpop.fever b { color: #d84315; }
