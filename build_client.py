@@ -2567,13 +2567,13 @@ APP_JS_TEMPLATE = r"""
     else if (kind === "mash") { mx.count = 0; mx.goal = [9, 10][H]; mxMashDecay(); }
     else if (kind === "arrows") { mxNewArrows(); }
     var limit = MX_LIMIT[kind][H]; // 0 = 제한 시간 없음 (테이프 붙이기 -- 2026-10-16 사용자 요청)
-    mx.startAt = Date.now(); mx.deadline = mx.startAt + limit; mx.limit = limit;
+    mx.startAt = Date.now(); mx.deadline = Math.max(mx.startAt, mx.showUntil || 0) + limit; mx.limit = limit;
     var my = mx;
     if (limit) mx.clock = setInterval(function () {
       if (mx !== my) { clearInterval(my.clock); return; }
       if (mx.won) { clearInterval(mx.clock); return; }
       var bar = document.getElementById("mx-time");
-      if (bar) bar.style.width = Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + "%";
+      if (bar) bar.style.width = Math.max(0, Math.min(1, (mx.deadline - Date.now()) / mx.limit) * 100) + "%";
       if (Date.now() > mx.deadline) { // 시간 초과 -> 같은 조각 게임을 새 문제로 다시
         clearInterval(mx.clock);
         mx.flash = "배송 지연! 다시"; mx.lockUntil = Date.now() + 900; mxRender();
@@ -2585,12 +2585,14 @@ APP_JS_TEMPLATE = r"""
     mxRender();
   }
   // 방향 따라 누르기: 1.3초(후반 1초) 보여 주고 가린다 -- 외워서 누르기. 틀리면 새 순서로 다시 보여 줌.
+  var MX_MEMO_MS = 5000;
   function mxNewArrows() {
     var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"], H = mxHard() ? 1 : 0;
     mx.seq = []; for (var k = 0; k < [3, 4][H]; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); // 2026-10-16 (사용자): 전반 3개 / 후반 4개
-    mx.pos = 0; mx.showUntil = Date.now() + [1900, 1500][H];
-    var my = mx;
-    setTimeout(function () { if (mx === my) mxRender(); }, [1900, 1500][H] + 20);
+    // 2026-10-21 (사용자): 길은 팝업으로 5초 보여 주고 사라짐. 제한 시간은 팝업이 닫힌 뒤부터.
+    mx.pos = 0; mx.showUntil = Date.now() + MX_MEMO_MS;
+    var my = mx, seqNo = (mx.seqNo = (mx.seqNo || 0) + 1);
+    for (var t = 1; t <= MX_MEMO_MS / 1000; t++) setTimeout(function () { if (mx === my && my.seqNo === seqNo) mxRender(); }, t * 1000 + 20);
   }
   // 초록불에만 누르기: 기다리다 빨강(누르면 실패) 또는 초록이 뜬다. 초록은 짧게만 켜진다(놓치면 다시). 성공 needHits번.
   // 2026-10-16 (사용자 요청): 두 좌석이 같은 시각에 같은 불 -- 서버가 준 씨앗(race.seed)과 시작 시각(race.startedAt, 서버 시계)으로
@@ -2654,7 +2656,7 @@ APP_JS_TEMPLATE = r"""
   function mxFail(msg) {
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
     // 2026-10-16 (사용자): 틀리면 제한 시간도 처음부터 다시 (잠깐 멈춘 0.7초 뒤부터)
-    if (mx.limit) mx.deadline = Date.now() + 700 + mx.limit;
+    if (mx.limit) mx.deadline = Math.max(Date.now() + 700, mx.showUntil || 0) + mx.limit;
     var my = mx;
     setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 700);
     mxRender();
@@ -2722,8 +2724,11 @@ APP_JS_TEMPLATE = r"""
       body = '<div class="mx-route"><span class="mx-stop">물류센터</span><div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + (i < mx.pos || !hide ? MX_ARROW[k] : '?') + '</span>'; }).join('') + '</div><span class="mx-stop home">고객 집</span></div>'
         + '<div class="mx-hint">' + (hide ? '외운 길 순서대로 운전!' : '골목 길을 외우세요…') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
+      if (!hide) body += '<div class="mx-memo"><div class="mx-memo-card"><div class="mx-memo-t">배달 길을 외우세요!</div><div class="mx-memo-seq">'
+        + mx.seq.map(function (k) { return '<span>' + MX_ARROW[k] + '</span>'; }).join('<i>›</i>')
+        + '</div><div class="mx-memo-c">' + Math.max(1, Math.ceil((mx.showUntil - Date.now()) / 1000)) + '</div></div></div>';
     }
-    var tbar = (mx.won || !mx.limit) ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + '%"></i></div>';
+    var tbar = (mx.won || !mx.limit) ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, Math.min(1, (mx.deadline - Date.now()) / mx.limit) * 100) + '%"></i></div>';
     el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + tbar + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
   }
   document.addEventListener("keydown", function (e) {

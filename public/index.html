@@ -1815,6 +1815,17 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
 .dpop.fever { border-top-color: #ffb300 !important; background: #fff4d6; }
 .dpop.fever b { color: #d84315; }
 
+/* ===== 27. 배달 길 외우기 팝업 (2026-10-21): 5초 보여 주고 사라짐 ===== */
+.mx-card { position: relative; }
+.mx-memo { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(20,24,40,.72); border-radius: inherit; animation: mxMemoIn .25s ease-out; }
+.mx-memo-card { background: #fffaf0; border: 4px solid #ffd23f; border-radius: 22px; padding: 20px 28px 16px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.mx-memo-t { font-weight: 900; font-size: 1.3rem; color: #3a2a00; margin-bottom: 10px; }
+.mx-memo-seq { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.mx-memo-seq span { display: grid; place-items: center; width: 74px; height: 74px; border-radius: 16px; background: #263238; color: #ffd23f; font-size: 3rem; font-weight: 900; }
+.mx-memo-seq i { font-style: normal; color: #b0a080; font-size: 2rem; }
+.mx-memo-c { margin-top: 12px; font-size: 2rem; font-weight: 900; color: #e2691a; }
+@keyframes mxMemoIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+
 </style>
 </head><body>
 <div id="app"></div>
@@ -3091,7 +3102,7 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
   var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1019-0810"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1021-0955"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -4951,13 +4962,13 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
     else if (kind === "mash") { mx.count = 0; mx.goal = [9, 10][H]; mxMashDecay(); }
     else if (kind === "arrows") { mxNewArrows(); }
     var limit = MX_LIMIT[kind][H]; // 0 = 제한 시간 없음 (테이프 붙이기 -- 2026-10-16 사용자 요청)
-    mx.startAt = Date.now(); mx.deadline = mx.startAt + limit; mx.limit = limit;
+    mx.startAt = Date.now(); mx.deadline = Math.max(mx.startAt, mx.showUntil || 0) + limit; mx.limit = limit;
     var my = mx;
     if (limit) mx.clock = setInterval(function () {
       if (mx !== my) { clearInterval(my.clock); return; }
       if (mx.won) { clearInterval(mx.clock); return; }
       var bar = document.getElementById("mx-time");
-      if (bar) bar.style.width = Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + "%";
+      if (bar) bar.style.width = Math.max(0, Math.min(1, (mx.deadline - Date.now()) / mx.limit) * 100) + "%";
       if (Date.now() > mx.deadline) { // 시간 초과 -> 같은 조각 게임을 새 문제로 다시
         clearInterval(mx.clock);
         mx.flash = "배송 지연! 다시"; mx.lockUntil = Date.now() + 900; mxRender();
@@ -4969,12 +4980,14 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
     mxRender();
   }
   // 방향 따라 누르기: 1.3초(후반 1초) 보여 주고 가린다 -- 외워서 누르기. 틀리면 새 순서로 다시 보여 줌.
+  var MX_MEMO_MS = 5000;
   function mxNewArrows() {
     var a = ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"], H = mxHard() ? 1 : 0;
     mx.seq = []; for (var k = 0; k < [3, 4][H]; k++) mx.seq.push(a[Math.floor(Math.random() * 4)]); // 2026-10-16 (사용자): 전반 3개 / 후반 4개
-    mx.pos = 0; mx.showUntil = Date.now() + [1900, 1500][H];
-    var my = mx;
-    setTimeout(function () { if (mx === my) mxRender(); }, [1900, 1500][H] + 20);
+    // 2026-10-21 (사용자): 길은 팝업으로 5초 보여 주고 사라짐. 제한 시간은 팝업이 닫힌 뒤부터.
+    mx.pos = 0; mx.showUntil = Date.now() + MX_MEMO_MS;
+    var my = mx, seqNo = (mx.seqNo = (mx.seqNo || 0) + 1);
+    for (var t = 1; t <= MX_MEMO_MS / 1000; t++) setTimeout(function () { if (mx === my && my.seqNo === seqNo) mxRender(); }, t * 1000 + 20);
   }
   // 초록불에만 누르기: 기다리다 빨강(누르면 실패) 또는 초록이 뜬다. 초록은 짧게만 켜진다(놓치면 다시). 성공 needHits번.
   // 2026-10-16 (사용자 요청): 두 좌석이 같은 시각에 같은 불 -- 서버가 준 씨앗(race.seed)과 시작 시각(race.startedAt, 서버 시계)으로
@@ -5038,7 +5051,7 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
   function mxFail(msg) {
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
     // 2026-10-16 (사용자): 틀리면 제한 시간도 처음부터 다시 (잠깐 멈춘 0.7초 뒤부터)
-    if (mx.limit) mx.deadline = Date.now() + 700 + mx.limit;
+    if (mx.limit) mx.deadline = Math.max(Date.now() + 700, mx.showUntil || 0) + mx.limit;
     var my = mx;
     setTimeout(function () { if (mx === my) { mx.flash = null; mxRender(); } }, 700);
     mxRender();
@@ -5106,8 +5119,11 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
       body = '<div class="mx-route"><span class="mx-stop">물류센터</span><div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + (i < mx.pos || !hide ? MX_ARROW[k] : '?') + '</span>'; }).join('') + '</div><span class="mx-stop home">고객 집</span></div>'
         + '<div class="mx-hint">' + (hide ? '외운 길 순서대로 운전!' : '골목 길을 외우세요…') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
+      if (!hide) body += '<div class="mx-memo"><div class="mx-memo-card"><div class="mx-memo-t">배달 길을 외우세요!</div><div class="mx-memo-seq">'
+        + mx.seq.map(function (k) { return '<span>' + MX_ARROW[k] + '</span>'; }).join('<i>›</i>')
+        + '</div><div class="mx-memo-c">' + Math.max(1, Math.ceil((mx.showUntil - Date.now()) / 1000)) + '</div></div></div>';
     }
-    var tbar = (mx.won || !mx.limit) ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, (mx.deadline - Date.now()) / mx.limit * 100) + '%"></i></div>';
+    var tbar = (mx.won || !mx.limit) ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, Math.min(1, (mx.deadline - Date.now()) / mx.limit) * 100) + '%"></i></div>';
     el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + tbar + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
   }
   document.addEventListener("keydown", function (e) {

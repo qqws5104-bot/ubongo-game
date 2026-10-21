@@ -862,3 +862,14 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
 @keyframes dFevEdge { 50% { border-color: #ff3d00; } }
 .dpop.fever { border-top-color: #ffb300 !important; background: #fff4d6; }
 .dpop.fever b { color: #d84315; }
+
+/* ===== 27. 배달 길 외우기 팝업 (2026-10-21): 5초 보여 주고 사라짐 ===== */
+.mx-card { position: relative; }
+.mx-memo { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(20,24,40,.72); border-radius: inherit; animation: mxMemoIn .25s ease-out; }
+.mx-memo-card { background: #fffaf0; border: 4px solid #ffd23f; border-radius: 22px; padding: 20px 28px 16px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.mx-memo-t { font-weight: 900; font-size: 1.3rem; color: #3a2a00; margin-bottom: 10px; }
+.mx-memo-seq { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.mx-memo-seq span { display: grid; place-items: center; width: 74px; height: 74px; border-radius: 16px; background: #263238; color: #ffd23f; font-size: 3rem; font-weight: 900; }
+.mx-memo-seq i { font-style: normal; color: #b0a080; font-size: 2rem; }
+.mx-memo-c { margin-top: 12px; font-size: 2rem; font-weight: 900; color: #e2691a; }
+@keyframes mxMemoIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
