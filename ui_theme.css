@@ -891,3 +891,9 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
 .mx-scanbar { display: block; width: 70%; height: 12px; margin: 6px auto 0; border-radius: 999px; background: rgba(0,0,0,.18); overflow: hidden; }
 .mx-scanbar > i { display: block; height: 100%; background: #1f9a4c; transition: width .08s; }
 .mx-belt.go b { white-space: nowrap; } .mx-belt.go .mx-scanbar { flex: 1; min-width: 120px; }
+
+/* ===== 30. 송장 주소 확인 = 배송 메모로 한 번 더 생각 (2026-10-21) ===== */
+.mx-memo-note { display: block; margin-top: 4px; font-size: 1rem; font-weight: 700; color: #6b4b1a; background: #fff3c4; border-radius: 4px; padding: 3px 8px; }
+.mx-memo-note b { color: #c0392b; font-size: 1.15rem; }
+.mx-memo-note.plain b { color: #1f6b3a; }
+.mx-q small { display: block; font-weight: 600; color: #888; font-size: .78rem; margin-top: 2px; }

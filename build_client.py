@@ -2658,15 +2658,37 @@ APP_JS_TEMPLATE = r"""
     }, mxHard() ? 480 : 550); // 2026-10-16 (사용자 "테이프 너무 어려움"): 줄어드는 속도 더 느리게
   }
   // 송장 주소 맞추기: 위 송장의 호수와 같은 것을 고른다. 보기는 숫자를 뒤집거나 하나 바꾼 비슷한 호수들. needStreak번 연속.
+  // 2026-10-21 (사용자 "1:1 매칭이라 머리를 안 씀"): 송장에 기준 집 + 배송 메모("윗집", "왼쪽 옆집" ...)가 적혀 있어서
+  //   실제 문은 머리로 한 번(후반엔 두 번) 옮겨 찾아야 한다. 적힌 호수 그대로는 함정 보기. 가끔은 메모 없이 "그대로"(방심 방지).
+  //   호수 = 층 + 0 + 번째 집 (예: 607호 = 6층 7번째). 윗집 = 층+1, 왼쪽 옆집 = 번째-1.
+  var MX_REL = [
+    { k: "up", t: "윗집", df: 1, du: 0 }, { k: "down", t: "아랫집", df: -1, du: 0 },
+    { k: "left", t: "왼쪽 옆집", df: 0, du: -1 }, { k: "right", t: "오른쪽 옆집", df: 0, du: 1 },
+  ];
   function mxNewPick() {
-    var r9 = function () { return 1 + Math.floor(Math.random() * 9); };
-    var f = r9(), u = r9();
-    while (u === f) u = r9();
+    var H = mxHard() ? 1 : 0;
+    var r = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
     var lab = function (a, b) { return a + "0" + b + "호"; };
-    var target = lab(f, u), pool = [lab(u, f), lab(f, u % 9 + 1), lab(f % 9 + 1, u), lab(f, (u + 7) % 9 + 1)];
-    if (mxHard()) pool.push(f + "" + u + "0호", f + "00" + u + "호");
-    pool = pool.filter(function (x, i) { return x !== target && pool.indexOf(x) === i; }).sort(function () { return Math.random() - 0.5; });
-    mx.target = target; mx.opts = [target, pool[0], pool[1], pool[2]].sort(function () { return Math.random() - 0.5; });
+    var f = r(3, 7), u = r(3, 7); // 두 번 옮겨도 1~9 안
+    var steps = [];
+    var roll = Math.random();
+    if (roll < (H ? 0.12 : 0.2)) steps = [];                       // 메모 없음 -- 적힌 그대로
+    else if (!H || roll < 0.45) steps = [MX_REL[r(0, 3)]];         // 한 번
+    else { var a = MX_REL[r(0, 1)], b = MX_REL[r(2, 3)]; steps = Math.random() < 0.5 ? [a, b] : [b, a]; } // 두 번 (위아래 + 옆)
+    var tf = f, tu = u;
+    steps.forEach(function (st) { tf += st.df; tu += st.du; });
+    var target = lab(tf, tu), base = lab(f, u);
+    // 함정 보기: 적힌 집 그대로 / 반대로 옮긴 집 / 한 단계만 옮긴 집 / 층·번째 뒤바꾼 집
+    var pool = [base];
+    steps.forEach(function (st) { pool.push(lab(f - st.df * (steps.length === 1 ? 1 : 1), u - st.du)); });
+    if (steps.length === 2) { pool.push(lab(f + steps[0].df, u + steps[0].du), lab(f + steps[1].df, u + steps[1].du)); }
+    if (steps.length === 1) { var s0 = steps[0]; pool.push(lab(f + s0.du, u + s0.df)); } // 축을 헷갈림 (윗집인데 옆집으로)
+    pool.push(lab(tu, tf), lab(tf + 1, tu), lab(tf, tu - 1), lab(tf - 1, tu), lab(tf, tu + 1), lab(tf + 1, tu + 1)); // 모자라지 않게 여유분
+    pool = pool.filter(function (x, i) { return x !== target && pool.indexOf(x) === i; });
+    var lead = pool.slice(0, steps.length === 0 ? 1 : 2), rest = pool.slice(lead.length).sort(function () { return Math.random() - 0.5; });
+    var picks = lead.concat(rest).slice(0, 3);
+    mx.target = target; mx.base = base; mx.memo = steps.map(function (st) { return st.t; });
+    mx.opts = [target].concat(picks).sort(function () { return Math.random() - 0.5; });
   }
   function mxFail(msg) {
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
@@ -2738,7 +2760,10 @@ APP_JS_TEMPLATE = r"""
       body = '<button class="mx-react mx-belt ' + mx.phase + '" data-mx="tap">' + inner + '</button>'
         + '<div class="mx-count">' + mxDots(mx.hits, mx.needHits) + '<span>스캔 ' + mx.hits + '/' + mx.needHits + '</span></div>';
     } else if (mx.kind === "pick") {
-      body = '<div class="mx-target mx-addr mx-waybill"><small>받는 분 주소</small>' + esc(mx.target) + '<i class="mx-barcode"></i></div><div class="mx-q">이 택배는 어느 집 문 앞으로?</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
+      var memo = mx.memo && mx.memo.length ? mx.memo.join('의 ') : '';
+      body = '<div class="mx-target mx-addr mx-waybill"><small>받는 분 주소</small>' + esc(mx.base || mx.target)
+        + '<span class="mx-memo-note' + (memo ? '' : ' plain') + '">배송 메모 · <b>' + (memo ? esc(memo) + '에 맡겨 주세요' : '이 집 그대로') + '</b></span><i class="mx-barcode"></i></div>'
+        + '<div class="mx-q">' + (memo ? '메모대로 가면 어느 집 문 앞?' + (mxHard() ? '' : ' <small>(윗집 = 한 층 위 · 오른쪽 옆집 = 끝자리 +1)</small>') : '이 택배는 어느 집 문 앞으로?') + '</div><div class="mx-opts">' + mx.opts.map(function (o, i) {
         // 2026-10-21 (사용자): 보기는 집 문 앞 호수 팻말 모양. 긴 호수(5008호 등)는 글자를 줄여 한 줄로.
         return '<button class="mx-opt mx-addr-opt" data-mx-opt="' + i + '"><span class="mx-plate"><b class="' + (o.length > 4 ? 'long' : '') + '">' + esc(o) + '</b></span><small>' + ["←", "↑", "↓", "→"][i] + '</small></button>';
       }).join('') + '</div><div class="mx-count">' + mxDots(mx.streak, mx.needStreak) + '</div>';
