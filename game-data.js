@@ -238,7 +238,11 @@ const DELIVERY_BELL_WINDOW_MS = 2500;          // 문이 열려 있는 시간
 const RACE_GRANT_PLAN = [{ parcels: 3, first: 2 }, { parcels: 3, first: 2 }, { parcels: 5, first: 3 }];
 // 2026-10-16 (사용자 결정): 라운드 번호 대신 그 라운드 택배 쌓기 조각 수로 정한다. 2조각 = 택배 3개(1등 2개), 3조각 = 택배 5개(1등 3개).
 //   4조각(후반 5라운드부터)은 따로 정해지지 않아 3조각과 같게 둔다. 이 표가 있으면 위 RACE_GRANT_PLAN(라운드별)보다 우선.
-const RACE_GRANT_BY_PIECES = { 2: { parcels: 3, first: 2 }, 3: { parcels: 5, first: 3 }, 4: { parcels: 5, first: 3 } };
+// 2026-10-21 (사용자 결정): 늦은 사람도 맞추면 이득이 있게 --
+//   late = 늦은 사람이 RACE_CONSOLATION_MS 안에 완성하면 남은 것 중 직접 고르는 수, lateFail = 못 하면 무작위로 받는 수. 남는 택배는 사라짐.
+//   2조각 = 4개(1등 2개 고름 / 늦게라도 맞추면 남은 2개 다 / 못 맞추면 1개 무작위), 3조각 이상 = 5개(1등 2개 / 맞추면 남은 3개 중 2개 / 못 맞추면 1개 무작위).
+//   late·lateFail이 없으면 예전처럼 남은 것 전부.
+const RACE_GRANT_BY_PIECES = { 2: { parcels: 4, first: 2, late: 2, lateFail: 1 }, 3: { parcels: 5, first: 2, late: 2, lateFail: 1 }, 4: { parcels: 5, first: 2, late: 2, lateFail: 1 } };
 // 레이스 택배를 보드 칸 수와 상관없이 종류 비율(TYPES count)대로 계속 만든다 -- 라운드가 확보 시간 내내 이어진다.
 const RACE_UNLIMITED = 1;
 

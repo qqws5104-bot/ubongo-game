@@ -36,13 +36,18 @@ const OUT = "/tmp/wall_e2e_";
     await fin(p1); await fin(p2);
     await P[first].keyboard.press("Space"); await P[first].waitForTimeout(600);
     const n = await rail.locator(".rail-pk").count();
-    assert(n === 3 || n === 5, "택배 3개 또는 5개: " + n);
+    assert(n === 4 || n === 5, "택배 4개 또는 5개: " + n);
     if (n === 5) { saw5 = true; await rail.screenshot({ path: OUT + "r_rail_pick5.png" }); }
-    const take = n === 3 ? 2 : 3;
+    const take = 2; // 2026-10-21: 1등 2개 고르기
     for (let k = 0; k < take; k++) { await rail.keyboard.press(RAIL_KEYS[first][k]); await rail.waitForTimeout(250); }
     assert.strictEqual(await rail.locator(".rp-owner.seat-" + first).count(), take, "1등이 " + take + "개");
     await P[late].keyboard.press("Space"); await P[late].waitForTimeout(700);
-    assert.strictEqual(await rail.locator(".rp-owner.seat-" + late).count(), n - take, "늦은 사람이 나머지");
+    if (n === 5) {
+      // 늦은 사람도 시간 안에 완성 -> 남은 3개 중 2개 직접 고르기 (레일 화면 키, 남은 칸 = 인덱스 2,3,4)
+      await rail.screenshot({ path: OUT + "r_rail_latepick.png" });
+      for (const k of [2, 4]) { await rail.keyboard.press(RAIL_KEYS[late][k]); await rail.waitForTimeout(250); }
+    }
+    assert.strictEqual(await rail.locator(".rp-owner.seat-" + late).count(), 2, "늦게라도 완성하면 2개");
     await p1.waitForTimeout(2800);
   }
   assert(saw5, "3조각 라운드(전반 4라운드)에서 택배 5개");

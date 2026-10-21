@@ -17,11 +17,11 @@ function mk(rules) {
     const r = box.st.race;
     assert.strictEqual(r.game, "sticker"); assert.deepStrictEqual(r.stage, { "1": "sticker", "2": "sticker" }, "첫 미니게임부터");
     const t = D.TYPES.find((x) => r.puzzleId.indexOf(x.key + "-") === 0), pieces = Array.isArray(t.pieces) ? t.pieces[0] : t.pieces;
-    assert.strictEqual(r.pair.length, pieces === 2 ? 3 : 5, "조각 " + pieces + "개 -> 택배 수");
+    assert.strictEqual(r.pair.length, pieces === 2 ? 4 : 5, "조각 " + pieces + "개 -> 택배 수");
     room.raceStep("1", "sticker-done", 1); assert.strictEqual(box.st.race.stage["1"], "ubongo");
     // 3조각 문제로 직접 확인
-    assert.deepStrictEqual(room._planByPieces("fragile-1"), { parcels: 5, first: 3 });
-    assert.deepStrictEqual(room._planByPieces("normal-1"), { parcels: 3, first: 2 });
+    assert.deepStrictEqual(room._planByPieces("fragile-1"), { parcels: 5, first: 2, late: 2, lateFail: 1 });
+    assert.deepStrictEqual(room._planByPieces("normal-1"), { parcels: 4, first: 2, late: 2, lateFail: 1 });
     room.destroy();
   }
   // 0b) 조각마다 반응형 미니게임: stage pieces -> piece-done 조각 수만큼 -> ubongo
@@ -214,6 +214,42 @@ function mk(rules) {
     const f0 = box.st.delivery.elev.floor;
     room.wallElevator(null, "up"); assert.strictEqual(box.st.delivery.elev.floor, f0 + 1, "팀 키 없이 위로");
     room.wallElevator(null, "down"); assert.strictEqual(box.st.delivery.elev.floor, f0);
+    room.destroy();
+  }
+  // 11) 늦은 사람: 시간 안에 맞추면 남은 것 중 2개 직접 고름 / 못 맞추면 무작위 1개, 나머지는 사라짐
+  {
+    const { room, box } = mk({ raceConsolationMs: 300, racePickMs: 5000, raceRevealMs: 400 });
+    room._planNewRound(1, { parcels: 5, first: 2, late: 2, lateFail: 1 }, "fragile-1");
+    room.raceStep("1", "ubongo-done", 1);
+    room.racePick("1", 0); room.racePick("1", 1);
+    room.racePick("2", 2); assert.deepStrictEqual(box.st.race.picks["2"], [], "완성 전엔 못 고름");
+    room.raceStep("2", "ubongo-done", 1);
+    assert.strictEqual(box.st.race.status, "picking", "늦은 사람 고르는 중");
+    room.racePick("2", 4); room.racePick("2", 2);
+    assert.strictEqual(box.st.race.status, "reveal"); assert.deepStrictEqual(box.st.race.picks["2"], [4, 2]);
+    assert.deepStrictEqual(box.st.race.discarded, [3], "남은 하나는 사라짐");
+    await sleep(470);
+    // 못 맞춤 -> 무작위 1개
+    const r2 = box.st.race; assert.strictEqual(r2.round, 2);
+    room._planNewRound(2, { parcels: 5, first: 2, late: 2, lateFail: 1 }, "fragile-1");
+    room.raceStep("1", "ubongo-done", 2); room.racePick("1", 0); room.racePick("1", 1);
+    await sleep(380);
+    assert.strictEqual(box.st.race.picks["2"].length, 1, "무작위 1개"); assert.strictEqual(box.st.race.randomPick["2"], true);
+    assert.strictEqual(box.st.race.discarded.length, 2);
+    room.destroy();
+  }
+  // 12) 2조각(4개): 늦게라도 맞추면 남은 2개 다(고를 것 없음), 포기하면 바로 무작위 1개
+  {
+    const { room, box } = mk({ raceConsolationMs: 5000, racePickMs: 5000, raceRevealMs: 50 });
+    room._planNewRound(1, { parcels: 4, first: 2, late: 2, lateFail: 1 }, "normal-1");
+    room.raceStep("1", "ubongo-done", 1); room.racePick("1", 0); room.racePick("1", 3);
+    room.raceStep("2", "ubongo-done", 1);
+    assert.strictEqual(box.st.race.status, "reveal"); assert.strictEqual(box.st.race.picks["2"].length, 2);
+    await sleep(120);
+    room._planNewRound(2, { parcels: 4, first: 2, late: 2, lateFail: 1 }, "normal-1");
+    room.raceStep("1", "ubongo-done", 2); room.racePick("1", 0); room.racePick("1", 1);
+    room.raceStep("2", "give-up", 2);
+    assert.strictEqual(box.st.race.status, "reveal", "포기하면 20초 안 기다림"); assert.strictEqual(box.st.race.picks["2"].length, 1);
     room.destroy();
   }
   console.log("test_wall OK");

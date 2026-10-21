@@ -519,7 +519,7 @@ class GameRoom {
       return out;
     });
     this.state.race = {
-      round: roundNo, pair, game: this._raceNextGame(), plan: { parcels: pair.length, first: Math.min(plan.first, pair.length) },
+      round: roundNo, pair, game: this._raceNextGame(), plan: { parcels: pair.length, first: Math.min(plan.first, pair.length), late: plan.late != null ? plan.late : null, lateFail: plan.lateFail != null ? plan.lateFail : null },
       puzzleId: puzzleId || this._racePuzzleFor(roundNo),
       stage: { "1": "ubongo", "2": "ubongo" },
       finishedAt: { "1": null, "2": null },
@@ -560,12 +560,24 @@ class GameRoom {
       }
       if (firstFull()) {
         if (!r.secondEndsAt) r.secondEndsAt = now + (this.rules.raceConsolationMs || 0);
-        const rest = this._planRest();
-        if (rest.length && (r.stage[s2] === "done" || now >= r.secondEndsAt)) {
-          if (r.stage[s2] !== "done") { r.randomPick[s2] = true; r.stage[s2] = "done"; }
-          rest.forEach((i) => this._raceGrant(s2, i));
+        const lateN = r.plan.late != null ? r.plan.late : Infinity, failN = r.plan.lateFail != null ? r.plan.lateFail : Infinity;
+        const randomFill = (n) => { while (r.picks[s2].length < n && this._planRest().length) { const rest = this._planRest(); this._raceGrant(s2, rest[Math.floor(Math.random() * rest.length)]); } };
+        let lateDone = false;
+        if (!this._planRest().length) lateDone = true;
+        else if (r.stage[s2] === "done" && !r.randomPick[s2]) {
+          // 늦게라도 직접 완성: lateN개를 고른다 (남은 게 그 수 이하면 고를 것 없이 전부)
+          if (this._planRest().length <= lateN - r.picks[s2].length) { this._planRest().forEach((i) => this._raceGrant(s2, i)); lateDone = true; }
+          else if (r.picks[s2].length >= lateN) lateDone = true;
+          else {
+            if (!r.latePickEndsAt) r.latePickEndsAt = this.rules.raceAutoPick ? now + this.rules.racePickMs : null;
+            if (r.latePickEndsAt && now >= r.latePickEndsAt) { randomFill(lateN); lateDone = true; }
+          }
+        } else if (now >= r.secondEndsAt || r.stage[s2] === "out") {
+          // 시간 안에 못 맞춤(포기 포함): 무작위 failN개
+          r.randomPick[s2] = true; r.stage[s2] = "done";
+          randomFill(failN === Infinity ? r.pair.length : failN); lateDone = true;
         }
-        if (!this._planRest().length) this._raceReveal();
+        if (lateDone) this._raceReveal(); // 남은 택배는 사라짐 (r.discarded)
       }
     }
     if (r.status === "reveal" && now >= r.revealEndsAt) {
@@ -577,6 +589,7 @@ class GameRoom {
     if (cur.status === "picking") {
       const f = cur.first;
       if (cur.picks[f].length < cur.plan.first && this._planRest().length) nextTs = this.rules.raceAutoPick ? cur.pickEndsAt : null;
+      else if (cur.latePickEndsAt) nextTs = cur.latePickEndsAt;
       else nextTs = cur.secondEndsAt;
     } else if (cur.status === "reveal") nextTs = cur.revealEndsAt;
     this._raceAt(nextTs);
@@ -662,8 +675,13 @@ class GameRoom {
     if (this.state.phase !== "secure" || !this.rules.raceMode) return;
     const r = this.state.race;
     if (r && r.plan) {
-      if (r.status !== "picking" || r.first !== seat || typeof idx !== "number" || !r.pair[idx]) return;
-      if (r.picks[seat].length >= r.plan.first || !this._planRest().includes(idx)) return;
+      if (r.status !== "picking" || typeof idx !== "number" || !r.pair[idx] || !this._planRest().includes(idx)) return;
+      if (r.first === seat) { if (r.picks[seat].length >= r.plan.first) return; }
+      else {
+        // 늦은 사람: 1등이 다 고른 뒤, 시간 안에 직접 완성했을 때만 late개까지
+        const lateN = r.plan.late != null ? r.plan.late : Infinity;
+        if (!r.first || r.picks[r.first].length < r.plan.first || r.stage[seat] !== "done" || (r.randomPick && r.randomPick[seat]) || r.picks[seat].length >= lateN) return;
+      }
       this.touch();
       this._raceGrant(seat, idx);
       this._raceAdvance();

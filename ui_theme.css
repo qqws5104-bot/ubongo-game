@@ -873,3 +873,20 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
 .mx-memo-seq i { font-style: normal; color: #b0a080; font-size: 2rem; }
 .mx-memo-c { margin-top: 12px; font-size: 2rem; font-weight: 900; color: #e2691a; }
 @keyframes mxMemoIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+
+/* ===== 28. 송장 주소 확인: 보기 = 호수 팻말 (2026-10-21) ===== */
+.mx-opt.mx-addr-opt { background: transparent; padding: 4px 2px; height: auto; gap: 8px; }
+.mx-plate { position: relative; display: grid; place-items: center; width: 100%; min-height: 76px; padding: 12px 6px 10px; border-radius: 8px;
+  background: linear-gradient(160deg, #f6e7b8 0%, #d4b366 50%, #ecd8a0 100%); border: 2px solid #8a6a2a;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.65), inset 0 -2px 0 rgba(0,0,0,.12), 0 4px 0 #6b5220, 0 6px 10px rgba(0,0,0,.18); }
+.mx-plate::before, .mx-plate::after { content: ""; position: absolute; top: 7px; width: 7px; height: 7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff8e0, #8a6a2a 70%); box-shadow: 0 1px 0 rgba(255,255,255,.5); }
+.mx-plate::before { left: 8px; } .mx-plate::after { right: 8px; }
+.mx-plate b { white-space: nowrap; font-size: clamp(1.25rem, 4.4vw, 2rem); font-weight: 900; color: #3a2a10; letter-spacing: -.02em; text-shadow: 0 1px 0 rgba(255,255,255,.6); }
+.mx-plate b.long { font-size: clamp(1rem, 3.4vw, 1.6rem); letter-spacing: -.04em; }
+.mx-addr-opt:hover .mx-plate, .mx-addr-opt:active .mx-plate { transform: translateY(2px); box-shadow: inset 0 2px 0 rgba(255,255,255,.65), 0 2px 0 #6b5220; }
+
+/* ===== 29. 바코드 스캔 = 초록불 동안 연타 (2026-10-21) ===== */
+.mx-scanbar { display: block; width: 70%; height: 12px; margin: 6px auto 0; border-radius: 999px; background: rgba(0,0,0,.18); overflow: hidden; }
+.mx-scanbar > i { display: block; height: 100%; background: #1f9a4c; transition: width .08s; }
+.mx-belt.go b { white-space: nowrap; } .mx-belt.go .mx-scanbar { flex: 1; min-width: 120px; }
