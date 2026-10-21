@@ -2605,7 +2605,9 @@ APP_JS_TEMPLATE = r"""
     // 2026-10-21 (사용자): 길은 팝업으로 5초 보여 주고 사라짐. 제한 시간은 팝업이 닫힌 뒤부터.
     mx.pos = 0; mx.showUntil = Date.now() + MX_MEMO_MS;
     var my = mx, seqNo = (mx.seqNo = (mx.seqNo || 0) + 1);
-    for (var t = 1; t <= MX_MEMO_MS / 1000; t++) setTimeout(function () { if (mx === my && my.seqNo === seqNo) mxRender(); }, t * 1000 + 20);
+    // 2026-10-21 (사용자 "깜빡거림"): 보는 동안은 다시 그리지 않고 숫자만 바꾼다. 끝날 때 한 번만 다시 그림.
+    for (var t = 1; t < MX_MEMO_MS / 1000; t++) (function (t) { setTimeout(function () { if (mx !== my || my.seqNo !== seqNo) return; var c = document.querySelector("#mx-layer .mx-memo-c"); if (c) c.textContent = String(MX_MEMO_MS / 1000 - t); }, t * 1000); })(t);
+    setTimeout(function () { if (mx === my && my.seqNo === seqNo) mxRender(); }, MX_MEMO_MS + 20);
   }
   // 초록불에만 누르기: 기다리다 빨강(누르면 실패) 또는 초록이 뜬다. 초록은 짧게만 켜진다(놓치면 다시). 성공 needHits번.
   // 2026-10-16 (사용자 요청): 두 좌석이 같은 시각에 같은 불 -- 서버가 준 씨앗(race.seed)과 시작 시각(race.startedAt, 서버 시계)으로
@@ -2749,7 +2751,8 @@ APP_JS_TEMPLATE = r"""
       body = '<div class="mx-route"><span class="mx-stop">물류센터</span><div class="mx-seq">' + mx.seq.map(function (k, i) { return '<span class="' + (i < mx.pos ? 'ok' : (i === mx.pos ? 'now' : '')) + '">' + (i < mx.pos || !hide ? MX_ARROW[k] : '?') + '</span>'; }).join('') + '</div><span class="mx-stop home">고객 집</span></div>'
         + '<div class="mx-hint">' + (hide ? '외운 길 순서대로 운전!' : '골목 길을 외우세요…') + '</div>'
         + '<div class="mx-pad">' + ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"].map(function (k) { return '<button data-mx-dir="' + k + '">' + MX_ARROW[k] + '</button>'; }).join('') + '</div>';
-      if (!hide) body += '<div class="mx-memo"><div class="mx-memo-card"><div class="mx-memo-t">배달 길을 외우세요!</div><div class="mx-memo-seq">'
+      var memoAnim = mx.memoAnimSeq !== mx.seqNo; mx.memoAnimSeq = mx.seqNo; // 처음 뜰 때만 등장 애니메이션
+      if (!hide) body += '<div class="mx-memo' + (memoAnim ? ' anim' : '') + '"><div class="mx-memo-card"><div class="mx-memo-t">배달 길을 외우세요!</div><div class="mx-memo-seq">'
         + mx.seq.map(function (k) { return '<span>' + MX_ARROW[k] + '</span>'; }).join('<i>›</i>')
         + '</div><div class="mx-memo-c">' + Math.max(1, Math.ceil((mx.showUntil - Date.now()) / 1000)) + '</div></div></div>';
     }
