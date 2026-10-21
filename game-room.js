@@ -62,8 +62,9 @@ const DEFAULT_RULES = {
   deliveryClimbSteps: DELIVERY_CLIMB_STEPS,
   deliveryBellWaitMs: DELIVERY_BELL_WAIT_MS,
   deliveryBellWindowMs: DELIVERY_BELL_WINDOW_MS,
-  contestRate: process.env.CONTEST === "0" ? 0 : CONTEST_RATE,
-  blockReward: BLOCK_REWARD,
+  // 2026-10-21 테스트 1용: COMPETE=0 이면 ⚔ 같은 집 쟁탈과 막기 보상을 같이 끈다 (CONTEST=0 / BLOCK=0 으로 따로도 가능). 막기 자체(반송)는 그대로.
+  contestRate: process.env.CONTEST === "0" || process.env.COMPETE === "0" ? 0 : CONTEST_RATE,
+  blockReward: process.env.BLOCK === "0" || process.env.COMPETE === "0" ? 0 : BLOCK_REWARD,
   feverMs: process.env.FEVER === "0" ? 0 : FEVER_MS,
   feverMult: FEVER_MULT,
   comboBuildingBonus: COMBO_BUILDING_BONUS,
@@ -260,7 +261,7 @@ function initialState(rules) {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
     // 2026-10-16 벽 배송: 규칙 묶음(클라이언트 표시·점수 계산용)과 진행 상태(phase "delivery"일 때만)
-    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.blockReward || 0, feverMs: rules.feverMs || 0, feverMult: rules.feverMult || 1 } : null,
+    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.blockReward || 0, contest: (rules.contestRate || 0) > 0, feverMs: rules.feverMs || 0, feverMult: rules.feverMult || 1 } : null,
     delivery: null,
     phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
@@ -316,6 +317,12 @@ class GameRoom {
     this.state = initialState(this.rules);
     this.timer = null;
     this.lastActivityAt = Date.now();
+    this.logger = null; // 2026-10-21 플레이 기록 (server.js가 setLogger로 연결; 없으면 기록 안 함)
+  }
+  setLogger(fn) { this.logger = typeof fn === "function" ? fn : null; }
+  _log(ev) {
+    if (!this.logger) return;
+    try { this.logger(Object.assign({ at: Date.now(), room: this.code, half: this.state.half || 1 }, ev)); } catch (e) {}
   }
 
   destroy() {
@@ -527,6 +534,7 @@ class GameRoom {
       pickEndsAt: null, secondEndsAt: null, secondPickEndsAt: null, revealEndsAt: null,
       picks: { "1": [], "2": [] }, invoiceIds: { "1": [], "2": [] }, discarded: [],
       randomPick: { "1": false, "2": false },
+      t0: Date.now(), piecesAt: { "1": null, "2": null }, // 2026-10-21 기록용: 라운드 시작 / 조각을 다 모은 시각
     };
     if (this.rules.racePieceGames) {
       // 조각마다 반응형 미니게임: stage "pieces", got = 모은 조각 수, need = 조각 수. 게임 순서는 두 사람 같게.
@@ -539,6 +547,7 @@ class GameRoom {
       for (let k = 0; k < need; k++) { let opts = kinds.filter((x) => x !== last); if (!opts.length) opts = kinds; last = opts[Math.floor(Math.random() * opts.length)]; r.pieceGames.push(last); }
       this.lastPieceGame = last;
       r.stage = { "1": "pieces", "2": "pieces" };
+      this._log({ t: "round", round: r.round, puzzle: r.puzzleId, need: r.need, parcels: r.pair.length, games: r.pieceGames.slice() });
     } else if (this.state.race.game) this.state.race.stage = { "1": "sticker", "2": "sticker" }; // 택배 쌓기 전에 첫 미니게임
     this._raceAt(null);
   }
@@ -631,7 +640,7 @@ class GameRoom {
   }
 
   // 클라이언트가 보내는 진행 신호: "sticker-done"(송장 붙이기 끝 -> 우봉고로) / "ubongo-done"(우봉고 완료 = 투입) / "give-up"(이번 라운드 포기)
-  raceStep(seat, step, round) {
+  raceStep(seat, step, round, meta) {
     if (this.state.phase !== "secure" || !this.rules.raceMode) return;
     const r = this.state.race;
     if (!r || (seat !== "1" && seat !== "2")) return;
@@ -647,13 +656,23 @@ class GameRoom {
       // 2026-10-16 조각 하나 획득 (반응형 미니게임 하나 끝냄). 다 모으면 택배 쌓기(완성 -> 투입)로
       if (st !== "pieces") return;
       r.got[seat] += 1;
-      if (r.got[seat] >= r.need) r.stage[seat] = "ubongo";
+      const m = meta && typeof meta === "object" ? meta : {};
+      const num = (x) => (typeof x === "number" && isFinite(x) && x >= 0 && x < 600000 ? Math.round(x) : null);
+      this._log({ t: "piece", round: r.round, seat, idx: r.got[seat] - 1, kind: (r.pieceGames && r.pieceGames[r.got[seat] - 1]) || null,
+        ms: num(m.ms), fails: num(m.fails), timeouts: num(m.timeouts), sinceRound: now - (r.t0 || now) });
+      if (r.got[seat] >= r.need) { r.stage[seat] = "ubongo"; r.piecesAt[seat] = now; }
     } else if (step === "ubongo-done") {
       if (st !== "ubongo") return;
       const consol = this.rules.raceConsolationMs > 0;
       if (!consol && r.first && r.first !== seat && now > r.secondEndsAt) { r.stage[seat] = "out"; this._raceAdvance(); return; }
       r.stage[seat] = "done";
       r.finishedAt[seat] = now;
+      {
+        const o = seat === "1" ? "2" : "1";
+        this._log({ t: "finish", round: r.round, seat, first: !r.first, sinceRound: now - (r.t0 || now),
+          assembleMs: r.piecesAt && r.piecesAt[seat] ? now - r.piecesAt[seat] : null,
+          gapMs: r.first && r.finishedAt[o] ? now - r.finishedAt[o] : null, oppStage: r.stage[o], oppGot: r.got ? r.got[o] : null });
+      }
       if (r.plan) {
         if (!r.first) { r.first = seat; r.status = "picking"; r.pickEndsAt = this.rules.raceAutoPick ? now + this.rules.racePickMs : null; }
       } else if (!r.first) {
@@ -710,6 +729,7 @@ class GameRoom {
         id: "inv-" + seat + "-" + seq, catIdx: item.catIdx, floorIdx: item.floorIdx, unit: item.unit || null,
         room: item.unit ? null : drawRoom(this.state.players[seat]), acquiredSeq: seq,
         reward: item.reward, deliveredRound: null, stolen: false, deliveredWasPriority: false, returned: false,
+        src: r.first === seat ? "first" : (r.randomPick && r.randomPick[seat] ? "random" : "late"), // 2026-10-21 기록용: 어떻게 얻은 택배인지
       };
       this.state.players[seat].invoices.push(inv);
       r.picks[seat].push(idx);
@@ -806,6 +826,11 @@ class GameRoom {
   _raceReveal() {
     const r = this.state.race;
     r.status = "reveal";
+    if (r.plan) {
+      const desc = (i) => { const it = r.pair[i]; const u = UNITS.find((x) => x.id === it.unit); return { unit: it.unit, b: u ? u.b : null, cat: it.catIdx }; };
+      this._log({ t: "picks", round: r.round, first: r.first, random: Object.assign({}, r.randomPick),
+        offered: r.pair.map((_, i) => desc(i)), picks: { "1": r.picks["1"].map(desc), "2": r.picks["2"].map(desc) } });
+    }
     r.discarded = r.plan ? this._planRest() : r.pair.map((_, i) => i).filter((i) => r.picks["1"] !== i && r.picks["2"] !== i);
     // 아무도 안 가져간 택배: 레일로 돌아가 다음 라운드에 다시 나올 수 있다(기본). raceLeftoverReturn이 false면 사라진다(주인 없이 보드에서 빠짐).
     if (!this.rules.raceLeftoverReturn && !r.plan) {
@@ -1038,6 +1063,7 @@ class GameRoom {
     const br = (this.state.wallRule && this.state.wallRule.blockReward) || 0;
     if (br > 0) this.state.players[blocker].blocks = (this.state.players[blocker].blocks || 0) + 1;
     this._dEv("returned", unitId, door.seat, { blocker, gain: br });
+    this._log({ t: "blocked", seat: door.seat, unit: unitId, b: (this._unitOf(unitId) || {}).b, mode: door.mode || "wait", ms: Date.now() - door.start });
   }
   _completeDoor(unitId) {
     const d = this.state.delivery;
@@ -1060,6 +1086,7 @@ class GameRoom {
     const sr = this.state.setRule, wr = this.state.wallRule;
     if (sr && sr.amount > 0 && kindsBefore < sr.kinds && deliveredKinds(invs0) >= sr.kinds) combos.push({ k: "kinds", amount: sr.amount });
     if (wr && wr.bldBonus > 0 && bldBefore < 3 && deliveredBuildings(invs0) >= 3) combos.push({ k: "bld", amount: wr.bldBonus });
+    this._log({ t: "deliver", seat: door.seat, unit: unitId, b: (this._unitOf(unitId) || {}).b, mode: door.mode || "wait", ms: Date.now() - door.start, fever, src: inv ? inv.src || null : null, snatched: !!lostInv });
     this._dEv("done", unitId, door.seat, { combos, reward: inv ? (typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward) : 0, count: invs0.filter((v) => v.deliveredRound !== null && !v.stolen && !v.returned).length, snatched: lostInv ? (typeof lostInv.reward === "number" ? lostInv.reward : TYPES[lostInv.catIdx].reward) : 0, fever, streak: pl.streak });
   }
   _deliveryTick() {
@@ -1468,6 +1495,15 @@ class GameRoom {
   // the grand total and moves to "end".
   _finishHalf() {
     const scores = this._computeHalfScores();
+    {
+      const per = {};
+      ["1", "2"].forEach((s) => {
+        const invs = this.state.players[s].invoices;
+        const by = (src) => { const a = invs.filter((v) => (v.src || "late") === src); return { n: a.length, done: a.filter((v) => v.deliveredRound !== null && !v.lost && !v.returned).length }; };
+        per[s] = { score: scores[s], got: invs.length, first: by("first"), late: by("late"), random: by("random"), lost: invs.filter((v) => v.lost).length, wrong: this.state.players[s].wrong || 0, blocks: this.state.players[s].blocks || 0 };
+      });
+      this._log({ t: "half", per });
+    }
     this.state.halfHistory.push({
       half: this.state.half,
       players: JSON.parse(JSON.stringify(this.state.players)),

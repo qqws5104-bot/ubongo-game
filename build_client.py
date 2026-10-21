@@ -1082,7 +1082,7 @@ APP_JS_TEMPLATE = r"""
       l: function () { return ["먼저 끝낸 사람이 <b>2개</b> 고르기 · 늦은 사람도 <b>20초 안에 완성하면 2개</b> 고르기, 못 하면 <b>무작위 1개</b>(남은 건 사라져요).", "조각 2개 문제는 택배 4개, 조각 3개 이상은 5개 · 택배마다 <b>주소</b>가 보여요."]; } },
     { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> 누른 채 + 호실 키</div>'; },
-      l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송 + <b>막은 팀 보너스</b> · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!"]; } },
+      l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), (function () { var w = (state && state.wallRule) || {}; return "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송" + (w.blockReward ? " + <b>막은 팀 보너스</b>" : "") + (w.contest ? " · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!" : ""); })()]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · <b>↑</b> / <b>↓</b> 로 엘리베이터 움직이기 (누구나)</div>'; },
       l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · <b>마지막 15초는 FEVER</b> -- 배송 금액 2배!"]; } },
@@ -1290,6 +1290,38 @@ APP_JS_TEMPLATE = r"""
     html += '</div>';
     return html;
   }
+  // ---- 2026-10-21 테스트 1: 상대 진행도를 내 화면에 (미니게임 카드 위 / 택배 쌓기 중 화면) ----
+  //   값: 조각 수(0~need) → 판 맞추는 중(need + 0.5) → 투입(need + 1). 상대가 앞서면 강조.
+  function raceProg(r, s) { var st = r.stage[s]; if (st === "done") return (r.need || 0) + 1; if (st === "ubongo") return (r.need || 0) + 0.5; if (st === "out") return -1; return r.got ? r.got[s] : 0; }
+  function raceVsRow(st, r, s, me) {
+    var need = r.need || 0, got = r.got ? r.got[s] : 0, stg = r.stage[s], dots = '';
+    for (var k = 0; k < need; k++) dots += '<i class="vs-dot' + (k < got || stg === "ubongo" || stg === "done" ? ' on' : '') + '"></i>';
+    var label = stg === "done" ? '투입 완료!' : stg === "ubongo" ? '판 맞추는 중' : stg === "out" ? '포기' : '조각 ' + got + '/' + need;
+    return '<div class="vs-row t' + s + (me ? ' me' : ' opp') + (stg === "ubongo" ? ' assembling' : '') + (stg === "done" ? ' done' : '') + '" data-vs="' + s + '">'
+      + '<span class="vs-name">' + (me ? '나' : '상대') + '</span><span class="vs-dots">' + dots + '<i class="vs-board' + (stg === "done" ? ' on' : (stg === "ubongo" ? ' half' : '')) + '">판</i></span>'
+      + '<b class="vs-lab">' + label + '</b></div>';
+  }
+  function raceVsHtml(st, r, seat) {
+    if (!r || !r.pieceGames || !seat || r.status === "reveal") return '';
+    var o = raceOther(seat), a = raceProg(r, seat), b = raceProg(r, o), msg = '', cls = '';
+    if (r.stage[o] === "done" && r.stage[seat] !== "done") { msg = '상대가 먼저 투입했어요!'; cls = 'behind'; }
+    else if (r.stage[o] === "ubongo" && r.stage[seat] === "pieces") { msg = '상대가 벌써 판을 맞추는 중!'; cls = 'behind'; }
+    else if (b > a) { msg = '상대가 ' + (b - a >= 1 ? Math.floor(b - a) + '조각 ' : '') + '앞서요!'; cls = 'behind'; }
+    else if (a > b) { msg = '내가 앞서요 · 계속!'; cls = 'ahead'; }
+    else { msg = '막상막하!'; cls = 'even'; }
+    return '<div class="race-vs ' + cls + '">' + raceVsRow(st, r, seat, true) + raceVsRow(st, r, o, false) + '<div class="vs-msg">' + msg + '</div></div>';
+  }
+  // 상대가 한 단계 나아갈 때마다 잠깐 깜빡 + 작은 소리 (내 화면에서만)
+  var raceVsLast = { key: null, v: null };
+  function raceVsBump(r, seat) {
+    if (!r || !r.pieceGames || !seat) { raceVsLast = { key: null, v: null }; return; }
+    var key = (state.half || 1) + ":" + r.round, v = raceProg(r, raceOther(seat));
+    if (raceVsLast.key === key && raceVsLast.v != null && v > raceVsLast.v) {
+      Array.prototype.forEach.call(document.querySelectorAll('.race-vs .vs-row.opp'), function (el) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); });
+      try { dTone(220, 0, 0.12, "square", 0.08); dTone(196, 0.1, 0.16, "square", 0.08); } catch (e) {}
+    }
+    raceVsLast = { key: key, v: v };
+  }
   function raceMessage(st, r, seat) {
     if (r.plan) return raceMessagePlan(st, r, seat);
     if (r.status === "reveal") {
@@ -1430,6 +1462,7 @@ APP_JS_TEMPLATE = r"""
       return '<main class="stage stage--race">' + cartOpen('cart--race') + '<div class="race-blank">'
         + '<div class="race-head"><span class="round-pill">레이스 ' + r.round + '</span>'
         + racePickClock(r, seat) + '</div>'
+        + raceVsHtml(st, r, seat)
         + '<div class="rb-center">' + raceMessage(st, r, seat)
         + (me === "ubongo" ? '<div class="rb-actions"><button class="btn danger" data-action="race-giveup">포기</button><button class="btn ok" data-action="race-done">투입 (Space)</button></div>' : '')
         + '</div></div>' + cartClose() + '</main>';
@@ -2321,7 +2354,7 @@ APP_JS_TEMPLATE = r"""
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + dTug(st)
       + renderWalls(st, true)
-      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기 <b>+' + dWon((st.wallRule && st.wallRule.blockReward) || 0) + '</b> · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효</div></div>';
+      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기' + ((st.wallRule && st.wallRule.blockReward) ? ' <b>+' + dWon(st.wallRule.blockReward) + '</b>' : '') + ((st.wallRule && st.wallRule.contest) ? ' · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효' : '') + '</div></div>';
   }
   function renderRailDelivery(st, head, halfName) {
     return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
@@ -2554,6 +2587,10 @@ APP_JS_TEMPLATE = r"""
   function mxClose() { if (mx && mx.clock) clearInterval(mx.clock); if (mx && mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } mx = null; var el = document.getElementById("mx-layer"); if (el) { el.innerHTML = ""; el.classList.remove("on"); } }
   function microSync() {
     var r = state && state.phase === "secure" ? state.race : null, seat = mySeat();
+    // 2026-10-21 상대 진행 줄은 카드를 다시 그리지 않고 그 자리만 바꾼다 (깜빡임 없이)
+    var vsEl = document.getElementById("mx-vs");
+    if (vsEl && r) vsEl.innerHTML = raceVsHtml(state, r, seat);
+    raceVsBump(r && r.status !== "reveal" ? r : null, seat);
     var want = r && seat && r.pieceGames && r.stage[seat] === "pieces" && r.status !== "reveal";
     if (!want) {
       // 마지막 조각을 받은 직후엔 "조각 획득" 화면을 잠깐 더 보여 준다
@@ -2574,7 +2611,10 @@ APP_JS_TEMPLATE = r"""
     if (mx) { if (mx.timer) { clearTimeout(mx.timer); clearInterval(mx.timer); } if (mx.clock) clearInterval(mx.clock); }
     var kind = r.pieceGames[idx] || "react";
     var H = mxHard() ? 1 : 0;
-    mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0, tries: (mx && mx.round === r.round && mx.idx === idx ? (mx.tries || 0) + 1 : 0) };
+    var same = mx && mx.round === r.round && mx.idx === idx;
+    // 2026-10-21 기록용: 이 조각 게임을 처음 시작한 시각 / 실수 / 시간 초과 (시간 초과로 다시 시작해도 이어서 센다)
+    mx = { round: r.round, idx: idx, need: r.need, kind: kind, won: false, lockUntil: 0, tries: (same ? (mx.tries || 0) + 1 : 0),
+      t0Piece: same ? mx.t0Piece : Date.now(), fails: same ? (mx.fails || 0) : 0, timeouts: same ? (mx.timeouts || 0) + 1 : 0 };
     if (kind === "react") { mx.hits = 0; mx.scanCount = 0; mx.scanSeg = -1; mx.scanNeed = [6, 7][H]; mx.needHits = [1, 2][H]; mx.sched = mxReactSched((r.seed || 1) + idx * 7919, H); mx.t0 = r.startedAt || nowMs(); mx.lastHitSeg = -1; mx.seenSeg = -1; mxArmReact(); }
     else if (kind === "pick") { mx.streak = 0; mx.needStreak = [2, 3][H]; mxNewPick(); }
     else if (kind === "mash") { mx.count = 0; mx.goal = [9, 10][H]; mxMashDecay(); }
@@ -2691,6 +2731,7 @@ APP_JS_TEMPLATE = r"""
     mx.opts = [target].concat(picks).sort(function () { return Math.random() - 0.5; });
   }
   function mxFail(msg) {
+    mx.fails = (mx.fails || 0) + 1;
     mx.lockUntil = Date.now() + 700; mx.flash = msg;
     // 2026-10-16 (사용자): 틀리면 제한 시간도 처음부터 다시 (잠깐 멈춘 0.7초 뒤부터)
     if (mx.limit) mx.deadline = Math.max(Date.now() + 700, mx.showUntil || 0) + mx.limit;
@@ -2705,7 +2746,7 @@ APP_JS_TEMPLATE = r"""
     if (mx.clock) clearInterval(mx.clock);
     try { DSND.done(); } catch (e) {}
     mxRender();
-    send({ type: "race-step", seat: mySeat(), step: "piece-done", round: mx.round });
+    send({ type: "race-step", seat: mySeat(), step: "piece-done", round: mx.round, meta: { kind: mx.kind, ms: Date.now() - (mx.t0Piece || Date.now()), fails: mx.fails || 0, timeouts: mx.timeouts || 0 } });
   }
   // 입력 하나 (key = "Space" | "ArrowLeft" ... | {opt: i} 터치)
   function mxInput(key) {
@@ -2782,7 +2823,8 @@ APP_JS_TEMPLATE = r"""
         + '</div><div class="mx-memo-c">' + Math.max(1, Math.ceil((mx.showUntil - Date.now()) / 1000)) + '</div></div></div>';
     }
     var tbar = (mx.won || !mx.limit) ? '' : '<div class="mx-timebar"><i id="mx-time" style="width:' + Math.max(0, Math.min(1, (mx.deadline - Date.now()) / mx.limit) * 100) + '%"></i></div>';
-    el.innerHTML = '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + tbar + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
+    var vs = '<div id="mx-vs">' + (state && state.race ? raceVsHtml(state, state.race, mySeat()) : '') + '</div>';
+    el.innerHTML = vs + '<div class="mx-card' + (mx.flash ? ' fail' : '') + (mx.won ? ' won' : '') + '">' + head + tbar + body + (mx.flash ? '<div class="mx-flash">' + esc(mx.flash) + '</div>' : '') + '</div>';
   }
   document.addEventListener("keydown", function (e) {
     if (!mx || MAIN || RAIL) return;

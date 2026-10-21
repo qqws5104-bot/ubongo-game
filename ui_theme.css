@@ -897,3 +897,28 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
 .mx-memo-note b { color: #c0392b; font-size: 1.15rem; }
 .mx-memo-note.plain b { color: #1f6b3a; }
 .mx-q small { display: block; font-weight: 600; color: #888; font-size: .78rem; margin-top: 2px; }
+
+/* ===== 31. 테스트 1 · 상대 진행도 (2026-10-21) ===== */
+.race-vs { width: min(560px, 94vw); margin: 0 auto 12px; background: #1E2235; color: #FBF6EC; border-radius: 16px; padding: 12px 16px 10px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+#mx-vs { position: relative; z-index: 2; }
+#mx-vs .race-vs { margin-bottom: 14px; }
+.mx-layer.on { flex-direction: column; }
+.vs-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 10px; }
+.vs-name { font-weight: 900; font-size: .95rem; }
+.vs-row.t1 .vs-name { color: #ff7a72; } .vs-row.t2 .vs-name { color: #7fb0ff; }
+.vs-dots { display: flex; align-items: center; gap: 6px; }
+.vs-dot { width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,.14); display: inline-block; }
+.vs-row.t1 .vs-dot.on { background: #e53935; } .vs-row.t2 .vs-dot.on { background: #2f6fe0; }
+.vs-board { font-style: normal; font-size: .72rem; font-weight: 900; margin-left: 6px; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.14); color: rgba(255,255,255,.6); }
+.vs-board.half { background: #ffd23f; color: #3a2a00; animation: vsPulse .8s ease-in-out infinite alternate; }
+.vs-board.on { background: #1f9a4c; color: #fff; }
+.vs-lab { font-size: .95rem; white-space: nowrap; }
+.vs-row.opp.assembling .vs-lab, .vs-row.opp.done .vs-lab { color: #ffd23f; }
+.vs-row.bump { animation: vsBump .6s ease-out; }
+.vs-msg { text-align: center; font-weight: 900; font-size: 1rem; padding-top: 2px; }
+.race-vs.behind { box-shadow: 0 0 0 3px #e2691a, 0 8px 24px rgba(0,0,0,.25); }
+.race-vs.behind .vs-msg { color: #ffb36b; }
+.race-vs.ahead .vs-msg { color: #8fe0a8; }
+@keyframes vsBump { 0% { background: rgba(255,210,63,.55); transform: scale(1.03); } 100% { background: transparent; transform: none; } }
+@keyframes vsPulse { from { opacity: .7; } to { opacity: 1; } }
+body:has(.mx-layer.on) .race-blank .race-vs { visibility: hidden; } /* 미니게임 중엔 위 레이어의 진행 줄만 */
