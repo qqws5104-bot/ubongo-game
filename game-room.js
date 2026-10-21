@@ -988,10 +988,13 @@ class GameRoom {
   // 엘리베이터: 누를 때마다 한 층 (예전 vote와 같음). 두 팀이 반대로 누르면 차이만큼 움직인다.
   wallElevator(seat, dir) {
     if (this.state.phase !== "delivery" || !this.state.delivery || !this.state.delivery.elev) return;
-    if ((seat !== "1" && seat !== "2") || (dir !== "up" && dir !== "down")) return;
+    if (dir !== "up" && dir !== "down") return;
     const e = this.state.delivery.elev;
     this.touch();
-    e.presses[seat][dir] += 1;
+    // 2026-10-21 (사용자): 엘리베이터 ↑↓는 팀 키 없이도 누구나. 팀 키를 같이 누르면 그 팀 칸에, 아니면 "0" 칸에 센다.
+    const who = seat === "1" || seat === "2" ? seat : "0";
+    if (!e.presses[who]) e.presses[who] = { up: 0, down: 0 };
+    e.presses[who][dir] += 1;
     const before = e.floor;
     e.floor = Math.max(1, Math.min(e.top, e.floor + (dir === "up" ? 1 : -1)));
     if (e.floor !== before) e.movingUntil = Date.now() + (this.rules.deliveryElevMoveMs || 0); // 움직이는 동안 아파트 배송 시작 불가

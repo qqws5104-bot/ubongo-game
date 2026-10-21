@@ -169,7 +169,7 @@ wss.on("connection", (ws, req) => {
       const team = msg.team === "1" || msg.team === "2" ? msg.team : null;
       if (type === "wall-press" && typeof msg.unit === "string") entry.room.wallPress(team, msg.unit);
       if (type === "wall-release" && typeof msg.unit === "string" && team) entry.room.wallRelease(team, msg.unit);
-      if (type === "wall-elev" && team) entry.room.wallElevator(team, msg.dir);
+      if (type === "wall-elev") entry.room.wallElevator(team, msg.dir); // 2026-10-21: 팀 키 없이도 (team null)
       return;
     }
     if (seat === "1" || seat === "2") conn.seat = seat;

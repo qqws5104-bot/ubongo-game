@@ -89,7 +89,7 @@ const OUT = "/tmp/wall_e2e_";
   assert(wtxt.includes("오배송") || wtxt.includes("엘리베이터"), "파란 팀 잘못 누름 안내: " + wtxt);
   assert.strictEqual(await rail.locator(".d-team.big").count(), 2, "레일 화면 점수판");
   // 엘리베이터: 메인 컴퓨터 Shift+↑ -> 2층, 플레이어 화면엔 ▲▼ 버튼 없음
-  await s.keyboard.down("Shift"); await s.keyboard.press("ArrowUp"); await s.keyboard.up("Shift"); await s.waitForTimeout(300);
+  await s.keyboard.press("ArrowUp"); await s.waitForTimeout(300); // 2026-10-21 팀 키 없이
   assert((await s.locator(".d-elev-f").first().textContent()).includes("2층"), "엘리베이터 2층");
   assert.strictEqual(await p1.locator("[data-action=\"wall-elev\"]").count(), 0, "플레이어 화면엔 엘리베이터 버튼 없음");
   console.log("errs", errs);

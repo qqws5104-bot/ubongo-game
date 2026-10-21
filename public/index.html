@@ -3102,7 +3102,7 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
   var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1021-0955"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1021-1029"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -3479,7 +3479,7 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
         return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> 누른 채 + 호실 키</div>'; },
       l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송 + <b>막은 팀 보너스</b> · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!"]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
-        return '<div class="tut-keys big">메인 컴퓨터 · 팀 키 + <b>↑</b> / <b>↓</b> 로 엘리베이터 끌기</div>'; },
+        return '<div class="tut-keys big">메인 컴퓨터 · <b>↑</b> / <b>↓</b> 로 엘리베이터 움직이기 (누구나)</div>'; },
       l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · <b>마지막 15초는 FEVER</b> -- 배송 금액 2배!"]; } },
   ];
   function tutPages(st) { return (st && st.wallRule) ? TUT_PAGES_WALL : TUT_PAGES; }
@@ -4703,7 +4703,7 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + dTug(st)
       + renderWalls(st, true)
-      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · 팀 키 + <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기 <b>+' + dWon((st.wallRule && st.wallRule.blockReward) || 0) + '</b> · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효</div></div>';
+      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기 <b>+' + dWon((st.wallRule && st.wallRule.blockReward) || 0) + '</b> · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효</div></div>';
   }
   function renderRailDelivery(st, head, halfName) {
     return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
@@ -4880,7 +4880,7 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
     if (e.code === "ArrowUp" || e.code === "ArrowDown") {
       e.preventDefault();
       if (e.repeat) return true;
-      if (team === "1" || team === "2") send({ type: "wall-elev", team: team, dir: e.code === "ArrowUp" ? "up" : "down" });
+      send({ type: "wall-elev", team: (team === "1" || team === "2") ? team : null, dir: e.code === "ArrowUp" ? "up" : "down" }); // 2026-10-21: 팀 키 없이도
       return true;
     }
     var u = unitByKey[e.code];

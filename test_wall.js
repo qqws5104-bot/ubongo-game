@@ -207,6 +207,15 @@ function mk(rules) {
     assert.strictEqual(box.st.halfHistory[0].scores["1"], 3000 - 500);
     room.destroy();
   }
+  // 10) 엘리베이터는 팀 키 없이도 (seat null)
+  {
+    const { room, box } = mk({ deliveryMs: 3000, deliveryElevMoveMs: 0 });
+    room._endSecurePhase();
+    const f0 = box.st.delivery.elev.floor;
+    room.wallElevator(null, "up"); assert.strictEqual(box.st.delivery.elev.floor, f0 + 1, "팀 키 없이 위로");
+    room.wallElevator(null, "down"); assert.strictEqual(box.st.delivery.elev.floor, f0);
+    room.destroy();
+  }
   console.log("test_wall OK");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });
