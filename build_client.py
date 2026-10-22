@@ -1231,7 +1231,7 @@ APP_JS_TEMPLATE = r"""
       inner += tags.join('');
     }
     if (owner) inner += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + ' 획득</span>';
-    else if (left) inner += '<span class="rp-owner gone">레일로 돌아감</span>';
+    else if (left) inner += '<span class="rp-owner gone">' + (r.plan ? '사라짐' : '레일로 돌아감') + '</span>';
     else if (canPick) inner += '<span class="rp-owner pick">' + (r.plan ? (i + 1) : (RACE_KEYS[i] || '')) + ' 고르기</span>';
     return canPick ? '<button class="' + cls + '" data-action="race-pick" data-idx="' + i + '">' + inner + '</button>'
       : '<div class="' + cls + '">' + inner + '</div>';
@@ -1268,18 +1268,21 @@ APP_JS_TEMPLATE = r"""
   function raceLane(st, r, s, isMe) {
     var stg = r.stage[s];
     // 2026-10-15: 첫 게임이 없으면(기본) 택배 쌓기 > 투입 두 단계
-    var steps = r.pieceGames ? [["pieces", "조각 " + (r.got ? r.got[s] : 0) + "/" + r.need], ["ubongo", "완성"], ["done", "투입"]]
+    // 2026-10-22: 공개 규칙 -- 조립 중이라는 단계는 따로 보여 주지 않고 "조각 n/n"으로. 남은 조각 하나면 "완성 임박".
+    var stp = stg === "ubongo" ? "pieces" : stg;
+    var steps = r.pieceGames ? [["pieces", "조각 " + (stg === "ubongo" ? r.need : (r.got ? r.got[s] : 0)) + "/" + r.need + (raceImminent(r, s) ? " · 완성 임박" : "")], ["done", "완성"]]
       : r.game ? [["sticker", raceGameName(r)], ["ubongo", "택배 쌓기"], ["done", "투입"]] : [["ubongo", "택배 쌓기"], ["done", "투입"]];
-    var idx = -1; steps.forEach(function (sp, k) { if (sp[0] === stg) idx = k; });
+    if (r.randomPick && r.randomPick[s] && r.pieceGames) stp = "pieces"; // 시간 초과로 받은 사람은 "완성"으로 칠하지 않는다
+    var idx = -1; steps.forEach(function (sp, k) { if (sp[0] === (r.pieceGames ? stp : stg)) idx = k; });
     var last = steps.length - 1;
-    var html = '<div class="race-lane' + (isMe ? ' me' : '') + (stg === "out" ? ' is-out' : '') + '"><span class="rl-name">' + (isMe ? '나 · ' : '') + esc(seatName(s, st))
+    var html = '<div class="race-lane' + (isMe ? ' me' : '') + (stg === "out" ? ' is-out' : '') + (raceImminent(r, s) ? ' imminent' : '') + '"><span class="rl-name">' + (isMe ? '나 · ' : '') + esc(seatName(s, st))
       + (r.first === s ? ' <em>1등</em>' : '') + '</span><span class="rl-steps">';
     steps.forEach(function (sp, k) {
       html += '<span class="rl-step' + (k < idx || (k === last && idx === last) ? ' done' : '') + (k === idx && idx < last ? ' now' : '') + '">' + sp[1] + '</span>';
       if (k < last) html += '<i class="rl-arrow">›</i>';
     });
     var dsec = raceDoneSec(r, s);
-    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '') + (dsec != null ? '<span class="rl-time">완성 ' + dsec.toFixed(1) + '초</span>' : '');
+    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '') + (dsec != null ? '<span class="rl-time">완성 ' + raceTime(dsec) + '</span>' : (r.randomPick && r.randomPick[s] ? '<span class="rl-out">시간 초과</span>' : ''));
     // 2026-10-15 종류 모으기: 이번 하프에 가진 종류 (공개 정보 -- 상대가 뭘 노리는지 보이게)
     var rule = setRuleOf(st);
     if (rule.amount > 0) {
@@ -1302,14 +1305,36 @@ APP_JS_TEMPLATE = r"""
     if (!seat) return esc(TEAM[fast]) + '이 ' + gap + '초 먼저';
     return fast === seat ? '내가 ' + gap + '초 먼저 완성!' : '상대가 ' + gap + '초 먼저 완성';
   }
+  // 2026-10-22 (사용자 제안 1) 완성 임박: 남은 조각이 하나일 때. 단 조각 2개 문제는 1/2부터 임박이면 너무 이르니 2/2(다 모음)일 때.
+  function raceImminent(r, s) {
+    if (!r || !r.pieceGames) return false;
+    var need = r.need || 0, st = r.stage[s];
+    if (st === "ubongo") return true;
+    return st === "pieces" && need >= 3 && r.got && r.got[s] === need - 1;
+  }
+  function raceTime(sec) { var m = Math.floor(sec / 60), x = sec - m * 60; return (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + Math.floor(x); }
+  function raceGapTxt(g) { return (g < 10 ? g.toFixed(1) : Math.round(g)) + '초'; }
+  // 2026-10-22 (사용자 제안 2) 퍼즐 완성 순위 -- 점수 없음, 기록만. 늦은 사람이 시간 안에 못 하면 "시간 초과".
+  function raceRankHtml(st, r) {
+    var rows = ["1", "2"].map(function (s) { return { s: s, t: raceDoneSec(r, s) }; });
+    rows.sort(function (a, b) { if (a.t == null) return 1; if (b.t == null) return -1; return a.t - b.t; });
+    var first = rows[0];
+    return '<div class="race-rank">' + '<div class="rr-title">퍼즐 완성 기록</div>' + rows.map(function (x, k) {
+      var sub = k === 0 ? (x.t != null ? '선택 우선권' : '') : (x.t == null ? ((r.randomPick && r.randomPick[x.s]) ? '시간 초과 · 무작위 받기' : '포기') : (first.t != null ? raceGapTxt(x.t - first.t) + ' 차이' : ''));
+      return '<div class="rr-row t' + x.s + (k === 0 ? ' win' : '') + '"><b class="rr-pos">' + (x.t == null ? '—' : (k + 1) + '위') + '</b><span class="rr-name">' + esc(seatName(x.s, st)) + '</span>'
+        + '<span class="rr-time">' + (x.t != null ? '퍼즐 완성 ' + raceTime(x.t) : '미완성') + '</span><span class="rr-sub">' + sub + '</span>'
+        + '<span class="rr-got">' + r.picks[x.s].length + '개</span></div>';
+    }).join('') + '</div>';
+  }
   function raceProg(r, s) { var st = r.stage[s]; if (st === "done") return (r.need || 0) + 1; if (st === "ubongo") return (r.need || 0) + 0.5; if (st === "out") return -1; return r.got ? r.got[s] : 0; }
   function raceVsRow(st, r, s, me) {
     var need = r.need || 0, got = r.got ? r.got[s] : 0, stg = r.stage[s], dots = '';
     for (var k = 0; k < need; k++) dots += '<i class="vs-dot' + (k < got || stg === "ubongo" || stg === "done" ? ' on' : '') + '"></i>';
     // 공개 규칙: 조각 수와 완성 여부·완성 시각만 (조립 상태·게임 종류는 보여 주지 않음)
     var ds = raceDoneSec(r, s);
-    var label = stg === "done" ? '완성 · ' + (ds != null ? ds.toFixed(1) + '초' : '') : stg === "out" ? '포기' : '조각 ' + (stg === "ubongo" ? need : got) + '/' + need;
-    return '<div class="vs-row t' + s + (me ? ' me' : ' opp') + (stg === "done" ? ' done' : '') + '" data-vs="' + s + '">'
+    var imm = raceImminent(r, s);
+    var label = stg === "done" ? '완성 · ' + (ds != null ? raceTime(ds) : '') : stg === "out" ? '포기' : '조각 ' + (stg === "ubongo" ? need : got) + '/' + need + (imm ? ' · 완성 임박' : '');
+    return '<div class="vs-row t' + s + (me ? ' me' : ' opp') + (imm ? ' imminent' : '') + (stg === "done" ? ' done' : '') + '" data-vs="' + s + '">'
       + '<span class="vs-name">' + (me ? '나' : '상대') + '</span><span class="vs-dots">' + dots + '<i class="vs-board' + (stg === "done" ? ' on' : '') + '">완성</i></span>'
       + '<b class="vs-lab">' + label + '</b></div>';
   }
@@ -1318,7 +1343,8 @@ APP_JS_TEMPLATE = r"""
     var o = raceOther(seat), a = raceProg(r, seat), b = raceProg(r, o), msg = '', cls = '';
     if (r.stage[o] === "done" && r.stage[seat] === "done") { msg = raceGapHtml(r, seat); cls = raceDoneSec(r, seat) <= raceDoneSec(r, o) ? 'ahead' : 'behind'; }
     else if (r.stage[o] === "done" && r.stage[seat] !== "done") { msg = '상대가 먼저 완성했어요!'; cls = 'behind'; }
-    else if (r.stage[o] === "ubongo" && r.stage[seat] === "pieces") { msg = '상대가 조각을 다 모았어요!'; cls = 'behind'; }
+    else if (raceImminent(r, o) && !raceImminent(r, seat)) { msg = '상대 완성 임박! 서두르세요'; cls = 'behind urgent'; }
+    else if (raceImminent(r, o) && raceImminent(r, seat)) { msg = '둘 다 완성 임박!'; cls = 'even urgent'; }
     else if (b > a) { msg = '상대가 ' + (b - a >= 1 ? Math.floor(b - a) + '조각 ' : '') + '앞서요!'; cls = 'behind'; }
     else if (a > b) { msg = '내가 앞서요 · 계속!'; cls = 'ahead'; }
     else { msg = '막상막하!'; cls = 'even'; }
@@ -1326,12 +1352,19 @@ APP_JS_TEMPLATE = r"""
   }
   // 상대가 한 단계 나아갈 때마다 잠깐 깜빡 + 작은 소리 (내 화면에서만)
   var raceVsLast = { key: null, v: null };
+  var raceImmSeen = {};
   function raceVsBump(r, seat) {
     if (!r || !r.pieceGames || !seat) { raceVsLast = { key: null, v: null }; return; }
     var key = (state.half || 1) + ":" + r.round, v = raceProg(r, raceOther(seat));
+    // 상대가 완성 임박이 되는 순간 한 번만: 짧은 경고음 (피로하지 않게 라운드당 1회)
+    var immNow = false;
+    if (raceImminent(r, raceOther(seat)) && !raceImmSeen[key]) {
+      raceImmSeen[key] = 1; immNow = true;
+      try { dTone(660, 0, 0.09, "square", 0.1); dTone(880, 0.1, 0.09, "square", 0.1); dTone(1100, 0.2, 0.16, "square", 0.1); } catch (e) {}
+    }
     if (raceVsLast.key === key && raceVsLast.v != null && v > raceVsLast.v) {
       Array.prototype.forEach.call(document.querySelectorAll('.race-vs .vs-row.opp'), function (el) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); });
-      try { dTone(220, 0, 0.12, "square", 0.08); dTone(196, 0.1, 0.16, "square", 0.08); } catch (e) {}
+      if (!immNow) try { dTone(220, 0, 0.12, "square", 0.08); dTone(196, 0.1, 0.16, "square", 0.08); } catch (e) {}
     }
     raceVsLast = { key: key, v: v };
   }
@@ -1385,6 +1418,7 @@ APP_JS_TEMPLATE = r"""
   function raceMessagePlan(st, r, seat) {
     var f = r.first, n = r.plan.first, rest = rRestCount(r);
     if (r.status === "reveal") {
+      if (r.pieceGames) return raceRankHtml(st, r);
       var gapT = raceGapHtml(r, null);
       return '<div class="race-msg reveal">' + ["1", "2"].map(function (s) {
         var d = raceDoneSec(r, s);
@@ -2978,7 +3012,7 @@ APP_JS_TEMPLATE = r"""
       + itAddrHtml(it)
       + '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span><span class="rp-amt">' + fmtWon(t.reward) + '</span>';
     if (owner) html += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + (r.randomPick && r.randomPick[owner] ? ' (무작위)' : '') + ' 획득</span>';
-    else if (left) html += '<span class="rp-owner gone">레일로 돌아감</span>';
+    else if (left) html += '<span class="rp-owner gone">' + (r.plan ? '사라짐' : '레일로 돌아감') + '</span>';
     else {
       var rule = setRuleOf(st), tags = [];
       ["1", "2"].forEach(function (s) {
@@ -3014,7 +3048,9 @@ APP_JS_TEMPLATE = r"""
     var meta = cellMeta(r.puzzleId, st.half);
     return '<div class="rv rv-puzzle-only"><div class="race-puzzle">'
       + '<div class="rp-cap">레이스 ' + r.round + ' · 택배 쌓기 · 조각 ' + racePieces(st, r) + '개</div>'
-      + (meta && meta.src ? '<img src="' + meta.src + '" alt="택배 쌓기 문제">' : '') + '</div></div>';
+      + (meta && meta.src ? '<img src="' + meta.src + '" alt="택배 쌓기 문제">' : '') + '</div>'
+      // 2026-10-22: 레일 화면(관전)에도 두 사람 진행도 -- 조각 수 · 완성 임박 · 완성 시각
+      + (r.pieceGames ? '<div class="race-lanes rv-lanes">' + ["1", "2"].map(function (s) { return raceLane(st, r, s, false); }).join('') + '</div>' : '') + '</div>';
   }
   function renderRail() {
     var st = state;
@@ -3524,6 +3560,10 @@ for _n in ["apt", "mansion", "house1", "house2", "house3", "house4"]:   # 2026-1
         UI_THEME_CSS = UI_THEME_CSS.replace("@@TOWN_" + _n.upper() + "@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
 with open(os.path.join(_here, "ui_art", "building.jpg"), "rb") as _f:   # 2026-10-14 엘리베이터 이동 표시(건물 단면도)
     UI_THEME_CSS = UI_THEME_CSS.replace("@@BUILDING_BG@@", "data:image/jpeg;base64," + base64.b64encode(_f.read()).decode("ascii"))
+# 2026-10-22 둥근 제목 글꼴(Jua)을 파일로 박아 넣는다 -- 구글 글꼴이 안 되는 현장(오프라인)에서도 같은 모양
+_jua_dir = os.path.join(_here, "ui_art", "fonts", "jua")
+_jua_css = open(os.path.join(_jua_dir, "jua_embedded.css"), encoding="utf-8").read()  # 글꼴이 이미 data URI로 들어 있는 한 파일
+UI_THEME_CSS = _jua_css + "\n" + UI_THEME_CSS
 assert "@@" not in UI_THEME_CSS and "</style" not in UI_THEME_CSS
 assert "</style" not in MAINVIEW_CSS
 assert "</script" not in MINIGAMES_JS and "</style" not in MINIGAMES_CSS

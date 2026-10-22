@@ -923,3 +923,116 @@ body.d-fever::after { content: ""; position: fixed; inset: 0; z-index: 9990; poi
 @keyframes vsPulse { from { opacity: .7; } to { opacity: 1; } }
 body:has(.mx-layer.on) .race-blank .race-vs { visibility: hidden; } /* 미니게임 중엔 위 레이어의 진행 줄만 */
 .rl-time { margin-left: 10px; font-weight: 800; font-size: .85rem; color: #1f6b3a; background: #e3f6e8; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+
+/* ===== 32. 완성 임박 / 퍼즐 완성 기록 (2026-10-22) ===== */
+.vs-row.imminent { background: rgba(226,105,26,.22); }
+.vs-row.opp.imminent { animation: vsImm 1s ease-in-out infinite alternate; }
+.vs-row.imminent .vs-lab { color: #ffb36b; }
+.race-vs.urgent .vs-msg { color: #ffd23f; letter-spacing: .02em; }
+@keyframes vsImm { from { background: rgba(226,105,26,.18); } to { background: rgba(226,105,26,.45); } }
+.race-lane.imminent .rl-step.now { background: #e2691a; color: #fff; animation: vsPulse .8s ease-in-out infinite alternate; }
+.race-rank { background: #1E2235; color: #FBF6EC; border-radius: 14px; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+.rr-title { font-weight: 900; font-size: .95rem; color: #ffd23f; text-align: center; }
+.rr-row { display: grid; grid-template-columns: 48px minmax(80px, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.06); }
+.rr-row.win { background: rgba(255,210,63,.16); box-shadow: inset 0 0 0 2px rgba(255,210,63,.55); }
+.rr-pos { font-size: 1.1rem; }
+.rr-row.t1 .rr-name { color: #ff7a72; font-weight: 800; } .rr-row.t2 .rr-name { color: #7fb0ff; font-weight: 800; }
+.rr-time { font-variant-numeric: tabular-nums; font-weight: 800; }
+.rr-sub { font-size: .85rem; color: #d5d8e4; }
+.rr-row.win .rr-sub { color: #ffd23f; font-weight: 800; }
+.rr-got { font-size: .85rem; opacity: .8; }
+.rv-puzzle-only { flex-direction: column; gap: 1.2vh; }
+.rv-puzzle-only .race-puzzle { min-height: 0; }
+.rv-lanes { flex: 0 0 auto; display: flex; flex-direction: column; gap: .8vh; }
+.rv-lanes .race-lane { font-size: clamp(1rem, 2.4vh, 1.6rem); }
+
+/* ===== 33. 부드러운 일러스트 재질 (2026-10-22, 사용자 레퍼런스: 남색 패널 + 두꺼운 노란 테두리 + 둥근 글꼴) =====
+ *  색: 남색 #16285A(패널) / 외곽선 #14204A / 노랑 #F6C344 / 얼음빛 #E6F1FA.  글꼴: 제목·숫자 = Jua(둥근 고딕), 본문 = Noto Sans KR.
+ *  규칙만 덮어쓰는 층이라 이 블록을 지우면 예전 모양으로 돌아간다. */
+:root {
+  --sf-navy: #16285A; --sf-navy2: #22397A; --sf-line: #14204A; --sf-yellow: #F6C344; --sf-yellow-deep: #D99A1E; --sf-ice: #E6F1FA;
+  --font-display: 'Jua', 'Noto Sans KR', sans-serif;
+  --cart-red: #EE5A4F; --cart-red-dark: #14204A; --cart-screen: #DCE8F4; --cart-base: #16285A; --cart-wheel: #14204A; --cart-hub: #6C7BA8;
+}
+.topbar { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)) !important; border-bottom: 4px solid var(--sf-yellow) !important; box-shadow: 0 4px 0 var(--sf-line); }
+.topbar h1 { color: #fff; font-family: var(--font-display); font-weight: 400; letter-spacing: .01em; }
+.topbar .eyebrow { color: var(--sf-yellow); }
+.seat-badge, .room-chip { background: var(--sf-navy) !important; color: #fff !important; border: 2px solid var(--sf-yellow) !important; font-family: var(--font-display) !important; font-weight: 400 !important; }
+
+/* 버튼: 둥근 사탕 버튼 (아래로 눌리는 그림자) */
+.btn { border-radius: 999px; border: 3px solid var(--sf-line) !important; box-shadow: 0 4px 0 var(--sf-line); font-family: var(--font-display); font-weight: 400; letter-spacing: .02em; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--sf-line); }
+.btn.primary { background: var(--sf-yellow); color: var(--sf-line); }
+.btn.ok { background: #3DBB6E; } .btn.danger { background: #EE5A4F; }
+.btn.ghost { background: #fff; color: var(--sf-line); }
+.card { border: 3px solid var(--sf-line); border-radius: 22px; box-shadow: 0 5px 0 rgba(20,32,74,.22); }
+
+/* 택배 카트: 둥글게 + 남색 만화 외곽선 */
+.cart-body { border: 4px solid var(--sf-line); border-radius: 30px 30px 12px 12px; background-color: var(--cart-red);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 40%), repeating-linear-gradient(90deg, transparent 0 46px, rgba(0,0,0,0.05) 46px 48px); }
+.cart-screen { border: 4px solid var(--sf-line); border-radius: 22px; background: linear-gradient(180deg, #EEF5FC, var(--cart-screen)); box-shadow: inset 0 4px 0 rgba(255,255,255,.6); }
+.cart-door i { background-color: var(--cart-red); }
+
+/* 미니게임 카드: 크림 + 노란 테두리 + 남색 외곽선 */
+.mx-card { border-radius: 30px; border: 5px solid var(--sf-yellow); box-shadow: 0 0 0 4px var(--sf-line), 0 16px 34px rgba(10,20,50,.35); background: #FFFBF1; }
+.mx-head .mx-piece { background: var(--sf-navy); color: var(--sf-yellow); font-family: var(--font-display); font-weight: 400; border: 2px solid var(--sf-yellow); }
+.mx-head .mx-name { font-family: var(--font-display); font-weight: 400; color: var(--sf-navy); font-size: 1.35rem; }
+.mx-timebar { border-radius: 999px; background: #E3DED0; border: 2px solid var(--sf-line); height: 12px; overflow: hidden; }
+.mx-timebar > i { background: linear-gradient(90deg, var(--sf-yellow), #F08A24); }
+.mx-pad button, .mx-opt:not(.mx-addr-opt) { border-radius: 16px; border: 3px solid var(--sf-line); box-shadow: 0 4px 0 var(--sf-line); }
+.mx-belt { border-radius: 20px; border: 4px solid var(--sf-line); }
+.mx-tape, .mx-route { border-radius: 20px; }
+.mx-memo-card { border-width: 5px; border-radius: 26px; box-shadow: 0 0 0 4px var(--sf-line), 0 12px 40px rgba(0,0,0,.45); }
+
+/* 남색 정보 패널 (상대 진행도 / 퍼즐 완성 기록 / 결과 팝업) */
+.race-vs, .race-rank { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)); border: 4px solid var(--sf-yellow); border-radius: 24px; box-shadow: 0 0 0 3px var(--sf-line), 0 10px 24px rgba(10,20,50,.3); }
+.race-vs.behind { box-shadow: 0 0 0 3px var(--sf-line), 0 0 0 7px #F08A24, 0 10px 24px rgba(10,20,50,.3); }
+.vs-name, .vs-lab, .vs-msg, .rr-title, .rr-pos, .rr-time { font-family: var(--font-display); font-weight: 400; }
+.vs-dot { border-radius: 8px; }
+.rr-row { border-radius: 14px; }
+.dpop { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)); color: #fff; border: 4px solid var(--sf-yellow) !important; border-radius: 24px;
+  box-shadow: 0 0 0 3px var(--sf-line), 0 14px 30px rgba(10,20,50,.35); }
+.dpop b { font-family: var(--font-display); font-weight: 400; font-size: 1.7rem; color: var(--sf-yellow); }
+.dpop span { color: #D5DCF0; }
+.dpop.ok b { color: #9CF0B9; } .dpop.bad, .dpop.warn { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)); }
+.dpop.bad b { color: #FF9C93; } .dpop.warn b { color: var(--sf-yellow); }
+.dpop.combo, .dpop.lead { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)); }
+
+/* 레이스 안내 줄 */
+.race-msg { border-radius: 999px; border: 3px solid var(--sf-line); box-shadow: 0 3px 0 var(--sf-line); font-family: var(--font-display); font-weight: 400; font-size: clamp(16px, 1.7vw, 22px); }
+.race-msg.reveal { background: var(--sf-navy); color: #fff; }
+.round-pill { background: var(--sf-navy) !important; color: var(--sf-yellow) !important; border: 2px solid var(--sf-yellow); font-family: var(--font-display); font-weight: 400; border-radius: 999px; }
+.race-parcel { border-radius: 22px; }
+.race-lane { border-radius: 16px; border: 2px solid rgba(20,32,74,.18); }
+.rl-step { border-radius: 999px; font-family: var(--font-display); font-weight: 400; }
+
+/* 배송: 점수 막대 = 둥근 알약 + 노란 테두리, 시계 = 남색 판 */
+.d-team { border-radius: 999px; border: 4px solid var(--sf-yellow); box-shadow: 0 0 0 3px var(--sf-line), 0 6px 0 rgba(10,20,50,.35); font-family: var(--font-display); }
+.d-team:not(.big) > b { font-weight: 400; font-size: 1.7rem; }
+.d-team.big .d-team-rows b { font-weight: 400; }
+.d-team.big { border-radius: 28px; }
+.d-team-v { font-family: var(--font-display); font-weight: 400; }
+.d-bar-mid { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)); border: 4px solid var(--sf-yellow); border-radius: 22px; box-shadow: 0 0 0 3px var(--sf-line); color: #fff; }
+.d-bar-mid .d-clock { color: var(--sf-yellow); font-family: var(--font-display); }
+.d-bar-mid .d-elev-l, .d-bar-mid .d-elev-f { color: #fff; }
+.d-tug-bar { height: 18px; border: 3px solid var(--sf-line); box-shadow: 0 3px 0 var(--sf-line); }
+.d-tug-bar > em { border-color: var(--sf-line); background: var(--sf-yellow); }
+.dw { border-radius: 24px; border: 4px solid var(--sf-line); background: rgba(255,255,255,.9); box-shadow: 0 5px 0 rgba(10,20,50,.35); }
+.dw-name { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; color: var(--sf-navy); }
+.d-keys1 { border-radius: 999px; border: 3px solid var(--sf-yellow); }
+.d-slip { border-radius: 18px; border: 3px solid var(--sf-line); box-shadow: 0 4px 0 rgba(20,32,74,.25); }
+.d-now { border-radius: 20px; border: 3px solid var(--sf-line); font-family: var(--font-display); font-weight: 400; }
+.d-combo { border-radius: 999px; }
+.dlv-team, .dlv-earn b { font-family: var(--font-display); font-weight: 400; }
+#dfever { border: 4px solid #fff; box-shadow: 0 0 0 3px var(--sf-line), 0 0 24px rgba(255,140,0,.8); }
+#dfever b { font-family: var(--font-display); font-style: normal; font-weight: 400; }
+.d-bar-mid .d-elev, .d-bar-mid .d-elev * { color: #fff !important; }
+.d-bar-mid .d-elev-f { color: var(--sf-yellow) !important; font-family: var(--font-display); font-weight: 400; }
+.d-main .d-bar-mid, .d-bar-mid { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)) !important; border: 4px solid var(--sf-yellow) !important; }
+.d-main .d-bar-mid .d-clock { color: var(--sf-yellow) !important; }
+
+.d-team.big .d-team-v { font-size: clamp(3rem, 6vw, 5rem) !important; }
+.d-board-mid { background: linear-gradient(180deg, var(--sf-navy2), var(--sf-navy)) !important; border: 4px solid var(--sf-yellow); border-radius: 26px; box-shadow: 0 0 0 3px var(--sf-line), 0 8px 0 rgba(10,20,50,.3); color: #fff; }
+.d-board-mid .d-clock { color: var(--sf-yellow) !important; font-family: var(--font-display); font-weight: 400; }
+.d-board-mid .d-elev, .d-board-mid .d-elev *, .d-board-mid .d-tug-even, .d-board-mid .d-tug-lead { color: #fff !important; }
+.d-team.big .d-team-v b { font-size: inherit !important; }
