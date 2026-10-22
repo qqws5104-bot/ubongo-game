@@ -1452,3 +1452,4 @@ node test_minigames_live.js
 - 플레이 기록(테스트 2·3): server.js 안 `PLAYLOG`(파일 4개 유지하려고 server.js에 넣음). 방마다 `room.setLogger`. 메모리 최근 20,000개 + logs/playlog.jsonl.
   - 사건: round / piece(게임 종류, 걸린 ms, 실수, 시간 초과 -- 클라이언트가 piece-done에 meta로 보냄) / finish(라운드 시작부터, 판 맞추는 데 걸린 시간, 1·2등 차이, 1등 들어올 때 상대 상태) / picks(레일에 나온 건물·종류, 각자 고른 것, 무작위 여부) / deliver(건물, 방식, 걸린 ms, 피버, 택배 출처 first/late/random) / blocked / half(출처별 배송 성공률, 점수).
   - 보기: `/playlog` 요약 표, `/playlog.json`, `/playlog.jsonl` 원본, `/playlog/clear?yes=1&label=조건` 비우고 조건 이름 붙이기. Render는 재시작하면 기록이 사라지니 테스트 끝나면 바로 내려받을 것.
+- 2026-10-22 상대 진행도 공개 규칙(사용자 문서) 반영: 공개 = 조각 수 / 완성 여부 / 완성 시각(라운드 시작부터, `r.finishedAt - r.t0`) / 두 사람 완성 시각 차이. 조립 중이라는 표시(노란 "판")는 뺌 -- 조각을 다 모으면 "조각 n/n"만. 레일 화면 줄에 "완성 12.3초", 결과 줄에 시각과 차이. 미니게임 종류는 원래부터 안 보임.

@@ -1278,7 +1278,8 @@ APP_JS_TEMPLATE = r"""
       html += '<span class="rl-step' + (k < idx || (k === last && idx === last) ? ' done' : '') + (k === idx && idx < last ? ' now' : '') + '">' + sp[1] + '</span>';
       if (k < last) html += '<i class="rl-arrow">›</i>';
     });
-    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '');
+    var dsec = raceDoneSec(r, s);
+    html += '</span>' + (stg === "out" ? '<span class="rl-out">이번 라운드 탈락</span>' : '') + (dsec != null ? '<span class="rl-time">완성 ' + dsec.toFixed(1) + '초</span>' : '');
     // 2026-10-15 종류 모으기: 이번 하프에 가진 종류 (공개 정보 -- 상대가 뭘 노리는지 보이게)
     var rule = setRuleOf(st);
     if (rule.amount > 0) {
@@ -1292,20 +1293,32 @@ APP_JS_TEMPLATE = r"""
   }
   // ---- 2026-10-21 테스트 1: 상대 진행도를 내 화면에 (미니게임 카드 위 / 택배 쌓기 중 화면) ----
   //   값: 조각 수(0~need) → 판 맞추는 중(need + 0.5) → 투입(need + 1). 상대가 앞서면 강조.
+  // 2026-10-21 (사용자 규칙 "상대 진행도 공개"): 완성 시각 = 라운드 시작부터 투입까지 (서버 시계)
+  function raceDoneSec(r, s) { return r.finishedAt && r.finishedAt[s] && r.t0 ? (r.finishedAt[s] - r.t0) / 1000 : null; }
+  function raceGapHtml(r, seat) {
+    var a = raceDoneSec(r, "1"), b = raceDoneSec(r, "2");
+    if (a == null || b == null) return '';
+    var fast = a <= b ? "1" : "2", gap = Math.abs(a - b).toFixed(1);
+    if (!seat) return esc(TEAM[fast]) + '이 ' + gap + '초 먼저';
+    return fast === seat ? '내가 ' + gap + '초 먼저 완성!' : '상대가 ' + gap + '초 먼저 완성';
+  }
   function raceProg(r, s) { var st = r.stage[s]; if (st === "done") return (r.need || 0) + 1; if (st === "ubongo") return (r.need || 0) + 0.5; if (st === "out") return -1; return r.got ? r.got[s] : 0; }
   function raceVsRow(st, r, s, me) {
     var need = r.need || 0, got = r.got ? r.got[s] : 0, stg = r.stage[s], dots = '';
     for (var k = 0; k < need; k++) dots += '<i class="vs-dot' + (k < got || stg === "ubongo" || stg === "done" ? ' on' : '') + '"></i>';
-    var label = stg === "done" ? '투입 완료!' : stg === "ubongo" ? '판 맞추는 중' : stg === "out" ? '포기' : '조각 ' + got + '/' + need;
-    return '<div class="vs-row t' + s + (me ? ' me' : ' opp') + (stg === "ubongo" ? ' assembling' : '') + (stg === "done" ? ' done' : '') + '" data-vs="' + s + '">'
-      + '<span class="vs-name">' + (me ? '나' : '상대') + '</span><span class="vs-dots">' + dots + '<i class="vs-board' + (stg === "done" ? ' on' : (stg === "ubongo" ? ' half' : '')) + '">판</i></span>'
+    // 공개 규칙: 조각 수와 완성 여부·완성 시각만 (조립 상태·게임 종류는 보여 주지 않음)
+    var ds = raceDoneSec(r, s);
+    var label = stg === "done" ? '완성 · ' + (ds != null ? ds.toFixed(1) + '초' : '') : stg === "out" ? '포기' : '조각 ' + (stg === "ubongo" ? need : got) + '/' + need;
+    return '<div class="vs-row t' + s + (me ? ' me' : ' opp') + (stg === "done" ? ' done' : '') + '" data-vs="' + s + '">'
+      + '<span class="vs-name">' + (me ? '나' : '상대') + '</span><span class="vs-dots">' + dots + '<i class="vs-board' + (stg === "done" ? ' on' : '') + '">완성</i></span>'
       + '<b class="vs-lab">' + label + '</b></div>';
   }
   function raceVsHtml(st, r, seat) {
     if (!r || !r.pieceGames || !seat || r.status === "reveal") return '';
     var o = raceOther(seat), a = raceProg(r, seat), b = raceProg(r, o), msg = '', cls = '';
-    if (r.stage[o] === "done" && r.stage[seat] !== "done") { msg = '상대가 먼저 투입했어요!'; cls = 'behind'; }
-    else if (r.stage[o] === "ubongo" && r.stage[seat] === "pieces") { msg = '상대가 벌써 판을 맞추는 중!'; cls = 'behind'; }
+    if (r.stage[o] === "done" && r.stage[seat] === "done") { msg = raceGapHtml(r, seat); cls = raceDoneSec(r, seat) <= raceDoneSec(r, o) ? 'ahead' : 'behind'; }
+    else if (r.stage[o] === "done" && r.stage[seat] !== "done") { msg = '상대가 먼저 완성했어요!'; cls = 'behind'; }
+    else if (r.stage[o] === "ubongo" && r.stage[seat] === "pieces") { msg = '상대가 조각을 다 모았어요!'; cls = 'behind'; }
     else if (b > a) { msg = '상대가 ' + (b - a >= 1 ? Math.floor(b - a) + '조각 ' : '') + '앞서요!'; cls = 'behind'; }
     else if (a > b) { msg = '내가 앞서요 · 계속!'; cls = 'ahead'; }
     else { msg = '막상막하!'; cls = 'even'; }
@@ -1372,9 +1385,11 @@ APP_JS_TEMPLATE = r"""
   function raceMessagePlan(st, r, seat) {
     var f = r.first, n = r.plan.first, rest = rRestCount(r);
     if (r.status === "reveal") {
+      var gapT = raceGapHtml(r, null);
       return '<div class="race-msg reveal">' + ["1", "2"].map(function (s) {
-        return esc(seatName(s, st)) + ' · ' + r.picks[s].length + '개' + (r.randomPick && r.randomPick[s] ? ' (자동)' : '');
-      }).join('<span class="sep">|</span>') + '</div>';
+        var d = raceDoneSec(r, s);
+        return esc(seatName(s, st)) + ' · ' + r.picks[s].length + '개' + (d != null ? ' · ' + d.toFixed(1) + '초' : '') + (r.randomPick && r.randomPick[s] ? ' (자동)' : '');
+      }).join('<span class="sep">|</span>') + (gapT ? '<span class="sep">|</span>' + gapT : '') + '</div>';
     }
     if (r.status !== "picking") {
       if (seat && r.stage[seat] === "out") return '<div class="race-msg">이번 라운드는 포기했어요 · 상대가 고른 뒤 무작위 ' + lateFailN(r) + '개를 받아요</div>';
