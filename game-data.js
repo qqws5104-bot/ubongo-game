@@ -184,10 +184,30 @@ const RACE_PUZZLE_ORDER = ["normal-1", "normal-2", "fixed-floor-1", "fragile-1",
 // 누르면 그 호실 불이 켜지고 DELIVERY_PROGRESS_MS 뒤 배송 완료. 켜진 동안 그 호실 버튼을 Ctrl/Shift 없이 DELIVERY_RETURN_TAPS번 누르면
 // 그 택배는 "반송"(배송 실패, 미배송과 같은 감점, 다시 배송 불가). 내 택배가 없는 호실을 Ctrl/Shift로 누르면 오배송 감점.
 const WALL_MODE = 1;
+// ---- 2026-10-22 (사용자 결정, 플레이 테스트 "주소가 낯설고 키가 너무 많다") 아파트 한 채 + 엘리베이터 이동 전쟁 ----
+//   건물은 아파트 한 채(1~7층), 층마다 N01~N08호 (왼쪽 01~04 / 가운데 엘리베이터 / 오른쪽 05~08). 맨션·주택 없음.
+//   엘리베이터 하나를 두 사람이 같이 쓴다: ↑ 게이지(누가 눌렀든 ↑ 입력 수) vs ↓ 게이지 -- 먼저 ELEV_WAR_TAPS에 닿은 방향으로 한 층,
+//   그리고 두 게이지 모두 0으로 (2026-10-22 사용자 확정 "5연타 선점"). 동시에 닿으면 서버가 먼저 받은 입력이 이김(항상 같은 기준).
+//   몇 번인지는 테스트용으로 ELEV_TAPS=3/5/7 환경변수로 바꿀 수 있다.
+//   ELEV_SETTLE_MS 동안 층이 안 바뀌면 문이 열리고 ELEV_OPEN_MS 동안 엘리베이터 잠김 -- 그 층 호실을 내 색 버튼으로 ELEV_DELIVER_TAPS번 연타하면 배송.
+//   같은 집(⚔)은 먼저 채운 사람만. 문이 닫히면 못 채운 연타는 처음부터. 위아래로 ELEV_FLIP_FORCE번 왔다 갔다 하면(버티기) 그 층에서 강제로 문 열림.
+//   1인당 버튼: ↑ ↓ + 호실 8개(빨강/파랑 한 쌍). APT_WAR=0 이면 예전(아파트·맨션·주택 3동).
+const APT_WAR = process.env.APT_WAR === "0" ? 0 : 1;
+const APT_UNITS_PER_FLOOR = 8;
+const ELEV_WAR_TAPS = Math.max(1, parseInt(process.env.ELEV_TAPS || "5", 10) || 5);
+const ELEV_SETTLE_MS = 800;
+const ELEV_OPEN_MS = 2500;
+const ELEV_DELIVER_TAPS = 3;
+const ELEV_FLIP_FORCE = 3;
+const ELEV_WAR_MOVE_MS = 250;   // 한 층 움직이는 연출 시간 (이 동안도 문은 닫힘)
 const UNITS = [];
-for (let f = 7; f >= 1; f--) for (let u = 1; u <= 2; u++) UNITS.push({ id: "a" + f + "0" + u, b: "apt", label: f + "0" + u + "호", floor: f });
-for (let f = 2; f >= 1; f--) for (let u = 1; u <= 6; u++) UNITS.push({ id: "m" + f + "0" + u, b: "mansion", label: f + "0" + u + "호", floor: f });
-["11", "11-1", "13", "13-1", "15", "15-1", "17", "17-1"].forEach((n, i) => UNITS.push({ id: "h" + (i + 1), b: "house", label: "성수로 " + n }));
+if (APT_WAR) {
+  for (let f = 7; f >= 1; f--) for (let u = 1; u <= APT_UNITS_PER_FLOOR; u++) UNITS.push({ id: "a" + f + "0" + u, b: "apt", label: f + "0" + u + "호", floor: f, n: u });
+} else {
+  for (let f = 7; f >= 1; f--) for (let u = 1; u <= 2; u++) UNITS.push({ id: "a" + f + "0" + u, b: "apt", label: f + "0" + u + "호", floor: f });
+  for (let f = 2; f >= 1; f--) for (let u = 1; u <= 6; u++) UNITS.push({ id: "m" + f + "0" + u, b: "mansion", label: f + "0" + u + "호", floor: f });
+  ["11", "11-1", "13", "13-1", "15", "15-1", "17", "17-1"].forEach((n, i) => UNITS.push({ id: "h" + (i + 1), b: "house", label: "성수로 " + n }));
+}
 const BUILDINGS = [
   { key: "apt", name: "성수타워 아파트", short: "아파트" },
   { key: "mansion", name: "체키맨션", short: "맨션" },
@@ -247,6 +267,7 @@ const RACE_GRANT_BY_PIECES = { 2: { parcels: 4, first: 2, late: 2, lateFail: 1 }
 const RACE_UNLIMITED = 1;
 
 module.exports = {
+  APT_WAR, APT_UNITS_PER_FLOOR, ELEV_WAR_TAPS, ELEV_SETTLE_MS, ELEV_OPEN_MS, ELEV_DELIVER_TAPS, ELEV_FLIP_FORCE, ELEV_WAR_MOVE_MS,
   WALL_MODE, UNITS, BUILDINGS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, COMBO_BUILDING_BONUS, DELIVERY_MODES, DELIVERY_CLIMB_STEPS, DELIVERY_BELL_WAIT_MS, DELIVERY_BELL_WINDOW_MS, CONTEST_RATE, BLOCK_REWARD, FEVER_MS, FEVER_MULT, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
   TYPES, COURIERS, FLOORS, ROOMS, CELLS, START_FLOOR_IDX, ELEVATOR_ROUNDS, SECURE_PHASE_MS, VOTE_MS,
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,

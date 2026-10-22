@@ -13,6 +13,7 @@ const {
   PRIORITY_MULTIPLIER, SET_BONUS, SET_BONUS_KINDS, TUTORIAL_PAGES, SAME_FLOOR_CHOICE_MS, HALVES, THIEF_PLACE_MS, THIEF_PER_HALF, PRIORITY_PICK_MS,
   FLOOR_REWARD_MULT, START_FLOOR_CHOICES, ELEVATOR_JOLT, RESULT_AUTO_ADVANCE_MS, MERGE_PRIORITY_THIEF, SAME_FLOOR_AUTO_PICK,
   RACE_MODE, RACE_PICK_MS, RACE_SECOND_MS, RACE_REVEAL_MS, RACE_PUZZLE_ORDER, RACE_PARCELS, RACE_LEFTOVER_RETURN, RACE_AUTO_PICK, RACE_GAME_POOL, RACE_AUTO_PICK_MODE, RACE_PIECES_BY_ROUND, RACE_CONSOLATION_MS, RACE_EXCLUDE_KINDS, FLOOR_LIMITS,
+  APT_WAR, ELEV_WAR_TAPS, ELEV_SETTLE_MS, ELEV_OPEN_MS, ELEV_DELIVER_TAPS, ELEV_FLIP_FORCE, ELEV_WAR_MOVE_MS,
   WALL_MODE, UNITS, DELIVERY_MS, DELIVERY_PROGRESS_MS, DELIVERY_HOLD_MS, DELIVERY_ELEVATOR, DELIVERY_ELEV_START, DELIVERY_ELEV_MOVE_MS, DELIVERY_RETURN_TAPS, DELIVERY_MAX_ACTIVE, DELIVERY_WRONG_PENALTY, COMBO_BUILDING_BONUS, DELIVERY_MODES, DELIVERY_CLIMB_STEPS, DELIVERY_BELL_WAIT_MS, DELIVERY_BELL_WINDOW_MS, CONTEST_RATE, BLOCK_REWARD, FEVER_MS, FEVER_MULT, RACE_GRANT_PLAN, RACE_GRANT_BY_PIECES, RACE_UNLIMITED, RACE_PIECE_GAMES, RACE_PIECE_GAME_KINDS,
 } = require("./game-data");
 
@@ -70,7 +71,15 @@ const DEFAULT_RULES = {
   deliveryPairButtons: process.env.PAIR_BUTTONS !== "0",
   feverMs: process.env.FEVER === "0" ? 0 : FEVER_MS,
   feverMult: FEVER_MULT,
-  comboBuildingBonus: COMBO_BUILDING_BONUS,
+  comboBuildingBonus: APT_WAR ? 0 : COMBO_BUILDING_BONUS, // 아파트 한 채면 건물 콤보 없음
+  // 2026-10-22 아파트 한 채 + 엘리베이터 이동 전쟁 (game-data.js APT_WAR 참고)
+  aptWar: !!APT_WAR,
+  elevWarTaps: ELEV_WAR_TAPS,
+  elevSettleMs: ELEV_SETTLE_MS,
+  elevOpenMs: ELEV_OPEN_MS,
+  elevDeliverTaps: ELEV_DELIVER_TAPS,
+  elevFlipForce: ELEV_FLIP_FORCE,
+  elevWarMoveMs: ELEV_WAR_MOVE_MS,
 };
 // 2026-10-12까지의 동작과 똑같이 만드는 규칙 (1F 시작, 배율 없음, 스페이스 게이트, 도둑 창 별도, 같은 층 선택 창).
 const LEGACY_RULES = {
@@ -264,7 +273,7 @@ function initialState(rules) {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
     // 2026-10-16 벽 배송: 규칙 묶음(클라이언트 표시·점수 계산용)과 진행 상태(phase "delivery"일 때만)
-    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.blockReward || 0, contest: (rules.contestRate || 0) > 0, pair: !!rules.deliveryPairButtons, feverMs: rules.feverMs || 0, feverMult: rules.feverMult || 1 } : null,
+    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.aptWar ? 0 : (rules.blockReward || 0), contest: (rules.contestRate || 0) > 0, pair: !!rules.deliveryPairButtons, feverMs: rules.feverMs || 0, feverMult: rules.feverMult || 1, war: rules.aptWar ? { taps: rules.elevWarTaps, settleMs: rules.elevSettleMs, openMs: rules.elevOpenMs, deliverTaps: rules.elevDeliverTaps, flipForce: rules.elevFlipForce } : null } : null,
     delivery: null,
     phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
@@ -919,6 +928,14 @@ class GameRoom {
     this.state.phase = "delivery";
     this.state.delivery = { endsAt: Date.now() + this.rules.deliveryMs, doors: {}, ev: [], evN: 0,
       elev: this.rules.deliveryElevator ? { floor: this.rules.deliveryElevStart || 1, top: 7, movingUntil: 0, presses: { "1": { up: 0, down: 0 }, "2": { up: 0, down: 0 } } } : null };
+    if (this.rules.aptWar) {
+      // 엘리베이터 이동 전쟁: cnt = 이번 층에서 각자 ↑/↓ 누른 수 (먼저 taps 채우면 그 방향으로 한 층, 둘 다 0으로)
+      const now0 = Date.now();
+      this.state.delivery.elev = { war: true, floor: this.rules.deliveryElevStart || 1, top: 7, movingUntil: 0, lastMoveAt: now0, open: false, openedAt: 0, openUntil: 0, openN: 0,
+        cnt: { up: 0, down: 0 }, by: { up: [], down: [] }, flips: 0, lastDir: null, mover: null };
+      this.state.delivery.mash = { "1": {}, "2": {} }; // 문 열린 동안 호실별 연타 수
+      this.state.delivery.wrongSeen = {};
+    }
     if (this.deliveryTimer) clearInterval(this.deliveryTimer);
     this.deliveryTimer = setInterval(() => this._deliveryTick(), 100);
     this.emit();
@@ -939,6 +956,7 @@ class GameRoom {
     const d = this.state.delivery;
     const door = d.doors[unitId];
     this.touch();
+    if (d.elev && d.elev.war) { this._warPress(seat, unitId); return; }
     if (this.rules.deliveryHoldMs > 0) { this._holdDown(seat, unitId); return; }
     if (door) {
       // 2026-10-16 (사용자 결정): 막기는 Ctrl/Shift 없이 그 호실 버튼 연타만. 팀 키를 누른 채 남의 켜진 버튼을 누르면 안내만.
@@ -1037,6 +1055,7 @@ class GameRoom {
     if (dir !== "up" && dir !== "down") return;
     const e = this.state.delivery.elev;
     this.touch();
+    if (e.war) { this._warElev(seat, dir); return; }
     // 2026-10-21 (사용자): 엘리베이터 ↑↓는 팀 키 없이도 누구나. 팀 키를 같이 누르면 그 팀 칸에, 아니면 "0" 칸에 센다.
     const who = seat === "1" || seat === "2" ? seat : "0";
     if (!e.presses[who]) e.presses[who] = { up: 0, down: 0 };
@@ -1050,6 +1069,73 @@ class GameRoom {
       const u = this._unitOf(id);
       if (u.b === "apt" && u.floor !== e.floor) { const s2 = d.doors[id].seat; delete d.doors[id]; this._dEv("elevleft", id, s2, { floor: e.floor }); }
     });
+    this.emit();
+  }
+
+  // 2026-10-22 엘리베이터 전쟁: 호실 버튼은 "지금 엘리베이터가 선 층의 slot번째 집" (1인당 버튼 8개)
+  wallSlot(seat, slot) {
+    if (this.state.phase !== "delivery" || !this.state.delivery || !this.state.delivery.elev || !this.state.delivery.elev.war) return;
+    if (!(slot >= 1 && slot <= 9)) return;
+    const id = "a" + this.state.delivery.elev.floor + "0" + slot;
+    if (!UNITS.some((u) => u.id === id)) return;
+    this.wallPress(seat, id);
+  }
+  // ---- 2026-10-22 엘리베이터 이동 전쟁 (rules.aptWar) ----
+  _warElev(seat, dir) {
+    if (seat !== "1" && seat !== "2") return; // 누가 눌렀는지 알아야 한다 (빨강/파랑 ↑↓) -- 게이지 칸 색
+    const d = this.state.delivery, e = d.elev, now = Date.now();
+    if (e.open) return; // 문 열린 동안 엘리베이터 잠김
+    // 2026-10-22 (사용자 확정 "5연타 선점"): 방향별 게이지 -- 누가 눌렀든 ↑는 ↑ 게이지, ↓는 ↓ 게이지. 먼저 taps에 닿은 방향으로 한 층.
+    e.cnt[dir] += 1; e.by[dir].push(seat);
+    if (e.cnt[dir] < (this.rules.elevWarTaps || 5)) { this.emit(); return; }
+    const nf = e.floor + (dir === "up" ? 1 : -1);
+    e.cnt = { up: 0, down: 0 }; e.by = { up: [], down: [] }; // 두 게이지 모두 처음부터
+    if (nf < 1 || nf > e.top) { this._dEv("elevend", null, seat, { floor: e.floor, dir }); this.emit(); return; }
+    if (e.lastDir && e.lastDir !== dir) e.flips += 1;
+    e.lastDir = dir;
+    e.floor = nf; e.lastMoveAt = now; e.movingUntil = now + (this.rules.elevWarMoveMs || 0); e.mover = seat; e.openedHere = false;
+    this._dEv("move", null, seat, { floor: nf, dir });
+    this.emit();
+  }
+  // 이 층에 아직 배송할 택배가 있는가 (둘 중 누구든)
+  _warFloorBusy(floor) {
+    return ["1", "2"].some((s) => this.state.players[s].invoices.some((v) => v.deliveredRound === null && !v.returned && !v.lost && v.unit && (this._unitOf(v.unit) || {}).floor === floor));
+  }
+  _warOpen(now) {
+    const d = this.state.delivery, e = d.elev;
+    e.open = true; e.openedHere = true; e.openedAt = now; e.openUntil = now + (this.rules.elevOpenMs || 2500); e.openN += 1; e.flips = 0; e.lastDir = null;
+    e.cnt = { up: 0, down: 0 }; e.by = { up: [], down: [] };
+    d.mash = { "1": {}, "2": {} };
+    this._dEv("open", null, null, { floor: e.floor, forced: !!this._warForced });
+  }
+  _warClose(now) {
+    const d = this.state.delivery, e = d.elev;
+    e.open = false; e.lastMoveAt = now; e.lastDir = null; e.flips = 0;
+    ["1", "2"].forEach((s) => { const part = Object.keys(d.mash[s] || {}).filter((u) => d.mash[s][u] > 0); if (part.length) this._dEv("shut", part[0], s, { taps: d.mash[s][part[0]] }); });
+    d.mash = { "1": {}, "2": {} };
+    this._dEv("close", null, null, { floor: e.floor });
+  }
+  _warPress(seat, unitId) {
+    if (seat !== "1" && seat !== "2") return;
+    const d = this.state.delivery, e = d.elev, u = this._unitOf(unitId);
+    if (!e.open || u.floor !== e.floor) { this._dEv(e.open ? "noelev" : "closed", unitId, seat, { floor: e.floor }); this.emit(); return; }
+    const pl = this.state.players[seat];
+    const inv = pl.invoices.find((v) => v.unit === unitId && v.deliveredRound === null && !v.returned && !v.lost);
+    if (!inv) {
+      const k = seat + ":" + unitId + ":" + e.openN; // 같은 문 열림에 같은 집 오배송은 한 번만 감점 (연타하다 실수해도 한 번)
+      if (!d.wrongSeen[k]) { d.wrongSeen[k] = 1; pl.wrong = (pl.wrong || 0) + 1; this._dEv("wrong", unitId, seat); }
+      this.emit(); return;
+    }
+    const m = d.mash[seat];
+    m[unitId] = (m[unitId] || 0) + 1;
+    const need = this.rules.elevDeliverTaps || 3;
+    if (m[unitId] < need) { this._dEv("step", unitId, seat, { steps: m[unitId], need }); this.emit(); return; }
+    delete m[unitId];
+    d.doors[unitId] = { seat, invId: inv.id, start: e.openedAt, taps: 0, mode: "mash" };
+    this._completeDoor(unitId);
+    const o = seat === "1" ? "2" : "1";
+    if (d.mash[o]) delete d.mash[o][unitId]; // 같은 집을 두드리던 상대는 끝
+    if (!this._warFloorBusy(e.floor)) e.openUntil = Math.min(e.openUntil, Date.now() + 400); // 이 층 택배를 다 보냈으면 바로 닫고 다시 쟁탈
     this.emit();
   }
 
@@ -1097,6 +1183,19 @@ class GameRoom {
     const d = this.state.delivery;
     const now = Date.now();
     let changed = false;
+    const ew = d.elev && d.elev.war ? d.elev : null;
+    if (ew) {
+      if (!ew.open) {
+        // 2026-10-22: 문은 "도착할 때 한 번", 그리고 누군가 이 층에 배송할 택배가 있을 때만 열린다.
+        //   (아무도 안 움직이면 열림·닫힘이 반복돼 엘리베이터가 대부분 잠겨 있던 문제 -- 빈 층에서 버텨도 문은 안 열리고 계속 쟁탈)
+        const force = ew.flips >= (this.rules.elevFlipForce || 99);
+        const settled = now - ew.lastMoveAt >= (this.rules.elevSettleMs || 800) && now >= ew.movingUntil;
+        if ((force || settled) && !ew.openedHere) {
+          if (this._warFloorBusy(ew.floor)) { this._warForced = force && !settled; this._warOpen(now); this._warForced = false; changed = true; }
+          else if (force) ew.flips = 0;
+        }
+      } else if (now >= ew.openUntil) { this._warClose(now); changed = true; }
+    }
     Object.keys(d.doors).forEach((unitId) => {
       const door = d.doors[unitId];
       if (door.mode === "climb") return; // 계단은 시간으로 끝나지 않는다
@@ -1119,6 +1218,8 @@ class GameRoom {
     this.deliveryTimer = null;
     const d = this.state.delivery;
     d.doors = {};
+    if (d.mash) d.mash = { "1": {}, "2": {} };
+    if (d.elev && d.elev.war) d.elev.open = false;
     d.endsAt = null;
     this._finishHalf();
   }

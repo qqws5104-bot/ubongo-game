@@ -1092,3 +1092,89 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
 .d-main .dwalls3 .dw-fit { display: flex; flex: 1 1 0; min-height: 0; min-width: 0; container-type: size; align-items: center; justify-content: center; align-self: stretch; width: 100%; }
 .d-main .dwalls3 .dw-fit > .dw-apt-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 405 / 510) !important; height: auto !important; max-height: none; aspect-ratio: 405 / 510; margin: 0 !important; }
 .d-main .dwalls3 .dw-fit > .dw-man-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 740 / 300) !important; height: auto !important; aspect-ratio: 740 / 300; margin: 0 !important; }
+
+/* ===== 37. 엘리베이터 이동 전쟁 (2026-10-22): 아파트 한 채, 층마다 N01~N04 | 엘리베이터 | N05~N08 ===== */
+.d-war .wwrap { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(240px, 24vw, 380px); gap: 1.2vw; }
+.wbld { min-height: 0; background: #fffdf6; border-radius: 18px; box-shadow: 0 6px 0 rgba(0,0,0,.18); padding: 1.2vh 1vw;
+  display: grid; grid-template-columns: clamp(2.4rem, 4vw, 3.6rem) repeat(var(--half), minmax(0, 1fr)) minmax(64px, .9fr) repeat(var(--half), minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr)); gap: .7vh .5vw; position: relative; }
+.wfl { grid-column: 1; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #e9e3d4; color: #4a4f63; font-size: clamp(.9rem, 2.2vh, 1.4rem); }
+.wfl.here { background: #ffd23f; color: #1e2235; box-shadow: 0 0 0 3px #1e2235 inset; }
+.wcell { min-width: 0; min-height: 0; display: flex; }
+.wu { flex: 1; min-width: 0; position: relative; border-radius: 10px; background: #f1eadc; border: 2px solid #ddd3bf; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3vh; overflow: hidden; transition: background .15s, transform .15s; }
+.wu b { font-size: clamp(.85rem, 2.4vh, 1.5rem); color: #6b6f80; font-variant-numeric: tabular-nums; z-index: 1; }
+.wu-door { position: absolute; left: 22%; right: 22%; top: 14%; bottom: 0; border-radius: 6px 6px 0 0; background: #e2d8c3; }
+.wu.here { background: #fff6d6; border-color: #f0c53a; }
+.wu.here .wu-door { background: #f3e2a8; }
+.wu.h1 b, .wu.h2 b { color: #1e2235; }
+.wu.h1 { border-color: #e2493d; }
+.wu.h2 { border-color: #2f6fdb; }
+.wu.vs { border-color: #9a4fd0; border-style: dashed; }
+.wu.open .wu-door { background: #fffdf6; box-shadow: inset 0 0 0 2px #e2d8c3; }
+.wu.go { transform: scale(1.06); z-index: 2; box-shadow: 0 0 0 3px #ffd23f, 0 6px 14px rgba(0,0,0,.25); animation: wuGo .6s ease-in-out infinite alternate; }
+@keyframes wuGo { to { box-shadow: 0 0 0 5px #ffd23f, 0 6px 18px rgba(0,0,0,.3); } }
+.wu-dots { display: flex; gap: 4px; z-index: 1; }
+.wu-dots i { width: clamp(9px, 1.4vh, 16px); height: clamp(9px, 1.4vh, 16px); border-radius: 50%; border: 2px solid #fff; }
+.wu-dots i.t1 { background: #e2493d; } .wu-dots i.t2 { background: #2f6fdb; }
+.wu-vs { position: absolute; top: 2px; right: 4px; font-size: clamp(.7rem, 1.6vh, 1rem); z-index: 1; }
+.wu-bars { position: absolute; left: 6%; right: 6%; bottom: 6%; display: flex; flex-direction: column; gap: 3px; z-index: 1; }
+.wu-bars i { display: block; height: clamp(6px, 1vh, 10px); border-radius: 6px; background: rgba(30,34,53,.15); position: relative; overflow: hidden; }
+.wu-bars i::after { content: ""; position: absolute; inset: 0; width: calc(var(--p) * 100%); border-radius: 6px; transition: width .08s; }
+.wu-bars i.t1::after { background: #e2493d; } .wu-bars i.t2::after { background: #2f6fdb; }
+.wshaft { position: relative; border-radius: 12px; background: repeating-linear-gradient(180deg, #2a3150 0 2px, #39416a 2px calc(100% / 7)); }
+.wcar { position: absolute; left: 6%; right: 6%; height: calc(100% / 7); padding: .4vh 0; box-sizing: border-box; transition: top .22s cubic-bezier(.3,1.4,.6,1); display: flex; justify-content: center; align-items: center; }
+.wcar::before { content: ""; position: absolute; inset: .4vh 0; border-radius: 10px; background: #ffd23f; box-shadow: 0 0 0 3px #1e2235 inset, 0 0 18px rgba(255,210,63,.6); }
+.wcar i { position: absolute; top: calc(.4vh + 4px); bottom: calc(.4vh + 4px); width: calc(50% - 6px); background: #c9cfe0; border: 2px solid #1e2235; transition: width .25s; z-index: 1; }
+.wcar i:first-of-type { left: 4px; border-radius: 6px 0 0 6px; } .wcar i:last-of-type { right: 4px; border-radius: 0 6px 6px 0; }
+.wcar.open i { width: 12%; }
+.wcar b { position: relative; z-index: 2; font-size: clamp(1rem, 3vh, 1.9rem); color: #1e2235; }
+.wcar.open b { color: #1f9a4c; }
+.wpanel { min-height: 0; display: flex; flex-direction: column; gap: 1vh; }
+.wfloor { background: #1e2235; border: 3px solid #ffd23f; border-radius: 18px; color: #fff; text-align: center; padding: .6vh 0; }
+.wfloor small { display: block; font-size: clamp(.75rem, 1.6vh, 1rem); opacity: .8; }
+.wfloor b { font-size: clamp(2.6rem, 9vh, 6rem); line-height: 1; color: #ffd23f; }
+.wfloor em { font-style: normal; font-size: .4em; margin-left: 4px; color: #fff; }
+.wst { border-radius: 16px; padding: .9vh 1vw; text-align: center; display: flex; flex-direction: column; gap: .4vh; position: relative; overflow: hidden; }
+.wst > b { font-size: clamp(1.1rem, 3.2vh, 2rem); }
+.wst span { font-size: clamp(.8rem, 1.8vh, 1.1rem); }
+.wst.war { background: #fffdf6; color: #1e2235; }
+.wst.war > b { color: #e2691a; }
+.wst.open { background: #1f9a4c; color: #fff; animation: wstPop .25s ease-out; }
+@keyframes wstPop { from { transform: scale(.92); } }
+.wst-bar { height: 8px; border-radius: 6px; background: rgba(255,255,255,.3); overflow: hidden; display: block; }
+.wst-bar i { display: block; height: 100%; width: calc(var(--p, 1) * 100%); background: #ffd23f; }
+.wg { flex: 1 1 0; min-height: 0; background: #fffdf6; border-radius: 16px; padding: .8vh .9vw; display: flex; flex-direction: column; gap: .5vh; border-left: 8px solid var(--tc); overflow: hidden; }
+.wg.t1 { --tc: #e2493d; } .wg.t2 { --tc: #2f6fdb; }
+.wg-h { font-size: clamp(.9rem, 2vh, 1.2rem); color: var(--tc); font-weight: 700; }
+.wg-h small { color: #6b6f80; font-weight: 400; margin-left: 6px; }
+.wg-row { display: flex; align-items: center; gap: 8px; }
+.wg-row kbd { width: 1.6em; text-align: center; color: var(--tc); font-size: clamp(.8rem, 1.8vh, 1.1rem); }
+.wg-pips { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.wg-pips i { height: clamp(10px, 1.8vh, 18px); border-radius: 5px; background: #e9e3d4; transition: background .06s; }
+.wg-pips i.on { background: var(--tc); }
+.wg-fl { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: auto; }
+.wg-fl span { font-size: clamp(.75rem, 1.6vh, 1rem); background: #f1eadc; border-radius: 8px; padding: 1px 8px; color: #1e2235; }
+.wg-fl span b { margin-left: 3px; color: var(--tc); }
+.wg-fl span.here { background: #ffd23f; }
+.wg-fl span.done { background: #1f9a4c; color: #fff; }
+.d-elev.open .d-elev-st { color: #1f9a4c; font-weight: 700; }
+/* 엘리베이터 전쟁 메인: 팝업이 1층(엘리베이터 시작 층)을 가리지 않게 맨 위 제목 자리로 */
+body:has(.d-war) .dpop { top: 1.2vh; bottom: auto; padding-top: 8px; padding-bottom: 8px; }
+.d-slip-a { white-space: nowrap; }
+/* 37b. 방향 게이지 (5연타 선점) + 층 바뀔 때 숫자 튀기 */
+.wdgs { display: flex; flex-direction: column; gap: .8vh; background: #fffdf6; border-radius: 16px; padding: 1vh .9vw; }
+.wdg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.wdg-a { font-size: clamp(.9rem, 2.1vh, 1.3rem); font-weight: 700; color: #1e2235; min-width: 3.4em; }
+.wdg-pips { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 5px; }
+.wdg-pips i { height: clamp(16px, 3vh, 30px); border-radius: 7px; background: #e9e3d4; transition: transform .08s; }
+.wdg-pips i.on { transform: scaleY(1.12); }
+.wdg-pips i.on.t1 { background: #e2493d; } .wdg-pips i.on.t2 { background: #2f6fdb; } .wdg-pips i.on.t0 { background: #8a8fa3; }
+.wdg-n { font-size: clamp(1.1rem, 3vh, 1.9rem); font-variant-numeric: tabular-nums; color: #1e2235; min-width: 2.6em; text-align: right; }
+.wdg-n small { font-size: .55em; color: #8a8fa3; }
+.wdg.lead .wdg-a, .wdg.lead .wdg-n { color: #e2691a; }
+.wdg.lock { opacity: .45; }
+.wfloor b { display: inline-block; }
+.wfloor b.pop { animation: wFloorPop .6s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes wFloorPop { 0% { transform: scale(1.7); color: #fff; text-shadow: 0 0 24px #ffd23f; } 100% { transform: scale(1); } }
+.wpanel .wg { flex: 1 1 0; }
+.wcar b { background: #ffd23f; border-radius: 8px; padding: 0 .4em; box-shadow: 0 0 0 2px #1e2235; }

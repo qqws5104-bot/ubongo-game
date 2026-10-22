@@ -1,37 +1,11 @@
-﻿건물,호실,빨간 버튼 키,파란 버튼 키
-아파트,7층 701호,KeyE,KeyQ
-아파트,7층 702호,KeyR,KeyW
-아파트,6층 601호,KeyD,KeyT
-아파트,6층 602호,KeyF,KeyN
-아파트,5층 501호,KeyC,Digit1
-아파트,5층 502호,KeyV,Digit2
-아파트,4층 401호,KeyU,Digit3
-아파트,4층 402호,KeyI,Digit4
-아파트,3층 301호,KeyJ,Digit5
-아파트,3층 302호,KeyK,Digit6
-아파트,2층 201호,KeyM,Digit7
-아파트,2층 202호,Comma,Digit8
-아파트,1층 101호,KeyO,Digit9
-아파트,1층 102호,KeyP,Digit0
-맨션,201호,KeyA,Numpad1
-맨션,202호,KeyS,Numpad2
-맨션,203호,KeyG,Numpad3
-맨션,204호,KeyH,Numpad4
-맨션,205호,KeyL,Numpad5
-맨션,206호,Semicolon,Numpad6
-맨션,101호,KeyZ,Numpad7
-맨션,102호,KeyX,Numpad8
-맨션,103호,KeyB,Numpad9
-맨션,104호,Period,Numpad0
-맨션,105호,Slash,NumpadAdd
-맨션,106호,Quote,NumpadSubtract
-주택,성수로 11,KeyY,NumpadMultiply
-주택,성수로 11-1,BracketLeft,NumpadDivide
-주택,성수로 13,BracketRight,NumpadDecimal
-주택,성수로 13-1,Backslash,NumpadEnter
-주택,성수로 15,Minus,Insert
-주택,성수로 15-1,Equal,Delete
-주택,성수로 17,Backquote,Home
-주택,성수로 17-1,Enter,End
-아파트,엘리베이터 위,ArrowUp,(공용)
-아파트,엘리베이터 아래,ArrowDown,(공용)
+﻿버튼,위치,빨간 플레이어 키,파란 플레이어 키,설명
+엘리베이터 ▲,가운데 조작대,KeyW,ArrowUp,연타 -- ▲ 게이지 (누가 눌렀든) 5 먼저 차면 한 층 위
+엘리베이터 ▼,가운데 조작대,KeyS,ArrowDown,연타 -- ▼ 게이지 5 먼저 차면 한 층 아래
+호실 N01,왼쪽 1번째,Digit1,KeyY,지금 엘리베이터가 선 층의 N01호 (문 열린 동안 3번 연타 = 배송)
+호실 N02,왼쪽 2번째,Digit2,KeyU,지금 엘리베이터가 선 층의 N02호 (문 열린 동안 3번 연타 = 배송)
+호실 N03,왼쪽 3번째,Digit3,KeyI,지금 엘리베이터가 선 층의 N03호 (문 열린 동안 3번 연타 = 배송)
+호실 N04,왼쪽 4번째,Digit4,KeyO,지금 엘리베이터가 선 층의 N04호 (문 열린 동안 3번 연타 = 배송)
+호실 N05,오른쪽 1번째,Digit5,KeyH,지금 엘리베이터가 선 층의 N05호 (문 열린 동안 3번 연타 = 배송)
+호실 N06,오른쪽 2번째,Digit6,KeyJ,지금 엘리베이터가 선 층의 N06호 (문 열린 동안 3번 연타 = 배송)
+호실 N07,오른쪽 3번째,Digit7,KeyK,지금 엘리베이터가 선 층의 N07호 (문 열린 동안 3번 연타 = 배송)
+호실 N08,오른쪽 4번째,Digit8,KeyL,지금 엘리베이터가 선 층의 N08호 (문 열린 동안 3번 연타 = 배송)

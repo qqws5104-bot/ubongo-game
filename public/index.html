@@ -2915,6 +2915,92 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
 .d-main .dwalls3 .dw-fit > .dw-apt-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 405 / 510) !important; height: auto !important; max-height: none; aspect-ratio: 405 / 510; margin: 0 !important; }
 .d-main .dwalls3 .dw-fit > .dw-man-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 740 / 300) !important; height: auto !important; aspect-ratio: 740 / 300; margin: 0 !important; }
 
+/* ===== 37. 엘리베이터 이동 전쟁 (2026-10-22): 아파트 한 채, 층마다 N01~N04 | 엘리베이터 | N05~N08 ===== */
+.d-war .wwrap { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(240px, 24vw, 380px); gap: 1.2vw; }
+.wbld { min-height: 0; background: #fffdf6; border-radius: 18px; box-shadow: 0 6px 0 rgba(0,0,0,.18); padding: 1.2vh 1vw;
+  display: grid; grid-template-columns: clamp(2.4rem, 4vw, 3.6rem) repeat(var(--half), minmax(0, 1fr)) minmax(64px, .9fr) repeat(var(--half), minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr)); gap: .7vh .5vw; position: relative; }
+.wfl { grid-column: 1; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #e9e3d4; color: #4a4f63; font-size: clamp(.9rem, 2.2vh, 1.4rem); }
+.wfl.here { background: #ffd23f; color: #1e2235; box-shadow: 0 0 0 3px #1e2235 inset; }
+.wcell { min-width: 0; min-height: 0; display: flex; }
+.wu { flex: 1; min-width: 0; position: relative; border-radius: 10px; background: #f1eadc; border: 2px solid #ddd3bf; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3vh; overflow: hidden; transition: background .15s, transform .15s; }
+.wu b { font-size: clamp(.85rem, 2.4vh, 1.5rem); color: #6b6f80; font-variant-numeric: tabular-nums; z-index: 1; }
+.wu-door { position: absolute; left: 22%; right: 22%; top: 14%; bottom: 0; border-radius: 6px 6px 0 0; background: #e2d8c3; }
+.wu.here { background: #fff6d6; border-color: #f0c53a; }
+.wu.here .wu-door { background: #f3e2a8; }
+.wu.h1 b, .wu.h2 b { color: #1e2235; }
+.wu.h1 { border-color: #e2493d; }
+.wu.h2 { border-color: #2f6fdb; }
+.wu.vs { border-color: #9a4fd0; border-style: dashed; }
+.wu.open .wu-door { background: #fffdf6; box-shadow: inset 0 0 0 2px #e2d8c3; }
+.wu.go { transform: scale(1.06); z-index: 2; box-shadow: 0 0 0 3px #ffd23f, 0 6px 14px rgba(0,0,0,.25); animation: wuGo .6s ease-in-out infinite alternate; }
+@keyframes wuGo { to { box-shadow: 0 0 0 5px #ffd23f, 0 6px 18px rgba(0,0,0,.3); } }
+.wu-dots { display: flex; gap: 4px; z-index: 1; }
+.wu-dots i { width: clamp(9px, 1.4vh, 16px); height: clamp(9px, 1.4vh, 16px); border-radius: 50%; border: 2px solid #fff; }
+.wu-dots i.t1 { background: #e2493d; } .wu-dots i.t2 { background: #2f6fdb; }
+.wu-vs { position: absolute; top: 2px; right: 4px; font-size: clamp(.7rem, 1.6vh, 1rem); z-index: 1; }
+.wu-bars { position: absolute; left: 6%; right: 6%; bottom: 6%; display: flex; flex-direction: column; gap: 3px; z-index: 1; }
+.wu-bars i { display: block; height: clamp(6px, 1vh, 10px); border-radius: 6px; background: rgba(30,34,53,.15); position: relative; overflow: hidden; }
+.wu-bars i::after { content: ""; position: absolute; inset: 0; width: calc(var(--p) * 100%); border-radius: 6px; transition: width .08s; }
+.wu-bars i.t1::after { background: #e2493d; } .wu-bars i.t2::after { background: #2f6fdb; }
+.wshaft { position: relative; border-radius: 12px; background: repeating-linear-gradient(180deg, #2a3150 0 2px, #39416a 2px calc(100% / 7)); }
+.wcar { position: absolute; left: 6%; right: 6%; height: calc(100% / 7); padding: .4vh 0; box-sizing: border-box; transition: top .22s cubic-bezier(.3,1.4,.6,1); display: flex; justify-content: center; align-items: center; }
+.wcar::before { content: ""; position: absolute; inset: .4vh 0; border-radius: 10px; background: #ffd23f; box-shadow: 0 0 0 3px #1e2235 inset, 0 0 18px rgba(255,210,63,.6); }
+.wcar i { position: absolute; top: calc(.4vh + 4px); bottom: calc(.4vh + 4px); width: calc(50% - 6px); background: #c9cfe0; border: 2px solid #1e2235; transition: width .25s; z-index: 1; }
+.wcar i:first-of-type { left: 4px; border-radius: 6px 0 0 6px; } .wcar i:last-of-type { right: 4px; border-radius: 0 6px 6px 0; }
+.wcar.open i { width: 12%; }
+.wcar b { position: relative; z-index: 2; font-size: clamp(1rem, 3vh, 1.9rem); color: #1e2235; }
+.wcar.open b { color: #1f9a4c; }
+.wpanel { min-height: 0; display: flex; flex-direction: column; gap: 1vh; }
+.wfloor { background: #1e2235; border: 3px solid #ffd23f; border-radius: 18px; color: #fff; text-align: center; padding: .6vh 0; }
+.wfloor small { display: block; font-size: clamp(.75rem, 1.6vh, 1rem); opacity: .8; }
+.wfloor b { font-size: clamp(2.6rem, 9vh, 6rem); line-height: 1; color: #ffd23f; }
+.wfloor em { font-style: normal; font-size: .4em; margin-left: 4px; color: #fff; }
+.wst { border-radius: 16px; padding: .9vh 1vw; text-align: center; display: flex; flex-direction: column; gap: .4vh; position: relative; overflow: hidden; }
+.wst > b { font-size: clamp(1.1rem, 3.2vh, 2rem); }
+.wst span { font-size: clamp(.8rem, 1.8vh, 1.1rem); }
+.wst.war { background: #fffdf6; color: #1e2235; }
+.wst.war > b { color: #e2691a; }
+.wst.open { background: #1f9a4c; color: #fff; animation: wstPop .25s ease-out; }
+@keyframes wstPop { from { transform: scale(.92); } }
+.wst-bar { height: 8px; border-radius: 6px; background: rgba(255,255,255,.3); overflow: hidden; display: block; }
+.wst-bar i { display: block; height: 100%; width: calc(var(--p, 1) * 100%); background: #ffd23f; }
+.wg { flex: 1 1 0; min-height: 0; background: #fffdf6; border-radius: 16px; padding: .8vh .9vw; display: flex; flex-direction: column; gap: .5vh; border-left: 8px solid var(--tc); overflow: hidden; }
+.wg.t1 { --tc: #e2493d; } .wg.t2 { --tc: #2f6fdb; }
+.wg-h { font-size: clamp(.9rem, 2vh, 1.2rem); color: var(--tc); font-weight: 700; }
+.wg-h small { color: #6b6f80; font-weight: 400; margin-left: 6px; }
+.wg-row { display: flex; align-items: center; gap: 8px; }
+.wg-row kbd { width: 1.6em; text-align: center; color: var(--tc); font-size: clamp(.8rem, 1.8vh, 1.1rem); }
+.wg-pips { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.wg-pips i { height: clamp(10px, 1.8vh, 18px); border-radius: 5px; background: #e9e3d4; transition: background .06s; }
+.wg-pips i.on { background: var(--tc); }
+.wg-fl { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: auto; }
+.wg-fl span { font-size: clamp(.75rem, 1.6vh, 1rem); background: #f1eadc; border-radius: 8px; padding: 1px 8px; color: #1e2235; }
+.wg-fl span b { margin-left: 3px; color: var(--tc); }
+.wg-fl span.here { background: #ffd23f; }
+.wg-fl span.done { background: #1f9a4c; color: #fff; }
+.d-elev.open .d-elev-st { color: #1f9a4c; font-weight: 700; }
+/* 엘리베이터 전쟁 메인: 팝업이 1층(엘리베이터 시작 층)을 가리지 않게 맨 위 제목 자리로 */
+body:has(.d-war) .dpop { top: 1.2vh; bottom: auto; padding-top: 8px; padding-bottom: 8px; }
+.d-slip-a { white-space: nowrap; }
+/* 37b. 방향 게이지 (5연타 선점) + 층 바뀔 때 숫자 튀기 */
+.wdgs { display: flex; flex-direction: column; gap: .8vh; background: #fffdf6; border-radius: 16px; padding: 1vh .9vw; }
+.wdg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.wdg-a { font-size: clamp(.9rem, 2.1vh, 1.3rem); font-weight: 700; color: #1e2235; min-width: 3.4em; }
+.wdg-pips { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 5px; }
+.wdg-pips i { height: clamp(16px, 3vh, 30px); border-radius: 7px; background: #e9e3d4; transition: transform .08s; }
+.wdg-pips i.on { transform: scaleY(1.12); }
+.wdg-pips i.on.t1 { background: #e2493d; } .wdg-pips i.on.t2 { background: #2f6fdb; } .wdg-pips i.on.t0 { background: #8a8fa3; }
+.wdg-n { font-size: clamp(1.1rem, 3vh, 1.9rem); font-variant-numeric: tabular-nums; color: #1e2235; min-width: 2.6em; text-align: right; }
+.wdg-n small { font-size: .55em; color: #8a8fa3; }
+.wdg.lead .wdg-a, .wdg.lead .wdg-n { color: #e2691a; }
+.wdg.lock { opacity: .45; }
+.wfloor b { display: inline-block; }
+.wfloor b.pop { animation: wFloorPop .6s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes wFloorPop { 0% { transform: scale(1.7); color: #fff; text-shadow: 0 0 24px #ffd23f; } 100% { transform: scale(1); } }
+.wpanel .wg { flex: 1 1 0; }
+.wcar b { background: #ffd23f; border-radius: 8px; padding: 0 .4em; box-shadow: 0 0 0 2px #1e2235; }
+
 </style>
 </head><body>
 <div id="app"></div>
@@ -4191,7 +4277,7 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
   var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1022-1504"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1022-1607"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -5739,7 +5825,7 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
   // ---------- 2026-10-16 벽 배송 (phase "delivery") ----------
   // 화면마다 볼 것 하나만 (사용자 피드백: 정보가 흩어져 시선이 분산됨):
   //   플레이어 화면 = 내 송장(주소)과 지금 상태 / 레일 화면 = 벽(호실 버튼) / 메인 모니터 = 두 팀 점수판
-  var WALL = {"units":[{"id":"a701","b":"apt","label":"701호","floor":7},{"id":"a702","b":"apt","label":"702호","floor":7},{"id":"a601","b":"apt","label":"601호","floor":6},{"id":"a602","b":"apt","label":"602호","floor":6},{"id":"a501","b":"apt","label":"501호","floor":5},{"id":"a502","b":"apt","label":"502호","floor":5},{"id":"a401","b":"apt","label":"401호","floor":4},{"id":"a402","b":"apt","label":"402호","floor":4},{"id":"a301","b":"apt","label":"301호","floor":3},{"id":"a302","b":"apt","label":"302호","floor":3},{"id":"a201","b":"apt","label":"201호","floor":2},{"id":"a202","b":"apt","label":"202호","floor":2},{"id":"a101","b":"apt","label":"101호","floor":1},{"id":"a102","b":"apt","label":"102호","floor":1},{"id":"m201","b":"mansion","label":"201호","floor":2},{"id":"m202","b":"mansion","label":"202호","floor":2},{"id":"m203","b":"mansion","label":"203호","floor":2},{"id":"m204","b":"mansion","label":"204호","floor":2},{"id":"m205","b":"mansion","label":"205호","floor":2},{"id":"m206","b":"mansion","label":"206호","floor":2},{"id":"m101","b":"mansion","label":"101호","floor":1},{"id":"m102","b":"mansion","label":"102호","floor":1},{"id":"m103","b":"mansion","label":"103호","floor":1},{"id":"m104","b":"mansion","label":"104호","floor":1},{"id":"m105","b":"mansion","label":"105호","floor":1},{"id":"m106","b":"mansion","label":"106호","floor":1},{"id":"h1","b":"house","label":"성수로 11"},{"id":"h2","b":"house","label":"성수로 11-1"},{"id":"h3","b":"house","label":"성수로 13"},{"id":"h4","b":"house","label":"성수로 13-1"},{"id":"h5","b":"house","label":"성수로 15"},{"id":"h6","b":"house","label":"성수로 15-1"},{"id":"h7","b":"house","label":"성수로 17"},{"id":"h8","b":"house","label":"성수로 17-1"}],"buildings":[{"key":"apt","name":"성수타워 아파트","short":"아파트"},{"key":"mansion","name":"체키맨션","short":"맨션"},{"key":"house","name":"단독주택","short":"주택"}]};
+  var WALL = {"units":[{"id":"a701","b":"apt","label":"701호","floor":7,"n":1},{"id":"a702","b":"apt","label":"702호","floor":7,"n":2},{"id":"a703","b":"apt","label":"703호","floor":7,"n":3},{"id":"a704","b":"apt","label":"704호","floor":7,"n":4},{"id":"a705","b":"apt","label":"705호","floor":7,"n":5},{"id":"a706","b":"apt","label":"706호","floor":7,"n":6},{"id":"a707","b":"apt","label":"707호","floor":7,"n":7},{"id":"a708","b":"apt","label":"708호","floor":7,"n":8},{"id":"a601","b":"apt","label":"601호","floor":6,"n":1},{"id":"a602","b":"apt","label":"602호","floor":6,"n":2},{"id":"a603","b":"apt","label":"603호","floor":6,"n":3},{"id":"a604","b":"apt","label":"604호","floor":6,"n":4},{"id":"a605","b":"apt","label":"605호","floor":6,"n":5},{"id":"a606","b":"apt","label":"606호","floor":6,"n":6},{"id":"a607","b":"apt","label":"607호","floor":6,"n":7},{"id":"a608","b":"apt","label":"608호","floor":6,"n":8},{"id":"a501","b":"apt","label":"501호","floor":5,"n":1},{"id":"a502","b":"apt","label":"502호","floor":5,"n":2},{"id":"a503","b":"apt","label":"503호","floor":5,"n":3},{"id":"a504","b":"apt","label":"504호","floor":5,"n":4},{"id":"a505","b":"apt","label":"505호","floor":5,"n":5},{"id":"a506","b":"apt","label":"506호","floor":5,"n":6},{"id":"a507","b":"apt","label":"507호","floor":5,"n":7},{"id":"a508","b":"apt","label":"508호","floor":5,"n":8},{"id":"a401","b":"apt","label":"401호","floor":4,"n":1},{"id":"a402","b":"apt","label":"402호","floor":4,"n":2},{"id":"a403","b":"apt","label":"403호","floor":4,"n":3},{"id":"a404","b":"apt","label":"404호","floor":4,"n":4},{"id":"a405","b":"apt","label":"405호","floor":4,"n":5},{"id":"a406","b":"apt","label":"406호","floor":4,"n":6},{"id":"a407","b":"apt","label":"407호","floor":4,"n":7},{"id":"a408","b":"apt","label":"408호","floor":4,"n":8},{"id":"a301","b":"apt","label":"301호","floor":3,"n":1},{"id":"a302","b":"apt","label":"302호","floor":3,"n":2},{"id":"a303","b":"apt","label":"303호","floor":3,"n":3},{"id":"a304","b":"apt","label":"304호","floor":3,"n":4},{"id":"a305","b":"apt","label":"305호","floor":3,"n":5},{"id":"a306","b":"apt","label":"306호","floor":3,"n":6},{"id":"a307","b":"apt","label":"307호","floor":3,"n":7},{"id":"a308","b":"apt","label":"308호","floor":3,"n":8},{"id":"a201","b":"apt","label":"201호","floor":2,"n":1},{"id":"a202","b":"apt","label":"202호","floor":2,"n":2},{"id":"a203","b":"apt","label":"203호","floor":2,"n":3},{"id":"a204","b":"apt","label":"204호","floor":2,"n":4},{"id":"a205","b":"apt","label":"205호","floor":2,"n":5},{"id":"a206","b":"apt","label":"206호","floor":2,"n":6},{"id":"a207","b":"apt","label":"207호","floor":2,"n":7},{"id":"a208","b":"apt","label":"208호","floor":2,"n":8},{"id":"a101","b":"apt","label":"101호","floor":1,"n":1},{"id":"a102","b":"apt","label":"102호","floor":1,"n":2},{"id":"a103","b":"apt","label":"103호","floor":1,"n":3},{"id":"a104","b":"apt","label":"104호","floor":1,"n":4},{"id":"a105","b":"apt","label":"105호","floor":1,"n":5},{"id":"a106","b":"apt","label":"106호","floor":1,"n":6},{"id":"a107","b":"apt","label":"107호","floor":1,"n":7},{"id":"a108","b":"apt","label":"108호","floor":1,"n":8}],"buildings":[{"key":"apt","name":"성수타워 아파트","short":"아파트"},{"key":"mansion","name":"체키맨션","short":"맨션"},{"key":"house","name":"단독주택","short":"주택"}],"war":true,"perFloor":8};
   function dWon(n) { return (n < 0 ? "-" : "") + Math.abs(n || 0).toLocaleString("ko-KR") + "원"; }
   var TEAM = { "1": "빨간 팀", "2": "파란 팀" };
   var TEAM_KEY = { "1": "Ctrl", "2": "Shift" };
@@ -5754,9 +5840,28 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
     "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "Numpad0",
     "NumpadAdd", "NumpadSubtract", "NumpadMultiply", "NumpadDivide", "NumpadDecimal", "NumpadEnter", "Insert", "Delete", "Home", "End"];
   var unitById = {}, unitByKey = {}, unitByKeyB = {};
-  WALL.units.forEach(function (u, i) { u.key = WALL_KEYS[i]; u.keyB = BLUE_KEYS[i]; u.keyLabel = KEY_LABEL[u.key] || u.key.replace("Key", ""); unitById[u.id] = u; unitByKey[u.key] = u; unitByKeyB[u.keyB] = u; });
+  WALL.units.forEach(function (u, i) { unitById[u.id] = u; if (WALL.war) return; u.key = WALL_KEYS[i]; u.keyB = BLUE_KEYS[i]; u.keyLabel = KEY_LABEL[u.key] || u.key.replace("Key", ""); unitByKey[u.key] = u; unitByKeyB[u.keyB] = u; });
+  // 2026-10-22 엘리베이터 이동 전쟁 (아파트 한 채): 1인당 버튼 = ↑ ↓ + 호실 8개(지금 엘리베이터가 선 층의 N01~N08).
+  //   빨강: ↑ W / ↓ S / 호실 1~8 = 숫자 1~8 · 파랑: ↑↓ 방향키 / 호실 1~8 = Y U I O H J K L (또는 숫자패드 1~8, 또는 Shift+숫자).
+  //   현장 아케이드 버튼 인코더는 이 키로 연결 (벽버튼_배선표.csv).
+  var WAR_KEYS = {
+    "1": { up: ["KeyW"], down: ["KeyS"], slot: ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8"] },
+    "2": { up: ["ArrowUp"], down: ["ArrowDown"], slot: ["KeyY", "KeyU", "KeyI", "KeyO", "KeyH", "KeyJ", "KeyK", "KeyL"], slot2: ["Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8"] },
+  };
+  var WAR_KEY_LABEL = { "1": { up: "W", down: "S", slot: ["1", "2", "3", "4", "5", "6", "7", "8"] }, "2": { up: "↑", down: "↓", slot: ["Y", "U", "I", "O", "H", "J", "K", "L"] } };
+  function dWar() { return !!(state && state.delivery && state.delivery.elev && state.delivery.elev.war); }
+  function warKey(code, shift) {
+    for (var s = 1; s <= 2; s++) {
+      var k = WAR_KEYS[s], t = String(s);
+      if (k.up.indexOf(code) >= 0) return { team: t, dir: "up" };
+      if (k.down.indexOf(code) >= 0) return { team: t, dir: "down" };
+      var i = k.slot.indexOf(code); if (i < 0 && k.slot2) i = k.slot2.indexOf(code);
+      if (i >= 0) return { team: shift && t === "1" ? "2" : t, slot: i + 1 };
+    }
+    return null;
+  }
   function dPair() { return !!(state && state.wallRule && state.wallRule.pair); }
-  function unitAddr(u) { return u.b === "house" ? u.label : (u.b === "apt" ? "아파트 " + u.floor + "층 " + u.label : "맨션 " + u.label); }
+  function unitAddr(u) { if (WALL.war) return u.floor + "층 " + u.label; return u.b === "house" ? u.label : (u.b === "apt" ? "아파트 " + u.floor + "층 " + u.label : "맨션 " + u.label); }
   function invAddr(inv) { return (inv && inv.unit && unitById[inv.unit]) ? unitAddr(unitById[inv.unit]) : roomCode(inv.floorIdx, inv.room); }
   function bShort(b) { return b === "apt" ? "아파트" : (b === "mansion" ? "맨션" : "주택"); }
   function dStats(st, s) {
@@ -5859,6 +5964,7 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
   function elevCtl(st, withButtons) {
     var e = st.delivery.elev;
     if (!e) return '';
+    if (e.war) return '<div class="d-elev' + (e.open ? ' open' : '') + '"><span class="d-elev-l">엘리베이터</span><b class="d-elev-f">' + e.floor + '층</b><span class="d-elev-st">' + (e.open ? '문 열림' : '이동 전쟁') + '</span></div>';
     return '<div class="d-elev" data-moving="' + (e.movingUntil || 0) + '"><span class="d-elev-l">엘리베이터</span><b class="d-elev-f">' + e.floor + '층</b><span class="d-elev-mv">이동 중</span></div>';
   }
 
@@ -5866,7 +5972,14 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
   function renderDelivery(st, seat) {
     var s = dStats(st, seat), act = dActive(st, seat), rail = railInfo && railInfo.count > 0;
     var now = '';
-    if (act) {
+    if (dWar()) {
+      var e = st.delivery.elev, mineHere = s.pending.filter(function (v) { var u = unitById[v.unit]; return u && u.floor === e.floor; });
+      var fl = warFloors(st, seat), fk = Object.keys(fl).sort(function (a, b) { return b - a; });
+      var L = WAR_KEY_LABEL[seat];
+      if (!s.pending.length) now = '<div class="d-now is-clear">내 택배를 모두 배송했어요</div>';
+      else if (e.open && mineHere.length) now = '<div class="d-now is-on t' + seat + '"><b>' + e.floor + '층 문 열림!</b> ' + mineHere.map(function (v) { return esc(unitById[v.unit].label); }).join(' · ') + ' 버튼 <b>' + (warRule(st).deliverTaps || 3) + '번</b> 연타!</div>';
+      else now = '<div class="d-now">엘리베이터 <b>' + e.floor + '층</b>' + (e.open ? ' (문 열림 -- 내 택배 없음)' : '') + ' · 내 택배 층 <b>' + fk.join(', ') + '</b> · ' + esc(L.up) + '/' + esc(L.down) + ' <b>' + (warRule(st).taps || 5) + '번</b> 먼저 누르면 한 층</div>';
+    } else if (act) {
       var u = unitById[act.unit];
       now = '<div class="d-now is-on t' + seat + '"' + dDoorAttrs(act.door) + '><b>' + esc(unitAddr(u)) + '</b> 배송 중' + dDoorNote(act.door) + (act.door.hold ? ' · 손 떼지 마세요' : (act.door.taps ? ' · 상대가 막는 중 ' + act.door.taps + '/' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '!' : '')) + '<i class="d-now-bar"><i></i></i></div>';
     } else if (s.pending.length) {
@@ -5878,7 +5991,7 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
       var u = unitById[v.unit];
       var on = act && act.unit === v.unit;
       var other = seat === "1" ? "2" : "1", vsx = u && dHeld(st, other, v.unit);
-      return '<div class="d-slip' + (on ? ' on' : '') + (vsx ? ' vs' : '') + '">' + (vsx ? '<span class="d-slip-vs">⚔ 상대도 이 집!</span>' : '') + '<span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span><span class="d-slip-a">' + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w"><i class="d-kind fee-t' + v.catIdx + '">' + esc(TYPES[v.catIdx].name) + '</i> ' + dWon(invReward(v)) + '</span></div>';
+      return '<div class="d-slip' + (on ? ' on' : '') + (vsx ? ' vs' : '') + '">' + (vsx ? '<span class="d-slip-vs">⚔ 상대도 이 집!</span>' : '') + (WALL.war ? '' : '<span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span>') + '<span class="d-slip-a">' + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w"><i class="d-kind fee-t' + v.catIdx + '">' + esc(TYPES[v.catIdx].name) + '</i> ' + dWon(invReward(v)) + '</span></div>';
     }).join('');
     var html = '<main class="stage stage--dlv">' + cartOpen('cart--dlv') + '<div class="dlv t' + seat + '">'
       + '<div class="dlv-top"><span class="dlv-team t' + seat + '">' + TEAM[seat] + '</span>' + dClock(st)
@@ -5908,14 +6021,74 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
       + '<div><span>획득</span><b>' + x.got + '개 · ' + dWon(x.gotSum) + '</b></div>'
       + '<div><span>배송 완료</span><b>' + x.done + '개 · ' + dWon(x.doneSum) + '</b></div>'
       + '<div><span>남은 택배</span><b>' + x.pending.length + '개</b></div>'
-      + '<div><span>막기 · 뺏김</span><b>' + x.blocks + '회' + (x.blockSum ? ' +' + dWon(x.blockSum) : '') + ' · ' + x.lost + '개</b></div>'
-      + '<div><span>콤보</span><b>종류 ' + Math.min(x.kinds, x.kindsNeed) + '/' + x.kindsNeed + ' · 건물 ' + Math.min(x.blds, 3) + '/3</b></div>'
+      + (dWar() ? '<div><span>⚔ 뺏김</span><b>' + x.lost + '개</b></div>' : '<div><span>막기 · 뺏김</span><b>' + x.blocks + '회' + (x.blockSum ? ' +' + dWon(x.blockSum) : '') + ' · ' + x.lost + '개</b></div>')
+      + '<div><span>콤보</span><b>종류 ' + Math.min(x.kinds, x.kindsNeed) + '/' + x.kindsNeed + (x.bldAmt > 0 ? ' · 건물 ' + Math.min(x.blds, 3) + '/3' : '') + '</b></div>'
       + '<div><span>지금</span><b>' + (act ? esc(unitAddr(unitById[act.unit])) + ' 배송 중' : '—') + '</b></div>'
       + (x.returned || x.wrong ? '<div class="d-team-neg"><span>반송 · 오배송</span><b>' + x.returned + ' · ' + x.wrong + '</b></div>' : '')
       + '</div>' + (act ? '<i class="d-team-bar"' + dDoorAttrs(act.door) + '><i></i></i>' : '') + '</div>';
   }
   // 2026-10-16 (사용자 결정): 메인 컴퓨터 = 벽 + 입력(Ctrl/Shift + 호실 키 2초, Ctrl/Shift+↑↓ 엘리베이터). 레일 화면 = 두 팀 점수판.
+
+  // ---------- 2026-10-22 엘리베이터 이동 전쟁 (아파트 한 채) ----------
+  function warRule(st) { return (st.wallRule && st.wallRule.war) || { taps: 5, deliverTaps: 3, openMs: 2500 }; }
+  function warFloors(st, s) { var c = {}; dStats(st, s).pending.forEach(function (v) { var u = unitById[v.unit]; if (u) c[u.floor] = (c[u.floor] || 0) + 1; }); return c; }
+  function warUnit(st, u, e) {
+    var h1 = dHeld(st, "1", u.id), h2 = dHeld(st, "2", u.id), here = e.floor === u.floor, open = here && e.open;
+    var ms = st.delivery.mash || {}, need = warRule(st).deliverTaps || 3;
+    var m1 = open && ms["1"] ? (ms["1"][u.id] || 0) : 0, m2 = open && ms["2"] ? (ms["2"][u.id] || 0) : 0;
+    var cls = 'wu' + (h1 ? ' h1' : '') + (h2 ? ' h2' : '') + (h1 && h2 ? ' vs' : '') + (here ? ' here' : '') + (open ? ' open' : '') + (open && (h1 || h2) ? ' go' : '');
+    var bars = open && (h1 || h2) ? '<span class="wu-bars">' + (h1 ? '<i class="t1" style="--p:' + (m1 / need).toFixed(2) + '"></i>' : '') + (h2 ? '<i class="t2" style="--p:' + (m2 / need).toFixed(2) + '"></i>' : '') + '</span>' : '';
+    return '<div class="' + cls + '" data-unit="' + u.id + '"><span class="wu-door"></span><b>' + esc(u.label.replace("호", "")) + '</b>'
+      + '<span class="wu-dots">' + (h1 ? '<i class="t1"></i>' : '') + (h2 ? '<i class="t2"></i>' : '') + '</span>'
+      + (h1 && h2 ? '<span class="wu-vs">⚔</span>' : '') + bars + '</div>';
+  }
+  function warBuilding(st) {
+    var e = st.delivery.elev, per = WALL.perFloor || 8, half = per / 2, h = '';
+    for (var f = 7; f >= 1; f--) {
+      var row = 8 - f;
+      h += '<div class="wfl' + (e.floor === f ? ' here' : '') + '" style="grid-row:' + row + '"><b>' + f + 'F</b></div>';
+      for (var n = 1; n <= per; n++) {
+        var col = n <= half ? n + 1 : n + 2;
+        h += '<div class="wcell" style="grid-row:' + row + ';grid-column:' + col + '">' + warUnit(st, unitById["a" + f + "0" + n], e) + '</div>';
+      }
+    }
+    var top = ((7 - e.floor) / 7 * 100).toFixed(3);
+    h += '<div class="wshaft" style="grid-row:1 / span 7;grid-column:' + (half + 2) + '"><div class="wcar' + (e.open ? ' open' : '') + '" style="top:' + top + '%"><i></i><i></i><b>' + e.floor + '</b></div></div>';
+    return '<div class="wbld" style="--half:' + half + '">' + h + '</div>';
+  }
+  // 2026-10-22 (사용자 확정 "5연타 선점"): 방향 게이지 두 개 (▲ / ▼). 칸 색 = 그 칸을 채운 사람.
+  function warDirGauge(st, dir) {
+    var e = st.delivery.elev, n = warRule(st).taps || 5, by = (e.by && e.by[dir]) || [], v = (e.cnt && e.cnt[dir]) || 0, pips = '';
+    for (var i = 0; i < n; i++) pips += '<i' + (i < v ? ' class="on t' + (by[i] || "0") + '"' : '') + '></i>';
+    var lead = v > 0 && v >= ((e.cnt && e.cnt[dir === "up" ? "down" : "up"]) || 0);
+    return '<div class="wdg ' + dir + (lead ? ' lead' : '') + (e.open ? ' lock' : '') + '"><span class="wdg-a">' + (dir === "up" ? "▲ 위" : "▼ 아래") + '</span><span class="wdg-pips" style="--n:' + n + '">' + pips + '</span><b class="wdg-n">' + v + '<small>/' + n + '</small></b></div>';
+  }
+  function warTeamFloors(st, s) {
+    var e = st.delivery.elev, L = WAR_KEY_LABEL[s], fl = warFloors(st, s), fk = Object.keys(fl).sort(function (a, b) { return b - a; });
+    return '<div class="wg t' + s + '"><div class="wg-h">' + TEAM[s] + ' <small>' + esc(L.up) + ' / ' + esc(L.down) + ' · 남은 택배 층</small></div>'
+      + '<div class="wg-fl">' + (fk.length ? fk.map(function (f) { return '<span' + (+f === e.floor ? ' class="here"' : '') + '>' + f + '층<b>' + fl[f] + '</b></span>'; }).join('') : '<span class="done">다 배송!</span>') + '</div></div>';
+  }
+  function warPanel(st) {
+    var e = st.delivery.elev, w = warRule(st);
+    // 층이 바뀐 순간 숫자가 크게 튀게: 바뀐 시각을 기억해 두고, 렌더가 다시 돼도 애니메이션이 처음부터 다시 돌지 않게 지난 시간만큼 당겨 둔다
+    if (dLocal.wFloor !== e.floor) { if (dLocal.wFloor != null) dLocal.wFloorAt = nowMs(); dLocal.wFloor = e.floor; }
+    var since = dLocal.wFloorAt ? nowMs() - dLocal.wFloorAt : 1e9, pop = since < 600 ? ' class="pop" style="animation-delay:-' + Math.round(since) + 'ms"' : '';
+    var st0 = e.open ? '<div class="wst open" data-wopen="' + e.openUntil + '" data-wms="' + (w.openMs || 2500) + '"><b>문 열림!</b><span>그 층 내 집 <b>' + (w.deliverTaps || 3) + '번</b> 연타</span><i class="wst-bar"><i></i></i></div>'
+      : '<div class="wst war"><b>엘리베이터 쟁탈</b><span>먼저 <b>' + (w.taps || 5) + '번</b> 찬 방향으로 한 층!</span></div>';
+    return '<div class="wpanel"><div class="wfloor"><small>엘리베이터</small><b' + pop + '>' + e.floor + '<em>층</em></b></div>' + st0
+      + '<div class="wdgs">' + warDirGauge(st, "up") + warDirGauge(st, "down") + '</div>'
+      + warTeamFloors(st, "1") + warTeamFloors(st, "2") + '</div>';
+  }
+  function renderWarMain(st, head, halfName) {
+    var w = warRule(st), L1 = WAR_KEY_LABEL["1"], L2 = WAR_KEY_LABEL["2"];
+    return head("배송 · " + halfName) + '<div class="mv-body rv-dlv d-main d-war">'
+      + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + '</div>' + teamCard(st, "2", false) + '</div>'
+      + dTug(st)
+      + '<div class="wwrap">' + warBuilding(st) + warPanel(st) + '</div>'
+      + '<div class="d-keys1"><span class="t1"><b>빨강</b> ' + L1.up + '/' + L1.down + ' · 호실 1~8</span><span class="t2"><b>파랑</b> ↑/↓ · 호실 ' + L2.slot.join(' ') + '</span> · ↑↓ <b>' + (w.taps || 5) + '번</b> 먼저 = 한 층 · 택배 있는 층에 멈추면 문 열림 → 그 층 내 집 <b>' + (w.deliverTaps || 3) + '번</b> 연타 · ⚔ 같은 집은 먼저 채운 사람만</div></div>';
+  }
   function renderMainDelivery(st, head, halfName) {
+    if (st.delivery && st.delivery.elev && st.delivery.elev.war) return renderWarMain(st, head, halfName);
     return head("배송 · " + halfName) + '<div class="mv-body rv-dlv d-main">'
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + dTug(st)
@@ -5974,6 +6147,11 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
       if (e.n <= dLocal.lastEv) return;
       dLocal.lastEv = e.n;
       var mine = !me || e.seat === me, u = unitById[e.unit], addr = u ? unitAddr(u) : "", who = e.seat ? TEAM[e.seat] : "";
+      if (e.k === "move") { if (MAIN) { dTone(220 + (e.floor || 1) * 40, 0, 0.12, "sawtooth", 0.06); dTone(660 + (e.floor || 1) * 40, 0.08, 0.18, "sine", 0.22); } return; } // 엘리베이터 이동음 (층마다 음 높이)
+      if (e.k === "open") { DSND.open(); if (e.forced && MAIN) { dSay("버티기 끝!"); dPop("warn", "버티다가 " + e.floor + "층에서 문이 열렸어요", "", null); } return; }
+      if (e.k === "close" || e.k === "elevend") return;
+      if (e.k === "shut") { if (mine) { DSND.err(); dPop("warn", (me ? "" : who + " · ") + "문이 닫혔어요", addr + " · 연타 " + (e.taps || 0) + "번은 처음부터", e.seat); } return; }
+      if (e.k === "closed" || (e.k === "noelev" && dWar())) { if (me && mine) { DSND.soft(); dPop("warn", e.k === "closed" ? "문이 닫혀 있어요" : "엘리베이터가 " + (e.floor || "?") + "층이에요", "멈추고 문이 열려야 배송돼요", e.seat); } else if (mine) DSND.soft(); return; }
       if (e.k === "start") { if (mine || !me) DSND.start(); return; }
       if (e.k === "step") { if (mine) DSND.step(e.steps || 0); return; }
       if (e.k === "done") {
@@ -6059,6 +6237,10 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
       el.classList.toggle("bell-open", open);
       if (open && el.hasAttribute("data-unit") && !dLocal.beeped["bell" + at]) { dLocal.beeped["bell" + at] = 1; DSND.open(); }
     });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-wopen]"), function (el) {
+      var p = Math.max(0, Math.min(1, (parseInt(el.getAttribute("data-wopen"), 10) - n) / parseInt(el.getAttribute("data-wms"), 10)));
+      el.style.setProperty("--p", p.toFixed(3));
+    });
     Array.prototype.forEach.call(document.querySelectorAll(".d-elev[data-moving]"), function (el) { el.classList.toggle("moving", parseInt(el.getAttribute("data-moving"), 10) > n); });
     Array.prototype.forEach.call(document.querySelectorAll(".d-cnt[data-ck]"), function (el) {
       var k = el.getAttribute("data-ck"), tv = parseInt(el.getAttribute("data-cv"), 10), cur = dLocal.shown[k];
@@ -6095,6 +6277,14 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
     if (!state || state.phase !== "delivery") return false;
     var team = dTeamOf(e);
     if (!MAIN) return false; // 배송 입력은 메인 컴퓨터에서만
+    if (dWar()) {
+      var wk = warKey(e.code, e.shiftKey);
+      if (!wk) return false;
+      e.preventDefault();
+      if (wk.dir) { if (!e.repeat) send({ type: "wall-elev", team: wk.team, dir: wk.dir }); return true; } // 연타만 (누르고 있기 X)
+      if (!e.repeat) send({ type: "wall-slot", team: wk.team, slot: wk.slot });
+      return true;
+    }
     if (e.code === "ArrowUp" || e.code === "ArrowDown") {
       e.preventDefault();
       if (e.repeat) return true;

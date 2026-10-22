@@ -1,5 +1,6 @@
 // 2026-10-16 벽 배송 + 택배 쌓기 몫 계획 (서버 로직). 실행: node test_wall.js
 "use strict";
+process.env.APT_WAR = process.env.APT_WAR || "0"; // 예전 3동(아파트·맨션·주택) 규칙 테스트 -- 엘리베이터 전쟁은 test_war.js
 const { GameRoom } = require("./game-room.js");
 const D = require("./game-data.js");
 const assert = require("assert");

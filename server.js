@@ -301,6 +301,7 @@ wss.on("connection", (ws, req) => {
       if (type === "wall-press" && typeof msg.unit === "string") entry.room.wallPress(team, msg.unit);
       if (type === "wall-release" && typeof msg.unit === "string" && team) entry.room.wallRelease(team, msg.unit);
       if (type === "wall-elev") entry.room.wallElevator(team, msg.dir); // 2026-10-21: 팀 키 없이도 (team null)
+      if (type === "wall-slot" && Number.isInteger(msg.slot)) entry.room.wallSlot(team, msg.slot); // 2026-10-22 엘리베이터 전쟁: 지금 층의 N번째 호실
       return;
     }
     if (seat === "1" || seat === "2") conn.seat = seat;
