@@ -2908,6 +2908,13 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
 .d-main .dwalls3 .dw-house .dw-house-grid { flex: 1 1 0 !important; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-template-rows: repeat(4, minmax(0, 1fr)) !important; }
 .d-main .dwalls3 .dw-home-pic { aspect-ratio: auto !important; height: auto; min-height: 0; }
 
+/* 36c. 3분할 비율 고정 (2026-10-22): 화면 비율(16:10·4:3·세로)이 달라도 아파트·맨션 그림이 늘어나지 않게
+   그림을 감싼 .dw-fit 칸 크기(cqw/cqh) 안에서 원래 비율로 가장 크게 */
+.dw-fit { display: contents; }
+.d-main .dwalls3 .dw-fit { display: flex; flex: 1 1 0; min-height: 0; min-width: 0; container-type: size; align-items: center; justify-content: center; align-self: stretch; width: 100%; }
+.d-main .dwalls3 .dw-fit > .dw-apt-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 405 / 510) !important; height: auto !important; max-height: none; aspect-ratio: 405 / 510; margin: 0 !important; }
+.d-main .dwalls3 .dw-fit > .dw-man-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 740 / 300) !important; height: auto !important; aspect-ratio: 740 / 300; margin: 0 !important; }
+
 </style>
 </head><body>
 <div id="app"></div>
@@ -4184,7 +4191,7 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
   var RAIL_PICK_LABEL = { "1": ["A", "S", "D", "F", "G"], "2": ["H", "J", "K", "L", ";"] };
   var VOTING_MS = 5000, THIEF_PER_HALF = 2; // 튜토리얼 문구용 (game-data.js)
   var ELEVATOR_JOLT = 1; // 2026-10-14 덜컹 (game-data.js)
-  var BUILD_TAG = "v1022-1438"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
+  var BUILD_TAG = "v1022-1504"; // 배포 확인용 빌드 표시 (build_client.py가 빌드 시각을 넣는다 -- 화면 왼쪽 위 작은 글씨)
   // 송장 하나의 배송 성공 금액 (서버가 확보 순간 층 배율을 적용해 inv.reward에 박아 둔다 -- 예전 형식이면 종류 금액)
   function invReward(inv) { return typeof inv.reward === "number" ? inv.reward : TYPES[inv.catIdx].reward; }
   function floorMult(i) { return FLOOR_REWARD_MULT[i] == null ? 1 : FLOOR_REWARD_MULT[i]; }
@@ -5827,7 +5834,7 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
     //   위치는 그림 기준 비율(%) -- 층 가운데 y(그림 510px 기준)와 문 x 범위. 엘리베이터 칸은 승강로 위에서 움직인다.
     var ROW_Y = { 7: 70, 6: 129, 5: 188, 4: 247, 3: 306, 2: 365, 1: 426 }, IH = 510, IW = 405;
     var pct = function (v, of) { return (v / of * 100).toFixed(2) + '%'; };
-    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트</div><div class="dw-apt-pic">';
+    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트</div><div class="dw-fit"><div class="dw-apt-pic">';
     for (var f = 7; f >= 1; f--) {
       var top = pct(ROW_Y[f] - 27, IH), hh = pct(54, IH);
       apt += '<span class="dw-fl-hl' + (ef === f ? ' here' : '') + '" style="top:' + top + ';height:' + hh + '"></span>'
@@ -5835,14 +5842,14 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
         + '<span class="dw-slot" style="left:' + pct(234, IW) + ';top:' + top + ';width:' + pct(84, IW) + ';height:' + hh + '">' + unitBtn(st, unitById["a" + f + "02"], keyHint) + '</span>';
     }
     if (ef) apt += '<i class="dw-car-img" style="top:' + pct(ROW_Y[ef] - 26, IH) + ';height:' + pct(52, IH) + '"></i>';
-    apt += '</div></div>';
+    apt += '</div></div></div>'; // dw-fit: 3분할에서 칸 크기에 비율 유지로 맞추는 틀
     // 2026-10-16 (사용자 제공 그림 2): 맨션 그림(ui_art/town_mansion.jpg, 2층 x 201~206 / 101~106 -- 우리 호실과 같음) 위 문 자리에 버튼.
     var MW = 740, MH = 300, MX = [117, 227, 332, 437, 535, 620], MY = { 2: 75, 1: 220 }; // 외벽만 잘라 낸 그림(740x300) 기준
-    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션</div><div class="dw-man-pic">';
+    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션</div><div class="dw-fit"><div class="dw-man-pic">';
     [2, 1].forEach(function (f) { for (var k = 1; k <= 6; k++) {
       man += '<span class="dw-slot dw-mslot" style="left:' + pct(MX[k - 1] - 44, MW) + ';top:' + pct(MY[f] - 58, MH) + ';width:' + pct(88, MW) + ';height:' + pct(116, MH) + '">' + unitBtn(st, unitById["m" + f + "0" + k], keyHint) + '</span>';
     } });
-    man += '</div></div>';
+    man += '</div></div></div>';
     var hs = '<div class="dw dw-house dw-img"><div class="dw-name">주택 <small>성수로</small></div><div class="dw-house-grid">';
     for (var h = 1; h <= 8; h++) hs += '<div class="dw-home dw-home-pic hp' + (((h - 1) % 4) + 1) + '">' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
     hs += '</div></div>';

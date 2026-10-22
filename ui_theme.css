@@ -1085,3 +1085,10 @@ body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1
 .d-main .dwalls3 .dw-apt-pic { flex: 1 1 0 !important; min-height: 0; height: auto !important; width: auto !important; max-width: 100%; max-height: 100%; aspect-ratio: 405 / 510; margin: 0 auto; }
 .d-main .dwalls3 .dw-house .dw-house-grid { flex: 1 1 0 !important; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-template-rows: repeat(4, minmax(0, 1fr)) !important; }
 .d-main .dwalls3 .dw-home-pic { aspect-ratio: auto !important; height: auto; min-height: 0; }
+
+/* 36c. 3분할 비율 고정 (2026-10-22): 화면 비율(16:10·4:3·세로)이 달라도 아파트·맨션 그림이 늘어나지 않게
+   그림을 감싼 .dw-fit 칸 크기(cqw/cqh) 안에서 원래 비율로 가장 크게 */
+.dw-fit { display: contents; }
+.d-main .dwalls3 .dw-fit { display: flex; flex: 1 1 0; min-height: 0; min-width: 0; container-type: size; align-items: center; justify-content: center; align-self: stretch; width: 100%; }
+.d-main .dwalls3 .dw-fit > .dw-apt-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 405 / 510) !important; height: auto !important; max-height: none; aspect-ratio: 405 / 510; margin: 0 !important; }
+.d-main .dwalls3 .dw-fit > .dw-man-pic { flex: 0 0 auto !important; width: min(100cqw, 100cqh * 740 / 300) !important; height: auto !important; aspect-ratio: 740 / 300; margin: 0 !important; }

@@ -2350,7 +2350,7 @@ APP_JS_TEMPLATE = r"""
     //   위치는 그림 기준 비율(%) -- 층 가운데 y(그림 510px 기준)와 문 x 범위. 엘리베이터 칸은 승강로 위에서 움직인다.
     var ROW_Y = { 7: 70, 6: 129, 5: 188, 4: 247, 3: 306, 2: 365, 1: 426 }, IH = 510, IW = 405;
     var pct = function (v, of) { return (v / of * 100).toFixed(2) + '%'; };
-    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트</div><div class="dw-apt-pic">';
+    var apt = '<div class="dw dw-apt dw-img"><div class="dw-name">아파트</div><div class="dw-fit"><div class="dw-apt-pic">';
     for (var f = 7; f >= 1; f--) {
       var top = pct(ROW_Y[f] - 27, IH), hh = pct(54, IH);
       apt += '<span class="dw-fl-hl' + (ef === f ? ' here' : '') + '" style="top:' + top + ';height:' + hh + '"></span>'
@@ -2358,14 +2358,14 @@ APP_JS_TEMPLATE = r"""
         + '<span class="dw-slot" style="left:' + pct(234, IW) + ';top:' + top + ';width:' + pct(84, IW) + ';height:' + hh + '">' + unitBtn(st, unitById["a" + f + "02"], keyHint) + '</span>';
     }
     if (ef) apt += '<i class="dw-car-img" style="top:' + pct(ROW_Y[ef] - 26, IH) + ';height:' + pct(52, IH) + '"></i>';
-    apt += '</div></div>';
+    apt += '</div></div></div>'; // dw-fit: 3분할에서 칸 크기에 비율 유지로 맞추는 틀
     // 2026-10-16 (사용자 제공 그림 2): 맨션 그림(ui_art/town_mansion.jpg, 2층 x 201~206 / 101~106 -- 우리 호실과 같음) 위 문 자리에 버튼.
     var MW = 740, MH = 300, MX = [117, 227, 332, 437, 535, 620], MY = { 2: 75, 1: 220 }; // 외벽만 잘라 낸 그림(740x300) 기준
-    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션</div><div class="dw-man-pic">';
+    var man = '<div class="dw dw-mansion dw-img"><div class="dw-name">맨션</div><div class="dw-fit"><div class="dw-man-pic">';
     [2, 1].forEach(function (f) { for (var k = 1; k <= 6; k++) {
       man += '<span class="dw-slot dw-mslot" style="left:' + pct(MX[k - 1] - 44, MW) + ';top:' + pct(MY[f] - 58, MH) + ';width:' + pct(88, MW) + ';height:' + pct(116, MH) + '">' + unitBtn(st, unitById["m" + f + "0" + k], keyHint) + '</span>';
     } });
-    man += '</div></div>';
+    man += '</div></div></div>';
     var hs = '<div class="dw dw-house dw-img"><div class="dw-name">주택 <small>성수로</small></div><div class="dw-house-grid">';
     for (var h = 1; h <= 8; h++) hs += '<div class="dw-home dw-home-pic hp' + (((h - 1) % 4) + 1) + '">' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
     hs += '</div></div>';

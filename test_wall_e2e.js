@@ -105,7 +105,8 @@ const OUT = "/tmp/wall_e2e_";
     const k2 = await s.evaluate(() => { const st = window.__st || null; return null; });
     void k2;
   }
-  for (const [w, h] of [[1920, 1080], [1366, 768], [1280, 720]]) { await s.setViewportSize({ width: w, height: h }); await s.waitForTimeout(400); await s.screenshot({ path: OUT + "d_main_" + h + ".png" });
+  for (const [w, h] of [[1920, 1080], [1366, 768], [1280, 720], [1920, 969], [1536, 864], [1440, 900], [1920, 1200], [2560, 1440], [3840, 2160], [2560, 1080], [1024, 768], [1280, 1024], [1080, 1920]]) { await s.setViewportSize({ width: w, height: h }); await s.waitForTimeout(400); await s.screenshot({ path: OUT + "d_main_" + w + "x" + h + ".png" });
+    console.log("geo", w, h, JSON.stringify(await s.evaluate(() => { const r = e => { if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; }; return { walls: r(document.querySelector(".dwalls3")), cols: [...document.querySelectorAll(".dwalls3 > .dw")].map(r), apt: r(document.querySelector(".dwalls3 .dw-apt-pic")), man: r(document.querySelector(".dwalls3 .dw-man-pic")), h1: r(document.querySelector(".dwalls3 .dw-home-pic")), keys: r(document.querySelector(".d-keys1")) }; })));
     const ov = await s.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 2 || [...document.querySelectorAll(".dwalls3 > .dw")].some(d => d.scrollHeight > d.clientHeight + 4)); console.log("main", w, h, "overflow", ov); }
   assert.deepStrictEqual(errs, []);
   console.log("test_wall_e2e OK");
