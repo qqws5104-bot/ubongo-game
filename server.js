@@ -368,6 +368,15 @@ wss.on("connection", (ws, req) => {
         if (!conn.seat) return;
         if (entry.busy[conn.seat]) { entry.busy[conn.seat] = false; broadcast(code, entry.room.state); }
         break;
+      // 2026-10-22 (사용자 결정): 엘리베이터 이동 전쟁 입력은 각자 플레이어 화면에서 (▲▼ / 그 층 호실)
+      case "wall-elev":
+        if (!conn.seat || (msg.dir !== "up" && msg.dir !== "down")) return;
+        entry.room.wallElevator(conn.seat, msg.dir);
+        break;
+      case "wall-slot":
+        if (!conn.seat || !Number.isInteger(msg.slot)) return;
+        entry.room.wallSlot(conn.seat, msg.slot);
+        break;
       case "vote":
         if (!conn.seat || (msg.dir !== "up" && msg.dir !== "down")) return;
         entry.room.vote(conn.seat, msg.dir);

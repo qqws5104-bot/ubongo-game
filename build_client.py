@@ -675,6 +675,15 @@ APP_JS_TEMPLATE = r"""
   // 보석/체크마크 건물). box_art/의 3D 박스 일러스트와는 다른, 손으로 그린 별도의 단순한 SVG -- 그
   // 일러스트는 라벨 카드 안에 아이콘 크기로 넣기엔 스타일이 안 맞아서(입체 박스 그림 vs 평면 라인
   // 아이콘), 참고 포스터의 "구분/요금" 카드가 쓰는 플랫 아이콘 언어에 맞춰 새로 그렸다.
+  // 2026-10-22 (사용자 결정, 플레이 테스트 "비싼 것·안 비싼 것 구분이 어렵다"): 값어치 = 메달. 일반 = 동, 깨지기 쉬운 = 은, 귀중품 = 금.
+  //   색만으로 구분하지 않게 글자(동/은/금) + 크기(금이 제일 큼) + 별 개수. 확정 층수(지금 안 나옴)는 메달 없음.
+  // 2026-10-22 (사용자: "금·은·동 글자 말고 그 색의 택배 상자로, 글이 너무 많다"): 값어치 = 상자 색. 일반 = 동색 / 깨지기 쉬운 = 은색 / 귀중품 = 금색 상자.
+  //   글자 없이 색 + 크기(금이 제일 큼) + 금은 반짝임. 확정 층수(지금 안 나옴)는 상자 없음.
+  var MEDAL = [{ k: "동" }, { k: "은" }, { k: "금" }];
+  var PBOX_SVG = '<svg viewBox="0 0 40 38" aria-hidden="true"><path class="bx-f" d="M4 12 L20 19 L20 35 L4 28 Z"/><path class="bx-s" d="M20 19 L36 12 L36 28 L20 35 Z"/><path class="bx-t" d="M4 12 L20 5 L36 12 L20 19 Z"/>'
+    + '<path class="bx-tape" d="M11 8.9 L27 15.9 L27 21 L23 22.8 L23 17.6 L7.4 10.5 Z"/><path class="bx-o" d="M4 12 L20 5 L36 12 L36 28 L20 35 L4 28 Z M4 12 L20 19 L36 12 M20 19 L20 35"/></svg>';
+  function medal(ci, extra) { var m = MEDAL[ci]; if (!m) return ''; return '<span class="pbox m' + ci + (extra ? ' ' + extra : '') + '" title="' + m.k + '색 택배">' + PBOX_SVG + '</span>'; }
+  function medalTag(ci) { return MEDAL[ci] ? '<span class="pbox-tag">' + medal(ci, 'xl') + '</span>' : ''; }
   var CAT_ICONS = [
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg>',
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10l-1 8a4 4 0 0 1-8 0z"></path><path d="M12 11v6"></path><path d="M9 20h6"></path><path d="M9 5l2 3-2 2 3 2"></path></svg>',
@@ -1191,7 +1200,7 @@ APP_JS_TEMPLATE = r"""
   }
   function rRestCount(r) { var n = 0; r.pair.forEach(function (_, i) { if (!rOwner(r, i)) n++; }); return n; }
   function itAddrHtml(it) {
-    if (it.unit && unitById[it.unit]) { var u = unitById[it.unit]; return '<span class="rp-floorbig rp-addr"><small>' + esc(bShort(u.b)) + '</small>' + esc(u.b === "apt" ? u.floor + "층 " + u.label : u.label.replace("성수로 ", "성수로 ")) + '</span>'; }
+    if (it.unit && unitById[it.unit]) { var u = unitById[it.unit]; return '<span class="rp-floorbig rp-addr">' + (WALL.war ? '' : '<small>' + esc(bShort(u.b)) + '</small>') + esc(u.b === "apt" ? u.floor + "층 " + u.label : u.label.replace("성수로 ", "성수로 ")) + '</span>'; }
     return '<span class="rp-floorbig">' + esc(FLOORS[it.floorIdx] || '') + '</span>';
   }
   function raceCanPick(r, seat) {
@@ -1213,7 +1222,7 @@ APP_JS_TEMPLATE = r"""
     var canPick = !owner && raceCanPick(r, seat) && !railPicks();
     var t = TYPES[it.catIdx];
     var cls = 'race-parcel is-open fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + (canPick ? ' can-pick' : '') + (owner && owner === seat ? ' is-mine' : '');
-    var inner = '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span>'
+    var inner = medalTag(it.catIdx) + (WALL.war ? '' : '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span>')
       + '<span class="rp-amt">' + (multsVary() ? '기본 ' : '') + fmtWon(t.reward) + '</span>'
       // 2026-10-15: 확정 층수 택배만 층을 미리 보여 준다 (이름 그대로 층이 정해진 택배). 나머지는 송장이 나와야 안다.
       // 2026-10-15: 층을 보고 고른다 -- 모든 택배의 층을 카드에 크게 (호실은 송장에서)
@@ -1247,7 +1256,7 @@ APP_JS_TEMPLATE = r"""
       local.raceSlipSeenSet = local.raceSlipSeenSet || {};
       return '<div class="race-slips">' + invs.map(function (inv) {
         var isNew2 = !local.raceSlipSeenSet[inv.id]; local.raceSlipSeenSet[inv.id] = 1;
-        return '<div class="race-slip fee-t' + inv.catIdx + (isNew2 ? ' is-new' : '') + '"><div class="rs-bar">송장</div>'
+        return '<div class="race-slip fee-t' + inv.catIdx + (isNew2 ? ' is-new' : '') + '"><div class="rs-bar">송장</div>' + medalTag(inv.catIdx)
           + '<div class="rs-room">' + esc(invAddr(inv)) + '</div><div class="rs-amt">' + fmtWon(invReward(inv)) + '</div></div>';
       }).join('') + '</div>';
     }
@@ -1260,7 +1269,7 @@ APP_JS_TEMPLATE = r"""
     // 출력 애니메이션은 처음 한 번만 (상태가 올 때마다 다시 그리므로, 매번 붙이면 계속 처음부터 다시 나온다)
     var isNew = local.raceSlipSeen !== id;
     local.raceSlipSeen = id;
-    return '<div class="race-slip fee-t' + inv.catIdx + (isNew ? ' is-new' : '') + '"><div class="rs-bar">송장 출력</div>'
+    return '<div class="race-slip fee-t' + inv.catIdx + (isNew ? ' is-new' : '') + '"><div class="rs-bar">송장 출력</div>' + medalTag(inv.catIdx)
       + '<div class="rs-name"><span class="rp-ico">' + CAT_ICONS[inv.catIdx] + '</span>' + esc(t.name) + '</div>'
       + '<div class="rs-room">' + esc(invAddr(inv)) + '</div>'
       + '<div class="rs-floor">' + esc(FLOORS[inv.floorIdx]) + (floorMult(inv.floorIdx) !== 1 ? ' <small>' + multLabel(inv.floorIdx) + '</small>' : '') + '</div>'
@@ -2398,8 +2407,35 @@ APP_JS_TEMPLATE = r"""
     return '<div class="d-elev" data-moving="' + (e.movingUntil || 0) + '"><span class="d-elev-l">엘리베이터</span><b class="d-elev-f">' + e.floor + '층</b><span class="d-elev-mv">이동 중</span></div>';
   }
 
+  // 2026-10-22 (사용자 결정): 엘리베이터 전쟁 입력은 각자 화면. 이동 단계 = 큰 ▲▼, 배송 단계 = 지금 층 문 8개(내 택배 있는 집만 눌림)
+  function renderWarPlayer(st, seat) {
+    var s = dStats(st, seat), e = st.delivery.elev, w = warRule(st), per = WALL.perFloor || 8, mv = e.stage !== "deliver";
+    var ctl;
+    if (mv) {
+      ctl = '<div class="wp-move"><button class="wp-arrow up" data-war="up" aria-label="위로">▲</button><div class="wp-floor"><b>' + e.floor + '</b><small>층</small></div><button class="wp-arrow down" data-war="down" aria-label="아래로">▼</button></div>';
+    } else {
+      var doors = '', ms = (st.delivery.mash && st.delivery.mash[seat]) || {}, need = w.deliverTaps || 3;
+      for (var n = 1; n <= per; n++) {
+        var u = unitById["a" + e.floor + "0" + n], c = dHeldCat(st, seat, u.id), mine = c >= 0, p = (ms[u.id] || 0) / need;
+        doors += (n === per / 2 + 1 ? '<i class="wp-shaft"></i>' : '') + '<button class="wp-door' + (mine ? ' mine' : '') + '" data-war="slot" data-slot="' + n + '"' + (mine ? '' : ' disabled') + ' style="--p:' + p.toFixed(2) + '">'
+          + '<b>' + esc(u.label.replace("호", "")) + '</b>' + (mine ? medal(c) + '<i class="wp-door-bar"><i></i></i>' : '') + '</button>';
+      }
+      ctl = '<div class="wp-doors">' + doors + '</div>';
+    }
+    var slips = s.pending.slice().sort(function (a, b) { var ua = unitById[a.unit], ub = unitById[b.unit]; return (ub ? ub.floor : 0) - (ua ? ua.floor : 0); }).map(function (v) {
+      var u = unitById[v.unit], other = seat === "1" ? "2" : "1", vsx = u && dHeld(st, other, v.unit), here = u && u.floor === e.floor;
+      return '<div class="wp-slip' + (here ? ' here' : '') + (vsx ? ' vs' : '') + '">' + medal(v.catIdx) + '<b>' + esc(u ? u.label.replace("호", "") : invAddr(v)) + '</b>' + (vsx ? '<span class="wp-vs">⚔</span>' : '') + '</div>';
+    }).join('');
+    return '<main class="stage stage--dlv">' + cartOpen('cart--dlv') + '<div class="dlv wp t' + seat + '">'
+      + '<div class="dlv-top"><span class="dlv-team t' + seat + '">' + TEAM[seat] + '</span>' + dClock(st)
+      + '<span class="dlv-earn">' + dCount("p" + seat, s.live) + '<small>' + s.done + '건</small></span></div>'
+      + dTug(st) + warStage(st, true) + ctl
+      + '<div class="wp-slips">' + (slips || '<div class="wp-clear">다 배송했어요!</div>') + '</div>'
+      + '</div>' + cartClose() + '</main>';
+  }
   // 플레이어 화면: 내 송장(주소)과 지금 할 일만 크게
   function renderDelivery(st, seat) {
+    if (dWar()) return renderWarPlayer(st, seat);
     var s = dStats(st, seat), act = dActive(st, seat), rail = railInfo && railInfo.count > 0;
     var now = '';
     if (dWar()) {
@@ -2421,7 +2457,7 @@ APP_JS_TEMPLATE = r"""
       var u = unitById[v.unit];
       var on = act && act.unit === v.unit;
       var other = seat === "1" ? "2" : "1", vsx = u && dHeld(st, other, v.unit);
-      return '<div class="d-slip' + (on ? ' on' : '') + (vsx ? ' vs' : '') + '">' + (vsx ? '<span class="d-slip-vs">⚔ 상대도 이 집!</span>' : '') + (WALL.war ? '' : '<span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span>') + '<span class="d-slip-a">' + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w"><i class="d-kind fee-t' + v.catIdx + '">' + esc(TYPES[v.catIdx].name) + '</i> ' + dWon(invReward(v)) + '</span></div>';
+      return '<div class="d-slip' + (on ? ' on' : '') + (vsx ? ' vs' : '') + '">' + (vsx ? '<span class="d-slip-vs">⚔ 상대도 이 집!</span>' : '') + (WALL.war ? '' : '<span class="d-slip-b">' + esc(u ? bShort(u.b) : '') + '</span>') + '<span class="d-slip-a">' + medal(v.catIdx, 'big') + esc(u ? (u.b === "apt" ? u.floor + "층 " + u.label : u.label) : invAddr(v)) + '</span><span class="d-slip-w">' + (WALL.war ? '' : '<i class="d-kind fee-t' + v.catIdx + '">' + esc(TYPES[v.catIdx].name) + '</i> ') + dWon(invReward(v)) + '</span></div>';
     }).join('');
     var html = '<main class="stage stage--dlv">' + cartOpen('cart--dlv') + '<div class="dlv t' + seat + '">'
       + '<div class="dlv-top"><span class="dlv-team t' + seat + '">' + TEAM[seat] + '</span>' + dClock(st)
@@ -2462,6 +2498,8 @@ APP_JS_TEMPLATE = r"""
   // ---------- 2026-10-22 엘리베이터 이동 전쟁 (아파트 한 채) ----------
   function warRule(st) { return (st.wallRule && st.wallRule.war) || { taps: 5, deliverTaps: 3, openMs: 2500 }; }
   function warFloors(st, s) { var c = {}; dStats(st, s).pending.forEach(function (v) { var u = unitById[v.unit]; if (u) c[u.floor] = (c[u.floor] || 0) + 1; }); return c; }
+  // 그 집에 그 팀이 들고 있는 (미배송) 택배 종류
+  function dHeldCat(st, s, unit) { var c = -1; st.players[s].invoices.forEach(function (v) { if (v.unit === unit && v.deliveredRound === null && !v.returned && !v.lost && v.catIdx > c) c = v.catIdx; }); return c; }
   function warUnit(st, u, e) {
     var h1 = dHeld(st, "1", u.id), h2 = dHeld(st, "2", u.id), here = e.floor === u.floor, open = here && e.open;
     var ms = st.delivery.mash || {}, need = warRule(st).deliverTaps || 3;
@@ -2469,7 +2507,7 @@ APP_JS_TEMPLATE = r"""
     var cls = 'wu' + (h1 ? ' h1' : '') + (h2 ? ' h2' : '') + (h1 && h2 ? ' vs' : '') + (here ? ' here' : '') + (open ? ' open' : '') + (open && (h1 || h2) ? ' go' : '');
     var bars = open && (h1 || h2) ? '<span class="wu-bars">' + (h1 ? '<i class="t1" style="--p:' + (m1 / need).toFixed(2) + '"></i>' : '') + (h2 ? '<i class="t2" style="--p:' + (m2 / need).toFixed(2) + '"></i>' : '') + '</span>' : '';
     return '<div class="' + cls + '" data-unit="' + u.id + '"><span class="wu-door"></span><b>' + esc(u.label.replace("호", "")) + '</b>'
-      + '<span class="wu-dots">' + (h1 ? '<i class="t1"></i>' : '') + (h2 ? '<i class="t2"></i>' : '') + '</span>'
+      + '<span class="wu-dots">' + (h1 ? medal(dHeldCat(st, "1", u.id), 'mt1') : '') + (h2 ? medal(dHeldCat(st, "2", u.id), 'mt2') : '') + '</span>'
       + (h1 && h2 ? '<span class="wu-vs">⚔</span>' : '') + bars + '</div>';
   }
   function warBuilding(st) {
@@ -2486,27 +2524,25 @@ APP_JS_TEMPLATE = r"""
     h += '<div class="wshaft" style="grid-row:1 / span 7;grid-column:' + (half + 2) + '"><div class="wcar' + (e.open ? ' open' : '') + '" style="top:' + top + '%"><i></i><i></i><b>' + e.floor + '</b></div></div>';
     return '<div class="wbld" style="--half:' + half + '">' + h + '</div>';
   }
-  // 2026-10-22 (사용자 확정 "5연타 선점"): 방향 게이지 두 개 (▲ / ▼). 칸 색 = 그 칸을 채운 사람.
-  function warDirGauge(st, dir) {
-    var e = st.delivery.elev, n = warRule(st).taps || 5, by = (e.by && e.by[dir]) || [], v = (e.cnt && e.cnt[dir]) || 0, pips = '';
-    for (var i = 0; i < n; i++) pips += '<i' + (i < v ? ' class="on t' + (by[i] || "0") + '"' : '') + '></i>';
-    var lead = v > 0 && v >= ((e.cnt && e.cnt[dir === "up" ? "down" : "up"]) || 0);
-    return '<div class="wdg ' + dir + (lead ? ' lead' : '') + (e.open ? ' lock' : '') + '"><span class="wdg-a">' + (dir === "up" ? "▲ 위" : "▼ 아래") + '</span><span class="wdg-pips" style="--n:' + n + '">' + pips + '</span><b class="wdg-n">' + v + '<small>/' + n + '</small></b></div>';
+  // 2026-10-22 (사용자 결정 2차): 이동 5초(누를 때마다 한 층) -> 택배 있는 층이면 배송 5초. 입력은 각자 플레이어 화면.
+  function warStage(st, big) {
+    var e = st.delivery.elev, w = warRule(st), mv = e.stage !== "deliver";
+    var ends = mv ? e.stageEndsAt : e.openUntil, ms = mv ? (w.moveMs || 5000) : (w.openMs || 5000);
+    return '<div class="wst ' + (mv ? 'war' : 'open') + (big ? ' big' : '') + '" data-wend="' + ends + '" data-wms="' + ms + '"><b>' + (mv ? '이동' : '배송') + ' <span class="wst-sec" data-wsec="' + ends + '">' + Math.max(0, Math.ceil((ends - nowMs()) / 1000)) + '</span></b>'
+      + '<span>' + (mv ? '▲▼ 누른 만큼 움직여요' : e.floor + '층 내 집을 ' + (w.deliverTaps || 3) + '번씩!') + '</span><i class="wst-bar"><i></i></i></div>';
   }
   function warTeamFloors(st, s) {
-    var e = st.delivery.elev, L = WAR_KEY_LABEL[s], fl = warFloors(st, s), fk = Object.keys(fl).sort(function (a, b) { return b - a; });
-    return '<div class="wg t' + s + '"><div class="wg-h">' + TEAM[s] + ' <small>' + esc(L.up) + ' / ' + esc(L.down) + ' · 남은 택배 층</small></div>'
-      + '<div class="wg-fl">' + (fk.length ? fk.map(function (f) { return '<span' + (+f === e.floor ? ' class="here"' : '') + '>' + f + '층<b>' + fl[f] + '</b></span>'; }).join('') : '<span class="done">다 배송!</span>') + '</div></div>';
+    var e = st.delivery.elev, fl = {}, fk, mv = e.moves && e.moves[s];
+    dStats(st, s).pending.forEach(function (v) { var u = unitById[v.unit]; if (u) (fl[u.floor] = fl[u.floor] || []).push(v.catIdx); });
+    fk = Object.keys(fl).sort(function (a, b) { return b - a; });
+    return '<div class="wg t' + s + '"><div class="wg-h">' + TEAM[s] + (mv && e.stage === "move" ? ' <small class="wg-mv">▲' + mv.up + ' ▼' + mv.down + '</small>' : '') + '</div>'
+      + '<div class="wg-fl">' + (fk.length ? fk.map(function (f) { return '<span' + (+f === e.floor ? ' class="here"' : '') + '><em>' + f + '</em>' + fl[f].sort(function (a, b) { return b - a; }).map(function (c) { return medal(c, 'sm'); }).join('') + '</span>'; }).join('') : '<span class="done">다 배송!</span>') + '</div></div>';
   }
   function warPanel(st) {
-    var e = st.delivery.elev, w = warRule(st);
-    // 층이 바뀐 순간 숫자가 크게 튀게: 바뀐 시각을 기억해 두고, 렌더가 다시 돼도 애니메이션이 처음부터 다시 돌지 않게 지난 시간만큼 당겨 둔다
+    var e = st.delivery.elev;
     if (dLocal.wFloor !== e.floor) { if (dLocal.wFloor != null) dLocal.wFloorAt = nowMs(); dLocal.wFloor = e.floor; }
     var since = dLocal.wFloorAt ? nowMs() - dLocal.wFloorAt : 1e9, pop = since < 600 ? ' class="pop" style="animation-delay:-' + Math.round(since) + 'ms"' : '';
-    var st0 = e.open ? '<div class="wst open" data-wopen="' + e.openUntil + '" data-wms="' + (w.openMs || 2500) + '"><b>문 열림!</b><span>그 층 내 집 <b>' + (w.deliverTaps || 3) + '번</b> 연타</span><i class="wst-bar"><i></i></i></div>'
-      : '<div class="wst war"><b>엘리베이터 쟁탈</b><span>먼저 <b>' + (w.taps || 5) + '번</b> 찬 방향으로 한 층!</span></div>';
-    return '<div class="wpanel"><div class="wfloor"><small>엘리베이터</small><b' + pop + '>' + e.floor + '<em>층</em></b></div>' + st0
-      + '<div class="wdgs">' + warDirGauge(st, "up") + warDirGauge(st, "down") + '</div>'
+    return '<div class="wpanel"><div class="wfloor"><b' + pop + '>' + e.floor + '<em>층</em></b></div>' + warStage(st)
       + warTeamFloors(st, "1") + warTeamFloors(st, "2") + '</div>';
   }
   function renderWarMain(st, head, halfName) {
@@ -2515,7 +2551,7 @@ APP_JS_TEMPLATE = r"""
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + '</div>' + teamCard(st, "2", false) + '</div>'
       + dTug(st)
       + '<div class="wwrap">' + warBuilding(st) + warPanel(st) + '</div>'
-      + '<div class="d-keys1"><span class="t1"><b>빨강</b> ' + L1.up + '/' + L1.down + ' · 호실 1~8</span><span class="t2"><b>파랑</b> ↑/↓ · 호실 ' + L2.slot.join(' ') + '</span> · ↑↓ <b>' + (w.taps || 5) + '번</b> 먼저 = 한 층 · 택배 있는 층에 멈추면 문 열림 → 그 층 내 집 <b>' + (w.deliverTaps || 3) + '번</b> 연타 · ⚔ 같은 집은 먼저 채운 사람만</div></div>';
+      + '<div class="d-keys1"><b>이동 5초</b> ▲▼ 누른 만큼 · <b>배송 5초</b> 그 층 내 집 ' + (w.deliverTaps || 3) + '번씩 · ⚔ 먼저 채운 사람만</div></div>';
   }
   function renderMainDelivery(st, head, halfName) {
     if (st.delivery && st.delivery.elev && st.delivery.elev.war) return renderWarMain(st, head, halfName);
@@ -2580,6 +2616,7 @@ APP_JS_TEMPLATE = r"""
       if (e.k === "move") { if (MAIN) { dTone(220 + (e.floor || 1) * 40, 0, 0.12, "sawtooth", 0.06); dTone(660 + (e.floor || 1) * 40, 0.08, 0.18, "sine", 0.22); } return; } // 엘리베이터 이동음 (층마다 음 높이)
       if (e.k === "open") { DSND.open(); if (e.forced && MAIN) { dSay("버티기 끝!"); dPop("warn", "버티다가 " + e.floor + "층에서 문이 열렸어요", "", null); } return; }
       if (e.k === "close" || e.k === "elevend") return;
+      if (e.k === "empty") { DSND.soft(); return; }
       if (e.k === "shut") { if (mine) { DSND.err(); dPop("warn", (me ? "" : who + " · ") + "문이 닫혔어요", addr + " · 연타 " + (e.taps || 0) + "번은 처음부터", e.seat); } return; }
       if (e.k === "closed" || (e.k === "noelev" && dWar())) { if (me && mine) { DSND.soft(); dPop("warn", e.k === "closed" ? "문이 닫혀 있어요" : "엘리베이터가 " + (e.floor || "?") + "층이에요", "멈추고 문이 열려야 배송돼요", e.seat); } else if (mine) DSND.soft(); return; }
       if (e.k === "start") { if (mine || !me) DSND.start(); return; }
@@ -2667,10 +2704,11 @@ APP_JS_TEMPLATE = r"""
       el.classList.toggle("bell-open", open);
       if (open && el.hasAttribute("data-unit") && !dLocal.beeped["bell" + at]) { dLocal.beeped["bell" + at] = 1; DSND.open(); }
     });
-    Array.prototype.forEach.call(document.querySelectorAll("[data-wopen]"), function (el) {
-      var p = Math.max(0, Math.min(1, (parseInt(el.getAttribute("data-wopen"), 10) - n) / parseInt(el.getAttribute("data-wms"), 10)));
+    Array.prototype.forEach.call(document.querySelectorAll("[data-wend]"), function (el) {
+      var p = Math.max(0, Math.min(1, (parseInt(el.getAttribute("data-wend"), 10) - n) / parseInt(el.getAttribute("data-wms"), 10)));
       el.style.setProperty("--p", p.toFixed(3));
     });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-wsec]"), function (el) { el.textContent = Math.max(0, Math.ceil((parseInt(el.getAttribute("data-wsec"), 10) - n) / 1000)); });
     Array.prototype.forEach.call(document.querySelectorAll(".d-elev[data-moving]"), function (el) { el.classList.toggle("moving", parseInt(el.getAttribute("data-moving"), 10) > n); });
     Array.prototype.forEach.call(document.querySelectorAll(".d-cnt[data-ck]"), function (el) {
       var k = el.getAttribute("data-ck"), tv = parseInt(el.getAttribute("data-cv"), 10), cur = dLocal.shown[k];
@@ -2703,8 +2741,28 @@ APP_JS_TEMPLATE = r"""
   function dTeamOf(e) { if (e.ctrlKey && !e.shiftKey) return "1"; if (e.shiftKey && !e.ctrlKey) return "2"; if (e.ctrlKey && e.shiftKey) return "both"; return null; }
   function dPress(unit, team) { if (MAIN) send({ type: "wall-press", unit: unit, team: team }); }
   function dRelease(unit, team) { if (MAIN) send({ type: "wall-release", unit: unit, team: team }); }
+  function warSend(seat, what, slot) {
+    if (what === "up" || what === "down") send({ type: "wall-elev", seat: seat, dir: what });
+    else if (slot) send({ type: "wall-slot", seat: seat, slot: slot });
+  }
+  document.addEventListener("pointerdown", function (e) {
+    var b = e.target.closest && e.target.closest("[data-war]");
+    if (!b || MAIN || RAIL || !dWar() || b.disabled) return;
+    e.preventDefault();
+    b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit");
+    warSend(mySeat(), b.getAttribute("data-war"), parseInt(b.getAttribute("data-slot") || "0", 10));
+  });
   function dKeyDown(e) {
     if (!state || state.phase !== "delivery") return false;
+    if (dWar() && !MAIN && !RAIL && mySeat()) {
+      // 플레이어 기기 키보드 (시험용 / 아케이드 버튼 인코더): ↑ W = 위, ↓ S = 아래, 숫자 1~8 = 지금 층 N0n호
+      var c = e.code, dir = (c === "ArrowUp" || c === "KeyW") ? "up" : (c === "ArrowDown" || c === "KeyS") ? "down" : null;
+      var sl = /^(Digit|Numpad)([1-8])$/.exec(c);
+      if (!dir && !sl) return false;
+      e.preventDefault();
+      if (!e.repeat) warSend(mySeat(), dir || "slot", sl ? parseInt(sl[2], 10) : 0);
+      return true;
+    }
     var team = dTeamOf(e);
     if (!MAIN) return false; // 배송 입력은 메인 컴퓨터에서만
     if (dWar()) {
@@ -3176,8 +3234,9 @@ APP_JS_TEMPLATE = r"""
     var left = r.status === "reveal" && !owner;
     var t = TYPES[it.catIdx];
     var html = '<div class="race-parcel is-open rail-pk fee-t' + it.catIdx + (owner ? ' is-owned' : '') + (left ? ' is-gone' : '') + '">'
+      + medalTag(it.catIdx)
       + itAddrHtml(it)
-      + '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span><span class="rp-amt">' + fmtWon(t.reward) + '</span>';
+      + (WALL.war ? '' : '<span class="rp-ico">' + CAT_ICONS[it.catIdx] + '</span><span class="rp-name">' + esc(t.name) + '</span>') + '<span class="rp-amt">' + fmtWon(t.reward) + '</span>';
     if (owner) html += '<span class="rp-owner seat-' + owner + '">' + esc(seatName(owner, st)) + (r.randomPick && r.randomPick[owner] ? ' (무작위)' : '') + ' 획득</span>';
     else if (left) html += '<span class="rp-owner gone">' + (r.plan ? '사라짐' : '레일로 돌아감') + '</span>';
     else {

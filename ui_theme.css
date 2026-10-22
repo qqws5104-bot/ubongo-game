@@ -1178,3 +1178,101 @@ body:has(.d-war) .dpop { top: 1.2vh; bottom: auto; padding-top: 8px; padding-bot
 @keyframes wFloorPop { 0% { transform: scale(1.7); color: #fff; text-shadow: 0 0 24px #ffd23f; } 100% { transform: scale(1); } }
 .wpanel .wg { flex: 1 1 0; }
 .wcar b { background: #ffd23f; border-radius: 8px; padding: 0 .4em; box-shadow: 0 0 0 2px #1e2235; }
+
+/* ===== 38. 동·은·금 메달 (2026-10-22, 사용자 결정: 일반 = 동 / 깨지기 쉬운 = 은 / 귀중품 = 금) =====
+   색 + 글자 + 크기(금이 제일 큼) + 별 개수로 구분. 택배 카드 색도 동·은·금 계열로. */
+.medal { --ms: 1.7em; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: var(--ms); height: var(--ms); border-radius: 50%;
+  font-weight: 900; line-height: 1; vertical-align: middle; position: relative;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.2), inset 0 2px 0 rgba(255,255,255,.65), 0 1px 2px rgba(0,0,0,.25); }
+.medal b { font-size: calc(var(--ms) * .5); color: inherit !important; }
+.medal.m0 { --ms: 1.45em; background: radial-gradient(circle at 35% 30%, #f6cfa6, #c27a43 60%, #8a4f25); color: #4a2610; }
+.medal.m1 { --ms: 1.7em; background: radial-gradient(circle at 35% 30%, #ffffff, #c9cfda 58%, #8a93a5); color: #2c3444; }
+.medal.m2 { --ms: 2em; background: radial-gradient(circle at 35% 30%, #fff7c8, #f3c232 55%, #b8860b); color: #5a3a00; }
+.medal.m2::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 10px 2px rgba(255, 205, 40, .75); animation: medalGlow 1.4s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes medalGlow { from { opacity: .35; } to { opacity: 1; } }
+.medal.sm.m0 { --ms: 1.15em; } .medal.sm.m1 { --ms: 1.3em; } .medal.sm.m2 { --ms: 1.5em; }
+.medal.big.m0 { --ms: 1.6em; } .medal.big.m1 { --ms: 1.9em; } .medal.big.m2 { --ms: 2.2em; }
+.medal.mt1 { outline: 3px solid #e2493d; outline-offset: 1px; }
+.medal.mt2 { outline: 3px solid #2f6fdb; outline-offset: 1px; }
+.medal-tag { display: inline-flex; align-items: center; gap: 6px; align-self: center; font-size: clamp(1rem, 2.4vh, 1.5rem); }
+.medal-tag .medal { --ms: 2em; } .medal-tag.m0 .medal { --ms: 1.7em; } .medal-tag.m2 .medal { --ms: 2.3em; }
+.mt-stars { font-size: .8em; letter-spacing: 1px; }
+.medal-tag.m0 .mt-stars { color: #a86235; } .medal-tag.m1 .mt-stars { color: #7d8799; } .medal-tag.m2 .mt-stars { color: #d79a00; }
+.d-slip-a { display: inline-flex; align-items: center; gap: 8px; }
+.race-slip .medal-tag { margin: 4px auto 0; }
+/* 택배 카드 색: 동(구릿빛) / 은(회색빛) / 금(노랑) */
+.fee-t0 { --fc: #EDC3A0 !important; --fb: #6B3A12 !important; }
+.fee-t1 { --fc: #DCE1EA !important; --fb: #3E4A5E !important; }
+.fee-t2 { --fc: #FDDD59 !important; --fb: #8A5A08 !important; }
+.d-kind.fee-t0 { background: #EDC3A0 !important; } .d-kind.fee-t1 { background: #DCE1EA !important; } .d-kind.fee-t2 { background: #FDDD59 !important; }
+/* 메인 건물 칸: 메달이 들어가게 */
+.wu-dots { gap: 6px; font-size: clamp(.75rem, 1.9vh, 1.2rem); }
+.wg-fl span { display: inline-flex; align-items: center; gap: 3px; }
+/* 금과 안 겹치게: 위치 강조(지금 층·엘리베이터·문 열린 집)는 노랑 대신 민트 */
+.wfl.here { background: #4fd1ae; color: #10302a; box-shadow: 0 0 0 3px #1e2235 inset; }
+.wu.here { background: #e8fbf5; border-color: #4fd1ae; }
+.wu.here .wu-door { background: #c9f1e5; }
+.wu.go { box-shadow: 0 0 0 3px #4fd1ae, 0 6px 14px rgba(0,0,0,.25); }
+@keyframes wuGo { to { box-shadow: 0 0 0 6px #4fd1ae, 0 6px 18px rgba(0,0,0,.3); } }
+.wcar::before { background: #4fd1ae; box-shadow: 0 0 0 3px #1e2235 inset, 0 0 18px rgba(79,209,174,.6); }
+.wcar b { background: #fff; }
+.wfloor { border-color: #4fd1ae; }
+.wfloor b { color: #4fd1ae; }
+.wg-fl span.here { background: #c9f1e5; box-shadow: 0 0 0 2px #4fd1ae inset; }
+.d-slip-a { flex-direction: column; align-items: flex-start; gap: 4px; } /* 메달 위, 주소 아래 (좁은 송장에서 주소가 잘리지 않게) */
+
+/* ===== 39. 값어치 = 택배 상자 색 (2026-10-22, 사용자: 글자 대신 동·은·금 색 상자) ===== */
+.pbox { --ms: 1.6em; display: inline-block; flex: 0 0 auto; width: var(--ms); height: calc(var(--ms) * .95); vertical-align: middle; position: relative; }
+.pbox svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.pbox .bx-o { fill: none; stroke: #1e2235; stroke-width: 2; stroke-linejoin: round; }
+.pbox .bx-tape { fill: rgba(255,255,255,.55); }
+.pbox.m0 .bx-t { fill: #eab183; } .pbox.m0 .bx-f { fill: #c98149; } .pbox.m0 .bx-s { fill: #9a5a2e; }
+.pbox.m1 .bx-t { fill: #f4f6fa; } .pbox.m1 .bx-f { fill: #c6ccd8; } .pbox.m1 .bx-s { fill: #8f98aa; }
+.pbox.m2 .bx-t { fill: #ffe887; } .pbox.m2 .bx-f { fill: #f3c232; } .pbox.m2 .bx-s { fill: #c48f0c; }
+.pbox.m0 { --ms: 1.35em; } .pbox.m1 { --ms: 1.6em; } .pbox.m2 { --ms: 1.9em; }
+.pbox.m2::after { content: ""; position: absolute; inset: -4px; border-radius: 40%; box-shadow: 0 0 12px 3px rgba(255, 205, 40, .7); animation: medalGlow 1.4s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes medalGlow { from { opacity: .3; } to { opacity: 1; } }
+.pbox.sm.m0 { --ms: 1.05em; } .pbox.sm.m1 { --ms: 1.2em; } .pbox.sm.m2 { --ms: 1.4em; }
+.pbox.big.m0 { --ms: 1.5em; } .pbox.big.m1 { --ms: 1.8em; } .pbox.big.m2 { --ms: 2.1em; }
+.pbox.xl.m0 { --ms: 2.4em; } .pbox.xl.m1 { --ms: 2.9em; } .pbox.xl.m2 { --ms: 3.4em; }
+.pbox.mt1 { filter: drop-shadow(0 0 0 #e2493d) drop-shadow(2px 0 0 #e2493d) drop-shadow(-2px 0 0 #e2493d) drop-shadow(0 2px 0 #e2493d) drop-shadow(0 -2px 0 #e2493d); }
+.pbox.mt2 { filter: drop-shadow(2px 0 0 #2f6fdb) drop-shadow(-2px 0 0 #2f6fdb) drop-shadow(0 2px 0 #2f6fdb) drop-shadow(0 -2px 0 #2f6fdb); }
+.pbox-tag { display: flex; justify-content: center; align-self: center; font-size: clamp(.9rem, 2vh, 1.3rem); margin: 2px 0; }
+.wu-dots { gap: 4px; }
+.wg-fl span em { font-style: normal; font-weight: 700; margin-right: 2px; }
+.wg-mv { color: #4a4f63 !important; font-variant-numeric: tabular-nums; margin-left: 6px; }
+.wst-sec { display: inline-block; min-width: 1.2em; font-variant-numeric: tabular-nums; }
+.wst.war .wst-bar { background: #e9e3d4; } .wst.war .wst-bar i { background: #e2691a; }
+.wst-bar i { width: calc(var(--p, 1) * 100%); }
+
+/* 플레이어 화면 (엘리베이터 전쟁): 큰 ▲▼ / 그 층 문 8개 */
+.wp .wst.big { margin: 10px 0; }
+.wp .wst.big > b { font-size: 1.8rem; }
+.wp-move { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin: 6px 0 12px; }
+.wp-arrow { border: 0; border-radius: 22px; font-size: 3.4rem; line-height: 1; padding: 26px 0; color: #fff; background: var(--tc, #e2491d); box-shadow: 0 8px 0 rgba(0,0,0,.28); touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.wp.t1 .wp-arrow { --tc: #e2493d; } .wp.t2 .wp-arrow { --tc: #2f6fdb; }
+.wp-arrow.hit, .wp-door.hit { animation: wpHit .12s ease-out; }
+@keyframes wpHit { 50% { transform: translateY(5px) scale(.96); box-shadow: 0 3px 0 rgba(0,0,0,.28); } }
+.wp-floor { text-align: center; min-width: 4.5rem; }
+.wp-floor b { display: block; font-size: 4rem; line-height: 1; color: #1e2235; }
+.wp-floor small { font-size: 1rem; color: #6b6f80; }
+.wp-doors { display: grid; grid-template-columns: repeat(4, 1fr) 14px repeat(4, 1fr); gap: 6px; margin: 6px 0 12px; }
+.wp-shaft { background: #39416a; border-radius: 6px; }
+.wp-door { position: relative; border: 3px solid #ddd3bf; border-radius: 12px; background: #f1eadc; min-height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 6px 0 14px; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.wp-door b { font-size: 1.05rem; color: #9a9db0; }
+.wp-door:disabled { opacity: .55; }
+.wp-door.mine { background: #fffdf6; border-color: var(--tc); box-shadow: 0 6px 0 rgba(0,0,0,.2); cursor: pointer; }
+.wp.t1 .wp-door { --tc: #e2493d; } .wp.t2 .wp-door { --tc: #2f6fdb; }
+.wp-door.mine b { color: #1e2235; font-size: 1.2rem; }
+.wp-door-bar { position: absolute; left: 10%; right: 10%; bottom: 6px; height: 6px; border-radius: 4px; background: #e9e3d4; overflow: hidden; }
+.wp-door-bar i { display: block; height: 100%; width: calc(var(--p) * 100%); background: var(--tc); }
+.wp-slips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.wp-slip { display: inline-flex; align-items: center; gap: 6px; background: #fffdf6; border: 2px solid #e2d8c3; border-radius: 12px; padding: 6px 12px; font-size: 1.25rem; position: relative; }
+.wp-slip b { color: #1e2235; font-variant-numeric: tabular-nums; }
+.wp-slip.here { border-color: #4fd1ae; background: #e8fbf5; }
+.wp-slip.vs { border-style: dashed; border-color: #9a4fd0; }
+.wp-vs { font-size: .85rem; }
+.wp-clear { font-size: 1.3rem; color: #1f9a4c; font-weight: 700; }
+/* 층 목록 칩 규칙(.wg-fl span)이 상자(span.pbox)에 먹지 않게 */
+.wg-fl > span { font-size: clamp(.95rem, 2.3vh, 1.35rem); padding: 3px 10px; gap: 4px; }
+.wg-fl .pbox { background: none !important; padding: 0 !important; border-radius: 0 !important; box-shadow: none !important; font-size: inherit !important; display: inline-block !important; }
