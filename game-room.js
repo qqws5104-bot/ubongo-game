@@ -65,6 +65,9 @@ const DEFAULT_RULES = {
   // 2026-10-21 테스트 1용: COMPETE=0 이면 ⚔ 같은 집 쟁탈과 막기 보상을 같이 끈다 (CONTEST=0 / BLOCK=0 으로 따로도 가능). 막기 자체(반송)는 그대로.
   contestRate: process.env.CONTEST === "0" || process.env.COMPETE === "0" ? 0 : CONTEST_RATE,
   blockReward: process.env.BLOCK === "0" || process.env.COMPETE === "0" ? 0 : BLOCK_REWARD,
+  // 2026-10-22 (사용자 결정): 문마다 빨강·파랑 버튼 한 쌍. 팀이 정해진 입력으로 상대가 켠 문을 누르면 = 막기 1회(누가 막았는지도 안다).
+  //   PAIR_BUTTONS=0 이면 예전(팀 키로는 상대 문을 못 막고, 팀 키 없이 누른 입력만 막기).
+  deliveryPairButtons: process.env.PAIR_BUTTONS !== "0",
   feverMs: process.env.FEVER === "0" ? 0 : FEVER_MS,
   feverMult: FEVER_MULT,
   comboBuildingBonus: COMBO_BUILDING_BONUS,
@@ -261,7 +264,7 @@ function initialState(rules) {
     setRule: { amount: (rules && rules.setBonus) || 0, kinds: (rules && rules.setBonusKinds) || SET_BONUS_KINDS }, // 2026-10-15 종류 모으기 보너스 (클라이언트도 이걸로 계산)
     tutorial: null, // 2026-10-15 시작 전 튜토리얼 (phase "tutorial"일 때만)
     // 2026-10-16 벽 배송: 규칙 묶음(클라이언트 표시·점수 계산용)과 진행 상태(phase "delivery"일 때만)
-    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.blockReward || 0, contest: (rules.contestRate || 0) > 0, feverMs: rules.feverMs || 0, feverMult: rules.feverMult || 1 } : null,
+    wallRule: (rules && rules.wallMode) ? { wrongPenalty: rules.deliveryWrongPenalty || 0, progressMs: rules.deliveryProgressMs, holdMs: rules.deliveryHoldMs || 0, elevator: !!rules.deliveryElevator, returnTaps: rules.deliveryReturnTaps, maxActive: rules.deliveryMaxActive, bldBonus: rules.comboBuildingBonus || 0, modes: rules.deliveryModes || null, climb: rules.deliveryClimbSteps || null, bellWindowMs: rules.deliveryBellWindowMs || 0, blockReward: rules.blockReward || 0, contest: (rules.contestRate || 0) > 0, pair: !!rules.deliveryPairButtons, feverMs: rules.feverMs || 0, feverMult: rules.feverMult || 1 } : null,
     delivery: null,
     phase: "lobby", // lobby -> (tutorial) -> secure -> elevator -> halftime -> secure -> elevator -> end -> (재시작 시) secure ...
     ready: { "1": false, "2": false },
@@ -946,7 +949,7 @@ class GameRoom {
         this.emit();
         return;
       }
-      if (seat) { this._dEv("taken", unitId, seat); this.emit(); return; }
+      if (seat && !this.rules.deliveryPairButtons) { this._dEv("taken", unitId, seat); this.emit(); return; }
       this._wallTap(unitId);
       this.emit();
       return;

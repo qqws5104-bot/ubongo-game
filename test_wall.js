@@ -6,7 +6,7 @@ const assert = require("assert");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function mk(rules) {
   const box = { st: null };
-  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" }, contestRate: 0, feverMs: 0 }, rules));
+  const room = new GameRoom("T", (s) => { box.st = s; }, Object.assign({ wallMode: true, raceGrantPlan: D.RACE_GRANT_PLAN, raceGrantByPieces: D.RACE_GRANT_BY_PIECES, raceUnlimited: true, raceGamePool: [], racePieceGames: false, deliveryModes: { apt: "wait", mansion: "wait", house: "wait" }, contestRate: 0, feverMs: 0, deliveryPairButtons: false }, rules));
   room.pickCourier("cookbang", "c1"); room.pickCourier("cheonil", "c2"); room.setReady("1"); room.setReady("2");
   return { room, box };
 }
@@ -250,6 +250,20 @@ function mk(rules) {
     room.raceStep("1", "ubongo-done", 2); room.racePick("1", 0); room.racePick("1", 1);
     room.raceStep("2", "give-up", 2);
     assert.strictEqual(box.st.race.status, "reveal", "포기하면 20초 안 기다림"); assert.strictEqual(box.st.race.picks["2"].length, 1);
+    room.destroy();
+  }
+  // 13) 문마다 버튼 한 쌍: 팀 버튼으로 상대가 켠 문을 누르면 막기(누가 막았는지 앎), 내 문은 그대로 진행
+  {
+    const { room, box } = mk({ deliveryMs: 4000, deliveryProgressMs: 2000, deliveryElevMoveMs: 0, deliveryPairButtons: true, blockReward: 1000 });
+    room._endSecurePhase();
+    assert.strictEqual(box.st.wallRule.pair, true);
+    box.st.players["1"].invoices = [{ id: "a", catIdx: 0, unit: "h3", reward: 1000, deliveredRound: null }];
+    room.wallPress("1", "h3"); assert(box.st.delivery.doors.h3);
+    const last = () => box.st.delivery.ev[box.st.delivery.ev.length - 1];
+    room.wallPress("2", "h3"); assert.strictEqual(last().k, "tap", "파란 버튼으로 빨강이 켠 문 = 막기 1회"); assert.strictEqual(box.st.delivery.doors.h3.taps, 1);
+    for (let i = 0; i < 4; i++) room.wallPress("2", "h3");
+    assert.strictEqual(last().k, "returned"); assert.strictEqual(last().blocker, "2"); assert.strictEqual(box.st.players["2"].blocks, 1);
+    room.wallPress("2", "h5"); assert.strictEqual(last().k, "wrong", "빈 집에 내 버튼 = 오배송 그대로");
     room.destroy();
   }
   console.log("test_wall OK");

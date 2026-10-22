@@ -1058,3 +1058,30 @@ body.fx-glow-2 .cart-body, body.fx-glow-2 .rv-puzzle-only .race-puzzle { animati
 @keyframes glow1 { 0%, 60% { box-shadow: 0 0 0 6px #F2665C, 0 0 40px 12px rgba(242,102,92,.75); } 100% { box-shadow: 0 18px 40px rgba(20,30,60,.28); } }
 @keyframes glow2 { 0%, 60% { box-shadow: 0 0 0 6px #4F8BF0, 0 0 40px 12px rgba(79,139,240,.75); } 100% { box-shadow: 0 18px 40px rgba(20,30,60,.28); } }
 body:has(.mx-layer.on) .race-donefx, body:has(.race-blank) .race-donefx { top: auto; bottom: 5%; } /* 플레이어 화면에선 진행 줄을 가리지 않게 아래쪽 */
+
+/* ===== 36. 메인 화면 3분할 (2026-10-22): 아파트 | 맨션 | 주택, 화면 높이에 딱 맞게 ===== */
+html:has(.d-main), body:has(.d-main) { height: 100%; overflow: hidden; }
+body:has(.d-main) .mv { height: 100vh; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+body:has(.d-main) .mv-head { flex: 0 0 auto; padding-top: 1vh; padding-bottom: 1vh; }
+.mv-body.d-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 1vh; padding-bottom: 1vh; }
+.d-main .d-bar, .d-main .d-tug, .d-main .d-keys1 { flex: 0 0 auto; }
+.d-main .d-tug { margin: 0; }
+.d-main .d-keys1 { font-size: clamp(.75rem, 1.4vh, .95rem); padding: 4px 14px; }
+.d-main .dwalls.dwalls3 { flex: 1 1 auto; min-height: 0; display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 1.2vw; align-items: stretch; }
+.dwalls3 > .dw { min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; padding: 1vh 0.8vw; }
+.dwalls3 .dw-name { flex: 0 0 auto; margin-bottom: .6vh; font-size: clamp(1rem, 2.4vh, 1.5rem); text-align: center; }
+/* 아파트: 그림 비율(405:510)을 지키면서 칸 높이·폭 중 작은 쪽에 맞춤 */
+.dwalls3 .dw-apt-pic { flex: 0 0 auto; width: auto !important; max-width: 100%;
+  height: min(calc(100vh - 12.5rem - 9vh), calc((100vw - 6vw) / 3 * 510 / 405)) !important; aspect-ratio: 405 / 510; margin: 0 auto; }
+/* 맨션: 칸 폭에 맞추고 세로 가운데 */
+.dwalls3 .dw-mansion { justify-content: flex-start; }
+.dwalls3 .dw-man-pic { width: 100% !important; aspect-ratio: 740 / 300; margin: auto 0 !important; flex: 0 0 auto; }
+/* 주택: 2열 × 4줄로 칸 높이를 나눠 가짐 */
+.dwalls3 .dw-house-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 0.8vh 0.6vw; }
+.dwalls3 .dw-home-pic { aspect-ratio: auto !important; height: 100%; min-height: 0; }
+
+/* 36b. 3분할 맞춤 보정 (2026-10-22): 아파트는 칸 높이에 맞춰 축소, 주택 그리드 높이 0 버그(우선순위) 수정 */
+.d-main .dwalls3 .dw-apt { align-items: center; }
+.d-main .dwalls3 .dw-apt-pic { flex: 1 1 0 !important; min-height: 0; height: auto !important; width: auto !important; max-width: 100%; max-height: 100%; aspect-ratio: 405 / 510; margin: 0 auto; }
+.d-main .dwalls3 .dw-house .dw-house-grid { flex: 1 1 0 !important; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-template-rows: repeat(4, minmax(0, 1fr)) !important; }
+.d-main .dwalls3 .dw-home-pic { aspect-ratio: auto !important; height: auto; min-height: 0; }

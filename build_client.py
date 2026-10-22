@@ -1081,9 +1081,10 @@ APP_JS_TEMPLATE = r"""
         return '<div class="tut-flow"><span class="tut-step">짧은 게임 = 조각 1개<small>바코드 스캔 · 송장 주소 · 테이프(← →) · 배달 길</small></span><i>→</i>'
           + '<span class="tut-step">판에 놓기<small>레일 화면 문제를 실물 조각으로</small></span><i>→</i><span class="tut-step key">Space<small>완성하면 투입!</small></span></div>'; },
       l: function () { return ["먼저 끝낸 사람이 <b>2개</b> 고르기 · 늦은 사람도 <b>20초 안에 완성하면 2개</b> 고르기, 못 하면 <b>무작위 1개</b>(남은 건 사라져요).", "조각 2개 문제는 택배 4개, 조각 3개 이상은 5개 · 택배마다 <b>주소</b>가 보여요."]; } },
-    { t: "② 배송 — 팀 키 + 호실 버튼", v: function () {
+    { t: "② 배송 — 집 버튼 누르기", v: function () {
+        if (dPair()) return '<div class="tut-keys big">집마다 버튼 두 개 · <span class="t1"><b>빨간 버튼</b> 빨간 팀</span> · <span class="t2"><b>파란 버튼</b> 파란 팀</span> · 내 색 버튼을 누르세요</div>';
         return '<div class="tut-keys big">메인 컴퓨터 · <span class="t1"><b>Ctrl</b> 빨간 팀</span> · <span class="t2"><b>Shift</b> 파란 팀</span> 누른 채 + 호실 키</div>'; },
-      l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), (function () { var w = (state && state.wallRule) || {}; return "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송" + (w.blockReward ? " + <b>막은 팀 보너스</b>" : "") + (w.contest ? " · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!" : ""); })()]; } },
+      l: function () { return ["집마다 배송 방법이 달라요: " + (state ? dHowShort(state) : ""), (function () { var w = (state && state.wallRule) || {}; return (dPair() ? "상대가 켠 집은 <b>내 색 버튼 5번</b>이면 반송" : "상대 배송은 켜진 호실 키를 <b>그냥 5번</b> 연타하면 반송") + (w.blockReward ? " + <b>막은 팀 보너스</b>" : "") + (w.contest ? " · <b>⚔</b> 두 팀 다 가진 집은 <b>먼저 보낸 팀만</b> 인정!" : ""); })()]; } },
     { t: "③ 아파트는 엘리베이터", v: function () {
         return '<div class="tut-keys big">메인 컴퓨터 · <b>↑</b> / <b>↓</b> 로 엘리베이터 움직이기 (누구나)</div>'; },
       l: function () { return ["아파트 집은 엘리베이터가 <b>그 층에 멈춰 있어야</b> 배송돼요. 움직이는 중엔 못 하고, 누르는 동안 움직이면 실패!", "맨션·주택은 엘리베이터와 상관없어요 · <b>마지막 15초는 FEVER</b> -- 배송 금액 2배!"]; } },
@@ -2263,8 +2264,14 @@ APP_JS_TEMPLATE = r"""
     "KeyA", "KeyS", "KeyG", "KeyH", "KeyL", "Semicolon", "KeyZ", "KeyX", "KeyB", "Period", "Slash", "Quote",
     "KeyY", "BracketLeft", "BracketRight", "Backslash", "Minus", "Equal", "Backquote", "Enter"];
   var KEY_LABEL = { Comma: ",", Period: ".", Slash: "/", Semicolon: ";", Quote: "'", BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Backquote: "`", Enter: "↵" };
-  var unitById = {}, unitByKey = {};
-  WALL.units.forEach(function (u, i) { u.key = WALL_KEYS[i]; u.keyLabel = KEY_LABEL[u.key] || u.key.replace("Key", ""); unitById[u.id] = u; unitByKey[u.key] = u; });
+  // 2026-10-22 (사용자 결정) 문마다 버튼 한 쌍: 빨간 버튼 = 위 WALL_KEYS(그냥 누름), 파란 버튼 = 아래 BLUE_KEYS(그냥 누름).
+  //   키보드로 시험할 때는 빨강 = 호실 키 그대로, 파랑 = Shift + 호실 키 (또는 파란 키). 오락실 버튼 인코더에서 이 키로 연결.
+  var BLUE_KEYS = ["KeyQ", "KeyW", "KeyT", "KeyN", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Digit0",
+    "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "Numpad0",
+    "NumpadAdd", "NumpadSubtract", "NumpadMultiply", "NumpadDivide", "NumpadDecimal", "NumpadEnter", "Insert", "Delete", "Home", "End"];
+  var unitById = {}, unitByKey = {}, unitByKeyB = {};
+  WALL.units.forEach(function (u, i) { u.key = WALL_KEYS[i]; u.keyB = BLUE_KEYS[i]; u.keyLabel = KEY_LABEL[u.key] || u.key.replace("Key", ""); unitById[u.id] = u; unitByKey[u.key] = u; unitByKeyB[u.keyB] = u; });
+  function dPair() { return !!(state && state.wallRule && state.wallRule.pair); }
   function unitAddr(u) { return u.b === "house" ? u.label : (u.b === "apt" ? "아파트 " + u.floor + "층 " + u.label : "맨션 " + u.label); }
   function invAddr(inv) { return (inv && inv.unit && unitById[inv.unit]) ? unitAddr(unitById[inv.unit]) : roomCode(inv.floorIdx, inv.room); }
   function bShort(b) { return b === "apt" ? "아파트" : (b === "mansion" ? "맨션" : "주택"); }
@@ -2362,7 +2369,8 @@ APP_JS_TEMPLATE = r"""
     var hs = '<div class="dw dw-house dw-img"><div class="dw-name">주택 <small>성수로</small></div><div class="dw-house-grid">';
     for (var h = 1; h <= 8; h++) hs += '<div class="dw-home dw-home-pic hp' + (((h - 1) % 4) + 1) + '">' + unitBtn(st, unitById["h" + h], keyHint) + '</div>';
     hs += '</div></div>';
-    return keyHint ? '<div class="dwalls dwalls2">' + apt + '<div class="dw-right">' + man + hs + '</div></div>' : '<div class="dwalls">' + apt + man + hs + '</div>';
+    // 2026-10-22 (사용자: 메인이 한 화면에 다 안 나옴): 메인 화면은 아파트 | 맨션 | 주택 3분할, 화면 높이에 맞춤 (스크롤 없음)
+    return keyHint ? '<div class="dwalls dwalls3">' + apt + man + hs + '</div>' : '<div class="dwalls">' + apt + man + hs + '</div>';
   }
   function elevCtl(st, withButtons) {
     var e = st.delivery.elev;
@@ -2379,6 +2387,7 @@ APP_JS_TEMPLATE = r"""
       now = '<div class="d-now is-on t' + seat + '"' + dDoorAttrs(act.door) + '><b>' + esc(unitAddr(u)) + '</b> 배송 중' + dDoorNote(act.door) + (act.door.hold ? ' · 손 떼지 마세요' : (act.door.taps ? ' · 상대가 막는 중 ' + act.door.taps + '/' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '!' : '')) + '<i class="d-now-bar"><i></i></i></div>';
     } else if (s.pending.length) {
       now = '<div class="d-now">' + (st.wallRule && st.wallRule.holdMs ? '메인 컴퓨터에서 <b>' + TEAM_KEY[seat] + '</b> + 호실 키를 <b>' + Math.round(st.wallRule.holdMs / 1000) + '초</b> 누르고 있으면 배송 완료'
+        : dPair() ? '집 앞 <b>' + (seat === "1" ? '빨간' : '파란') + ' 버튼</b>으로 배송 · ' + dHowShort(st) + ' · 상대가 켠 집은 내 색 버튼 <b>' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '번</b>으로 막기'
         : '메인 컴퓨터에서 <b>' + TEAM_KEY[seat] + '</b> 누른 채 호실 키 · ' + dHowShort(st) + ' · 상대 배송은 그 호실 키 <b>' + ((st.wallRule && st.wallRule.returnTaps) || 5) + '번</b> 연타로 막기') + '</div>';
     } else now = '<div class="d-now is-clear">내 택배를 모두 처리했어요</div>';
     var slips = s.pending.map(function (v) {
@@ -2427,7 +2436,8 @@ APP_JS_TEMPLATE = r"""
       + '<div class="d-bar">' + teamCard(st, "1", false) + '<div class="d-bar-mid">' + dClock(st) + elevCtl(st, false) + '</div>' + teamCard(st, "2", false) + '</div>'
       + dTug(st)
       + renderWalls(st, true)
-      + '<div class="d-keys1"><span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기' + ((st.wallRule && st.wallRule.blockReward) ? ' <b>+' + dWon(st.wallRule.blockReward) + '</b>' : '') + ((st.wallRule && st.wallRule.contest) ? ' · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효' : '') + '</div></div>';
+      + '<div class="d-keys1">' + (dPair() ? '<span class="t1"><b>빨간 버튼</b> 빨강</span><span class="t2"><b>파란 버튼</b> 파랑</span> · ' + dHowShort(st) + ' · <b>↑↓</b> 엘리베이터 · 상대가 켠 집 내 색 버튼 <b>5번</b> = 막기 <small>(키보드: 호실 키 = 빨강, Shift+호실 키 = 파랑)</small>'
+        : '<span class="t1"><b>Ctrl</b> 빨강</span><span class="t2"><b>Shift</b> 파랑</span> + 호실 키 · ' + dHowShort(st) + ' · <b>↑↓</b> 엘리베이터 · 켜진 호실 키 <b>5번</b> = 막기') + ((st.wallRule && st.wallRule.blockReward) ? ' <b>+' + dWon(st.wallRule.blockReward) + '</b>' : '') + ((st.wallRule && st.wallRule.contest) ? ' · <b>⚔</b> 두 팀 다 가진 집 = 먼저 보내면 상대 것 무효' : '') + '</div></div>';
   }
   function renderRailDelivery(st, head, halfName) {
     return '<div class="rv">' + head("배송 · " + halfName) + '<div class="d-board">'
@@ -2608,6 +2618,18 @@ APP_JS_TEMPLATE = r"""
       return true;
     }
     var u = unitByKey[e.code];
+    if (dPair()) {
+      // 버튼 한 쌍: 어느 키냐로 팀이 정해진다 (빨간 버튼 키 = 1, 파란 버튼 키 = 2). 키보드 시험용으로 Shift를 누르면 파랑.
+      var keyTeam = u ? "1" : null;
+      if (!u && unitByKeyB[e.code]) { u = unitByKeyB[e.code]; keyTeam = "2"; }
+      if (!u) return false;
+      e.preventDefault();
+      if (e.repeat || dLocal.keyHold[e.code]) return true;
+      team = e.shiftKey ? "2" : keyTeam;
+      dLocal.keyHold[e.code] = { unit: u.id, team: team };
+      dPress(u.id, team);
+      return true;
+    }
     if (!u) return false;
     e.preventDefault();
     if (e.repeat || dLocal.keyHold[e.code]) return true;

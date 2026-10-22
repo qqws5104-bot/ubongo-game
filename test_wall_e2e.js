@@ -105,6 +105,8 @@ const OUT = "/tmp/wall_e2e_";
     const k2 = await s.evaluate(() => { const st = window.__st || null; return null; });
     void k2;
   }
+  for (const [w, h] of [[1920, 1080], [1366, 768], [1280, 720]]) { await s.setViewportSize({ width: w, height: h }); await s.waitForTimeout(400); await s.screenshot({ path: OUT + "d_main_" + h + ".png" });
+    const ov = await s.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 2 || [...document.querySelectorAll(".dwalls3 > .dw")].some(d => d.scrollHeight > d.clientHeight + 4)); console.log("main", w, h, "overflow", ov); }
   assert.deepStrictEqual(errs, []);
   console.log("test_wall_e2e OK");
   await b.close();
